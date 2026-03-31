@@ -25,14 +25,22 @@
 - `6d1dcec` `refactor: route compact through model facade`
   把 `services/compact/compact.ts` 需要的流式调用和最大输出 token 查询接到 facade，继续保持原实现委托给 Claude。
 
+- `2cd61dc` `docs: add development progress log`
+  新增仓库内的持续进展记录文件，开始按轮次记录已完成提交、当前进行中和下一步。
+
+- `aba4abf` `refactor: route side queries through provider client`
+  新增 `services/api/providerClient.ts` 这层最小客户端 facade，并把侧边查询先接到这层入口，继续委托现有 `client.ts`。
+
 ## 当前进行中
 
-- 继续清点 `upstream/claude-code` 里仍然直接从 `services/api/claude.ts` 取模型调用的路径。
-- 逐步把这些直连点旁路到 `services/api/model.ts`，先只做入口替换，不改行为。
+- 继续清点 `upstream/claude-code` 里仍然直接从 `services/api/client.ts` 和 `services/api/claude.ts` 取入口的路径。
+- 优先清理 `services/api/client.ts` 一侧剩余的 Claude 直连点，逐步旁路到 `services/api/providerClient.ts`。
+- 与此同时继续收窄 `services/api/model.ts` 的剩余入口替换面，先只做 facade 接线，不改行为。
 - 控制改动范围，避免又回到 prototype 扩功能的路线。
 
 ## 下一步
 
-- 继续替换剩余的 Claude 直连点，优先处理查询主链路和少数公共调用点。
+- 继续替换 `services/api/client.ts` 一侧剩余的 Claude 直连点，优先处理查询主链路附近和少数公共调用点。
+- 补齐 `providerClient` 和 `model` 两条 facade 的首批调用面，减少新代码再直接指向 Claude 专名实现。
 - 在 facade 足够稳定后，再进入下一层：抽更中立的调用类型和回合边界。
 - 每轮都同步更新这份文件，记录已完成提交、当前进行中和下一步。
