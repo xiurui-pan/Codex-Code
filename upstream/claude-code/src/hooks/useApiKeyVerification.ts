@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react'
 import { getIsNonInteractiveSession } from '../bootstrap/state.js'
-import { verifyApiKey } from '../services/api/claude.js'
+import { verifyModelAccess } from '../services/api/model.js'
 import {
   getAnthropicApiKeyWithSource,
   getApiKeyFromApiKeyHelper,
@@ -61,7 +61,7 @@ export function useApiKeyVerification(): ApiKeyVerificationResult {
     }
 
     try {
-      const isValid = await verifyApiKey(apiKey, false)
+      const isValid = await verifyModelAccess(apiKey, false)
       const newStatus = isValid ? 'valid' : 'invalid'
       setStatus(newStatus)
       return

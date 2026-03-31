@@ -13,7 +13,7 @@ import type { CacheSafeParams } from '../../utils/forkedAgent.js'
 import { logError } from '../../utils/log.js'
 import { tokenCountWithEstimation } from '../../utils/tokens.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../analytics/growthbook.js'
-import { getMaxOutputTokensForModel } from '../api/claude.js'
+import { getModelMaxOutputTokens } from '../api/model.js'
 import { notifyCompaction } from '../api/promptCacheBreakDetection.js'
 import { setLastSummarizedMessageId } from '../SessionMemory/sessionMemoryUtils.js'
 import {
@@ -32,7 +32,7 @@ const MAX_OUTPUT_TOKENS_FOR_SUMMARY = 20_000
 // Returns the context window size minus the max output tokens for the model
 export function getEffectiveContextWindowSize(model: string): number {
   const reservedTokensForSummary = Math.min(
-    getMaxOutputTokensForModel(model),
+    getModelMaxOutputTokens(model),
     MAX_OUTPUT_TOKENS_FOR_SUMMARY,
   )
   let contextWindow = getContextWindowForModel(model, getSdkBetas())
