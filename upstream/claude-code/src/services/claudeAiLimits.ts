@@ -11,7 +11,7 @@ import { isEssentialTrafficOnly } from '../utils/privacyLevel.js'
 import type { AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from './analytics/index.js'
 import { logEvent } from './analytics/index.js'
 import { getAPIMetadata } from './api/claude.js'
-import { getAnthropicClient } from './api/client.js'
+import { getProviderClient } from './api/providerClient.js'
 import {
   processRateLimitHeaders,
   shouldProcessRateLimits,
@@ -198,7 +198,7 @@ export function emitStatusChange(limits: ClaudeAILimits) {
 
 async function makeTestQuery() {
   const model = getSmallFastModel()
-  const anthropic = await getAnthropicClient({
+  const anthropic = await getProviderClient({
     maxRetries: 0,
     model,
     source: 'quota_check',
