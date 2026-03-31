@@ -55,13 +55,11 @@ import {
   splitSysPromptPrefix,
   toolToAPISchema,
 } from '../../utils/api.js'
-import { getOauthAccountInfo } from '../../utils/auth.js'
 import {
   getBedrockExtraBodyParamsBetas,
   getMergedBetas,
   getModelBetas,
 } from '../../utils/betas.js'
-import { getOrCreateUserID } from '../../utils/config.js'
 import {
   CAPPED_DEFAULT_MAX_TOKENS,
   getModelMaxOutputTokens,
@@ -118,16 +116,12 @@ import {
   getCacheEditingHeaderLatched,
   getFastModeHeaderLatched,
   getLastApiCompletionTimestamp,
-  getPromptCache1hAllowlist,
-  getPromptCache1hEligible,
   getSessionId,
   getThinkingClearLatched,
   setAfkModeHeaderLatched,
   setCacheEditingHeaderLatched,
   setFastModeHeaderLatched,
   setLastMainRequestId,
-  setPromptCache1hAllowlist,
-  setPromptCache1hEligible,
   setThinkingClearLatched,
 } from 'src/bootstrap/state.js'
 import {
@@ -198,7 +192,6 @@ import {
 import { count } from '../../utils/array.js'
 import { insertBlockAfterToolResults } from '../../utils/contentArray.js'
 import { validateBoundedIntEnvVar } from '../../utils/envValidation.js'
-import { safeParseJSON } from '../../utils/json.js'
 import { getInferenceProfileBackingModel } from '../../utils/model/bedrock.js'
 import {
   normalizeModelStringForAPI,
@@ -255,6 +248,13 @@ import {
   type RetryContext,
   withRetry,
 } from './withRetry.js'
+import {
+  configureRequestTaskBudgetParams,
+  getRequestExtraBodyParams,
+  getRequestMetadata,
+  getRequestPromptCachingEnabled,
+} from './requestConfig.js'
+import { getRequestCacheControl } from './requestCacheControl.js'
 
 // Define a type that represents valid JSON values
 type JsonValue = string | number | boolean | null | JsonObject | JsonArray
@@ -269,169 +269,9 @@ type JsonArray = JsonValue[]
  * @param betaHeaders - An array of beta headers to include in the request.
  * @returns A JSON object representing the extra body parameters.
  */
-export function getExtraBodyParams(betaHeaders?: string[]): JsonObject {
-  // Parse user's extra body parameters first
-  const extraBodyStr = process.env.CLAUDE_CODE_EXTRA_BODY
-  let result: JsonObject = {}
+export const getExtraBodyParams = getRequestExtraBodyParams
 
-  if (extraBodyStr) {
-    try {
-      // Parse as JSON, which can be null, boolean, number, string, array or object
-      const parsed = safeParseJSON(extraBodyStr)
-      // We expect an object with key-value pairs to spread into API parameters
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        // Shallow clone — safeParseJSON is LRU-cached and returns the same
-        // object reference for the same string. Mutating `result` below
-        // would poison the cache, causing stale values to persist.
-        result = { ...(parsed as JsonObject) }
-      } else {
-        logForDebugging(
-          `CLAUDE_CODE_EXTRA_BODY env var must be a JSON object, but was given ${extraBodyStr}`,
-          { level: 'error' },
-        )
-      }
-    } catch (error) {
-      logForDebugging(
-        `Error parsing CLAUDE_CODE_EXTRA_BODY: ${errorMessage(error)}`,
-        { level: 'error' },
-      )
-    }
-  }
-
-  // Anti-distillation: send fake_tools opt-in for 1P CLI only
-  if (
-    feature('ANTI_DISTILLATION_CC')
-      ? process.env.CLAUDE_CODE_ENTRYPOINT === 'cli' &&
-        shouldIncludeFirstPartyOnlyBetas() &&
-        getFeatureValue_CACHED_MAY_BE_STALE(
-          'tengu_anti_distill_fake_tool_injection',
-          false,
-        )
-      : false
-  ) {
-    result.anti_distillation = ['fake_tools']
-  }
-
-  // Handle beta headers if provided
-  if (betaHeaders && betaHeaders.length > 0) {
-    if (result.anthropic_beta && Array.isArray(result.anthropic_beta)) {
-      // Add to existing array, avoiding duplicates
-      const existingHeaders = result.anthropic_beta as string[]
-      const newHeaders = betaHeaders.filter(
-        header => !existingHeaders.includes(header),
-      )
-      result.anthropic_beta = [...existingHeaders, ...newHeaders]
-    } else {
-      // Create new array with the beta headers
-      result.anthropic_beta = betaHeaders
-    }
-  }
-
-  return result
-}
-
-export function getPromptCachingEnabled(model: string): boolean {
-  // Global disable takes precedence
-  if (isEnvTruthy(process.env.DISABLE_PROMPT_CACHING)) return false
-
-  // Check if we should disable for small/fast model
-  if (isEnvTruthy(process.env.DISABLE_PROMPT_CACHING_HAIKU)) {
-    const smallFastModel = getSmallFastModel()
-    if (model === smallFastModel) return false
-  }
-
-  // Check if we should disable for default Sonnet
-  if (isEnvTruthy(process.env.DISABLE_PROMPT_CACHING_SONNET)) {
-    const defaultSonnet = getDefaultSonnetModel()
-    if (model === defaultSonnet) return false
-  }
-
-  // Check if we should disable for default Opus
-  if (isEnvTruthy(process.env.DISABLE_PROMPT_CACHING_OPUS)) {
-    const defaultOpus = getDefaultOpusModel()
-    if (model === defaultOpus) return false
-  }
-
-  return true
-}
-
-export function getCacheControl({
-  scope,
-  querySource,
-}: {
-  scope?: CacheScope
-  querySource?: QuerySource
-} = {}): {
-  type: 'ephemeral'
-  ttl?: '1h'
-  scope?: CacheScope
-} {
-  return {
-    type: 'ephemeral',
-    ...(should1hCacheTTL(querySource) && { ttl: '1h' }),
-    ...(scope === 'global' && { scope }),
-  }
-}
-
-/**
- * Determines if 1h TTL should be used for prompt caching.
- *
- * Only applied when:
- * 1. User is eligible (ant or subscriber within rate limits)
- * 2. The query source matches a pattern in the GrowthBook allowlist
- *
- * GrowthBook config shape: { allowlist: string[] }
- * Patterns support trailing '*' for prefix matching.
- * Examples:
- * - { allowlist: ["repl_main_thread*", "sdk"] } — main thread + SDK only
- * - { allowlist: ["repl_main_thread*", "sdk", "agent:*"] } — also subagents
- * - { allowlist: ["*"] } — all sources
- *
- * The allowlist is cached in STATE for session stability — prevents mixed
- * TTLs when GrowthBook's disk cache updates mid-request.
- */
-function should1hCacheTTL(querySource?: QuerySource): boolean {
-  // 3P Bedrock users get 1h TTL when opted in via env var — they manage their own billing
-  // No GrowthBook gating needed since 3P users don't have GrowthBook configured
-  if (
-    getAPIProvider() === 'bedrock' &&
-    isEnvTruthy(process.env.ENABLE_PROMPT_CACHING_1H_BEDROCK)
-  ) {
-    return true
-  }
-
-  // Latch eligibility in bootstrap state for session stability — prevents
-  // mid-session overage flips from changing the cache_control TTL, which
-  // would bust the server-side prompt cache (~20K tokens per flip).
-  let userEligible = getPromptCache1hEligible()
-  if (userEligible === null) {
-    userEligible =
-      process.env.USER_TYPE === 'ant' ||
-      (isClaudeAISubscriber() && !currentLimits.isUsingOverage)
-    setPromptCache1hEligible(userEligible)
-  }
-  if (!userEligible) return false
-
-  // Cache allowlist in bootstrap state for session stability — prevents mixed
-  // TTLs when GrowthBook's disk cache updates mid-request
-  let allowlist = getPromptCache1hAllowlist()
-  if (allowlist === null) {
-    const config = getFeatureValue_CACHED_MAY_BE_STALE<{
-      allowlist?: string[]
-    }>('tengu_prompt_cache_1h_config', {})
-    allowlist = config.allowlist ?? []
-    setPromptCache1hAllowlist(allowlist)
-  }
-
-  return (
-    querySource !== undefined &&
-    allowlist.some(pattern =>
-      pattern.endsWith('*')
-        ? querySource.startsWith(pattern.slice(0, -1))
-        : querySource === pattern,
-    )
-  )
-}
+export const getCacheControl = getRequestCacheControl
 
 /**
  * Configure effort parameters for API request.
@@ -476,56 +316,7 @@ type TaskBudgetParam = {
   remaining?: number
 }
 
-export function configureTaskBudgetParams(
-  taskBudget: Options['taskBudget'],
-  outputConfig: BetaOutputConfig & { task_budget?: TaskBudgetParam },
-  betas: string[],
-): void {
-  if (
-    !taskBudget ||
-    'task_budget' in outputConfig ||
-    !shouldIncludeFirstPartyOnlyBetas()
-  ) {
-    return
-  }
-  outputConfig.task_budget = {
-    type: 'tokens',
-    total: taskBudget.total,
-    ...(taskBudget.remaining !== undefined && {
-      remaining: taskBudget.remaining,
-    }),
-  }
-  if (!betas.includes(TASK_BUDGETS_BETA_HEADER)) {
-    betas.push(TASK_BUDGETS_BETA_HEADER)
-  }
-}
-
-export function getAPIMetadata() {
-  // https://docs.google.com/document/d/1dURO9ycXXQCBS0V4Vhl4poDBRgkelFc5t2BNPoEgH5Q/edit?tab=t.0#heading=h.5g7nec5b09w5
-  let extra: JsonObject = {}
-  const extraStr = process.env.CLAUDE_CODE_EXTRA_METADATA
-  if (extraStr) {
-    const parsed = safeParseJSON(extraStr, false)
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      extra = parsed as JsonObject
-    } else {
-      logForDebugging(
-        `CLAUDE_CODE_EXTRA_METADATA env var must be a JSON object, but was given ${extraStr}`,
-        { level: 'error' },
-      )
-    }
-  }
-
-  return {
-    user_id: jsonStringify({
-      ...extra,
-      device_id: getOrCreateUserID(),
-      // Only include OAuth account UUID when actively using OAuth authentication
-      account_uuid: getOauthAccountInfo()?.accountUuid ?? '',
-      session_id: getSessionId(),
-    }),
-  }
-}
+export const getAPIMetadata = getRequestMetadata
 
 export async function verifyApiKey(
   apiKey: string,
@@ -1372,7 +1163,8 @@ async function* queryModel(
   logAPIPrefix(systemPrompt)
 
   const enablePromptCaching =
-    options.enablePromptCaching ?? getPromptCachingEnabled(options.model)
+    options.enablePromptCaching ??
+    getRequestPromptCachingEnabled(options.model)
   const system = buildSystemPromptBlocks(systemPrompt, enablePromptCaching, {
     skipGlobalCacheForSystemPrompt: needsToolBasedCacheMarker,
     querySource: options.querySource,
@@ -1568,7 +1360,7 @@ async function* queryModel(
       options.model,
     )
 
-    configureTaskBudgetParams(
+    configureRequestTaskBudgetParams(
       options.taskBudget,
       outputConfig as BetaOutputConfig & { task_budget?: TaskBudgetParam },
       betasParams,
@@ -1637,7 +1429,8 @@ async function* queryModel(
     })
 
     const enablePromptCaching =
-      options.enablePromptCaching ?? getPromptCachingEnabled(retryContext.model)
+      options.enablePromptCaching ??
+      getRequestPromptCachingEnabled(retryContext.model)
 
     // Fast mode: header is latched session-stable (cache-safe), but
     // `speed='fast'` stays dynamic so cooldown still suppresses the actual

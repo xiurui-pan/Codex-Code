@@ -52,20 +52,24 @@
 - `b0b9144` `refactor: route request helpers through request config facade`
   新增 `src/services/api/requestConfig.ts` 作为 `getAPIMetadata`、`getExtraBodyParams`、`getCacheControl` 的统一入口，并把 `claudeAiLimits`、`tokenEstimation`、`sideQuery`、`yoloClassifier` 这 4 个外部调用点从直接依赖 `claude.ts` 改成走这层入口，继续压缩外围代码对 `services/api/claude.ts` 的直连面。
 
-- 未提交：外围小模型调用收口
-  继续清掉剩余外部对 `services/api/claude.ts` 的直接模型调用，把 `Feedback.tsx` 和 `utils/teleport.tsx` 从 `queryHaiku` 改到 `model` facade 的 `callSmallModel`，进一步收紧外围外部对 Claude 专名入口的依赖。
+- `f064633` `refactor: route remaining small-model callers through facade`
+  把剩余外围小模型调用继续接到 `model` facade，进一步清理外部对 `queryHaiku` 这类 Claude 专名入口的直接依赖。
+
+- 未提交：请求配置家族内移
+  把 `claude.ts` 里的请求配置家族真正搬到 `requestConfig.ts` / `requestCacheControl.ts`，并让 `yoloClassifier` 跟着改到 `requestCacheControl`；同时按新决策明确移除了 Anthropic 专用的 `anti_distillation` 相关逻辑，不再保留也不再迁移。
 
 ## 当前进行中
 
 - 继续清点 `upstream/claude-code` 里仍然直接从 `services/api/client.ts` 和 `services/api/claude.ts` 取入口的路径。
-- `providerClient`、`model`、`requestConfig` 三条入口已经初步成形，外围外部直连点也已经基本清零，当前正在把焦点转向 `services/api/claude.ts` 内部能力拆分。
+- `providerClient`、`model`、`requestConfig` 三条入口已经初步成形，外围外部直连点也已经基本清零，当前已经进入 `services/api/claude.ts` 内部能力拆分阶段。
 - 当前焦点正在从 client 侧链和辅助函数层，逐步转向更核心的主循环入口和回合边界。
+- 明确不再保留 Anthropic 专用的 `anti_distillation` 逻辑，后续拆分以通用调用能力为主。
 - 控制改动范围，避免又回到 prototype 扩功能的路线。
 
 ## 下一步
 
-- 开始挑选最小的 `services/api/claude.ts` 内部能力接缝，继续向查询主循环和回合边界推进。
-- 逐步把高频复用、但仍然写死在 `claude.ts` 内部的能力拆到更清晰的 facade 或辅助层。
+- 继续从 `services/api/claude.ts` 内部挑选最小的高频能力接缝，逐步拆到更清晰的 facade 或辅助层。
+- 在内部能力拆分继续稳定后，进一步朝查询主循环入口和回合边界推进。
 - 优先选择高频复用、但写入范围还能控制住的主链入口，避免一次跨太大。
 - 在 facade 足够稳定后，再进入下一层：抽更中立的调用类型和回合边界。
 - 每轮都同步更新这份文件，记录已完成提交、当前进行中和下一步。
