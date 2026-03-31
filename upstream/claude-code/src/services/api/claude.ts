@@ -1,23 +1,18 @@
 import type {
   BetaContentBlock,
-  BetaContentBlockParam,
-  BetaImageBlockParam,
   BetaJSONOutputFormat,
   BetaMessage,
   BetaMessageDeltaUsage,
   BetaMessageStreamParams,
   BetaOutputConfig,
   BetaRawMessageStreamEvent,
-  BetaRequestDocumentBlock,
   BetaStopReason,
   BetaToolChoiceAuto,
   BetaToolChoiceTool,
-  BetaToolResultBlockParam,
   BetaToolUnion,
   BetaUsage,
   BetaMessageParam as MessageParam,
 } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
-import type { TextBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import type { Stream } from '@anthropic-ai/sdk/streaming.mjs'
 import { randomUUID } from 'crypto'
 import {
@@ -53,15 +48,10 @@ import {
   logAPIPrefix,
   toolToAPISchema,
 } from '../../utils/api.js'
-import {
-  getBedrockExtraBodyParamsBetas,
-  getMergedBetas,
-  getModelBetas,
-} from '../../utils/betas.js'
+import { getMergedBetas, getModelBetas } from '../../utils/betas.js'
 import {
   CAPPED_DEFAULT_MAX_TOKENS,
   getModelMaxOutputTokens,
-  getSonnet1mExpTreatmentEnabled,
 } from '../../utils/context.js'
 import { resolveAppliedEffort } from '../../utils/effort.js'
 import { isEnvTruthy } from '../../utils/envUtils.js'
@@ -78,12 +68,7 @@ import {
   stripCallerFieldFromAssistantMessage,
   stripToolReferenceBlocksFromUserMessage,
 } from '../../utils/messages.js'
-import {
-  getDefaultOpusModel,
-  getDefaultSonnetModel,
-  getSmallFastModel,
-  isNonCustomOpusModel,
-} from '../../utils/model/model.js'
+import { isNonCustomOpusModel } from '../../utils/model/model.js'
 import {
   asSystemPrompt,
   type SystemPrompt,
@@ -95,7 +80,6 @@ import {
   extractQuotaStatusFromError,
   extractQuotaStatusFromHeaders,
 } from '../claudeAiLimits.js'
-import { getAPIContextManagement } from '../compact/apiMicrocompact.js'
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const autoModeStateModule = feature('TRANSCRIPT_CLASSIFIER')
@@ -125,12 +109,8 @@ import {
 import {
   AFK_MODE_BETA_HEADER,
   CONTEXT_1M_BETA_HEADER,
-  CONTEXT_MANAGEMENT_BETA_HEADER,
   EFFORT_BETA_HEADER,
-  FAST_MODE_BETA_HEADER,
   PROMPT_CACHING_SCOPE_BETA_HEADER,
-  REDACT_THINKING_BETA_HEADER,
-  STRUCTURED_OUTPUTS_BETA_HEADER,
   TASK_BUDGETS_BETA_HEADER,
 } from 'src/constants/betas.js'
 import type { QuerySource } from 'src/constants/querySource.js'
@@ -149,13 +129,10 @@ import { getAgentContext } from 'src/utils/agentContext.js'
 import { isClaudeAISubscriber } from 'src/utils/auth.js'
 import {
   getToolSearchBetaHeader,
-  modelSupportsStructuredOutputs,
-  shouldIncludeFirstPartyOnlyBetas,
   shouldUseGlobalCacheScope,
 } from 'src/utils/betas.js'
 import { CLAUDE_IN_CHROME_MCP_SERVER_NAME } from 'src/utils/claudeInChrome/common.js'
 import { CHROME_TOOL_SEARCH_INSTRUCTIONS } from 'src/utils/claudeInChrome/prompt.js'
-import { getMaxThinkingTokensForModel } from 'src/utils/context.js'
 import { logForDebugging } from 'src/utils/debug.js'
 import { logForDiagnosticsNoPII } from 'src/utils/diagLogs.js'
 import { type EffortValue, modelSupportsEffort } from 'src/utils/effort.js'
@@ -170,11 +147,7 @@ import { headlessProfilerCheckpoint } from 'src/utils/headlessProfiler.js'
 import { isMcpInstructionsDeltaEnabled } from 'src/utils/mcpInstructionsDelta.js'
 import { calculateUSDCost } from 'src/utils/modelCost.js'
 import { endQueryProfile, queryCheckpoint } from 'src/utils/queryProfiler.js'
-import {
-  modelSupportsAdaptiveThinking,
-  modelSupportsThinking,
-  type ThinkingConfig,
-} from 'src/utils/thinking.js'
+import { type ThinkingConfig } from 'src/utils/thinking.js'
 import {
   extractDiscoveredToolNames,
   isDeferredToolsDeltaEnabled,
@@ -245,12 +218,12 @@ import {
   withRetry,
 } from './withRetry.js'
 import {
-  configureRequestTaskBudgetParams,
   getRequestExtraBodyParams,
   getRequestMetadata,
   getRequestPromptCachingEnabled,
 } from './requestConfig.js'
 import { getRequestCacheControl } from './requestCacheControl.js'
+import { buildRequestParamsFromContext } from './requestParamsBuilder.js'
 import {
   addCacheBreakpoints as addRequestCacheBreakpoints,
   assistantMessageToMessageParam as assistantMessageToRequestParam,
@@ -306,17 +279,6 @@ function configureEffortParams(
       effort_override: effortValue,
     }
   }
-}
-
-// output_config.task_budget — API-side token budget awareness for the model.
-// Stainless SDK types don't yet include task_budget on BetaOutputConfig, so we
-// define the wire shape locally and cast. The API validates on receipt; see
-// api/api/schemas/messages/request/output_config.py:12-39 in the monorepo.
-// Beta: task-budgets-2026-03-13 (EAP, claude-strudel-eap only as of Mar 2026).
-type TaskBudgetParam = {
-  type: 'tokens'
-  total: number
-  remaining?: number
 }
 
 export const getAPIMetadata = getRequestMetadata
@@ -1172,197 +1134,30 @@ async function* queryModel(
   let lastRequestBetas: string[] | undefined
 
   const paramsFromContext = (retryContext: RetryContext) => {
-    const betasParams = [...betas]
-
-    // Append 1M beta dynamically for the Sonnet 1M experiment.
-    if (
-      !betasParams.includes(CONTEXT_1M_BETA_HEADER) &&
-      getSonnet1mExpTreatmentEnabled(retryContext.model)
-    ) {
-      betasParams.push(CONTEXT_1M_BETA_HEADER)
-    }
-
-    // For Bedrock, include both model-based betas and dynamically-added tool search header
-    const bedrockBetas =
-      getAPIProvider() === 'bedrock'
-        ? [
-            ...getBedrockExtraBodyParamsBetas(retryContext.model),
-            ...(toolSearchHeader ? [toolSearchHeader] : []),
-          ]
-        : []
-    const extraBodyParams = getExtraBodyParams(bedrockBetas)
-
-    const outputConfig: BetaOutputConfig = {
-      ...((extraBodyParams.output_config as BetaOutputConfig) ?? {}),
-    }
-
-    configureEffortParams(
-      effort,
-      outputConfig,
-      extraBodyParams,
-      betasParams,
-      options.model,
-    )
-
-    configureRequestTaskBudgetParams(
-      options.taskBudget,
-      outputConfig as BetaOutputConfig & { task_budget?: TaskBudgetParam },
-      betasParams,
-    )
-
-    // Merge outputFormat into extraBodyParams.output_config alongside effort
-    // Requires structured-outputs beta header per SDK (see parse() in messages.mjs)
-    if (options.outputFormat && !('format' in outputConfig)) {
-      outputConfig.format = options.outputFormat as BetaJSONOutputFormat
-      // Add beta header if not already present and provider supports it
-      if (
-        modelSupportsStructuredOutputs(options.model) &&
-        !betasParams.includes(STRUCTURED_OUTPUTS_BETA_HEADER)
-      ) {
-        betasParams.push(STRUCTURED_OUTPUTS_BETA_HEADER)
-      }
-    }
-
-    // Retry context gets preference because it tries to course correct if we exceed the context window limit
-    const maxOutputTokens =
-      retryContext?.maxTokensOverride ||
-      options.maxOutputTokensOverride ||
-      getMaxOutputTokensForModel(options.model)
-
-    const hasThinking =
-      thinkingConfig.type !== 'disabled' &&
-      !isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_THINKING)
-    let thinking: BetaMessageStreamParams['thinking'] | undefined = undefined
-
-    // IMPORTANT: Do not change the adaptive-vs-budget thinking selection below
-    // without notifying the model launch DRI and research. This is a sensitive
-    // setting that can greatly affect model quality and bashing.
-    if (hasThinking && modelSupportsThinking(options.model)) {
-      if (
-        !isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING) &&
-        modelSupportsAdaptiveThinking(options.model)
-      ) {
-        // For models that support adaptive thinking, always use adaptive
-        // thinking without a budget.
-        thinking = {
-          type: 'adaptive',
-        } satisfies BetaMessageStreamParams['thinking']
-      } else {
-        // For models that do not support adaptive thinking, use the default
-        // thinking budget unless explicitly specified.
-        let thinkingBudget = getMaxThinkingTokensForModel(options.model)
-        if (
-          thinkingConfig.type === 'enabled' &&
-          thinkingConfig.budgetTokens !== undefined
-        ) {
-          thinkingBudget = thinkingConfig.budgetTokens
-        }
-        thinkingBudget = Math.min(maxOutputTokens - 1, thinkingBudget)
-        thinking = {
-          budget_tokens: thinkingBudget,
-          type: 'enabled',
-        } satisfies BetaMessageStreamParams['thinking']
-      }
-    }
-
-    // Get API context management strategies if enabled
-    const contextManagement = getAPIContextManagement({
-      hasThinking,
-      isRedactThinkingActive: betasParams.includes(REDACT_THINKING_BETA_HEADER),
-      clearAllThinking: thinkingClearLatched,
-    })
-
-    const enablePromptCaching =
-      options.enablePromptCaching ??
-      getRequestPromptCachingEnabled(retryContext.model)
-
-    // Fast mode: header is latched session-stable (cache-safe), but
-    // `speed='fast'` stays dynamic so cooldown still suppresses the actual
-    // fast-mode request without changing the cache key.
-    let speed: BetaMessageStreamParams['speed']
-    const isFastModeForRetry =
-      isFastModeEnabled() &&
-      isFastModeAvailable() &&
-      !isFastModeCooldown() &&
-      isFastModeSupportedByModel(options.model) &&
-      !!retryContext.fastMode
-    if (isFastModeForRetry) {
-      speed = 'fast'
-    }
-    if (fastModeHeaderLatched && !betasParams.includes(FAST_MODE_BETA_HEADER)) {
-      betasParams.push(FAST_MODE_BETA_HEADER)
-    }
-
-    // AFK mode beta: latched once auto mode is first activated. Still gated
-    // by isAgenticQuery per-call so classifiers/compaction don't get it.
-    if (feature('TRANSCRIPT_CLASSIFIER')) {
-      if (
-        afkHeaderLatched &&
-        shouldIncludeFirstPartyOnlyBetas() &&
-        isAgenticQuery &&
-        !betasParams.includes(AFK_MODE_BETA_HEADER)
-      ) {
-        betasParams.push(AFK_MODE_BETA_HEADER)
-      }
-    }
-
-    // Cache editing beta: header is latched session-stable; useCachedMC
-    // (controls cache_edits body behavior) stays live so edits stop when
-    // the feature disables but the header doesn't flip.
-    const useCachedMC =
-      cachedMCEnabled &&
-      getAPIProvider() === 'firstParty' &&
-      options.querySource === 'repl_main_thread'
-    if (
-      cacheEditingHeaderLatched &&
-      getAPIProvider() === 'firstParty' &&
-      options.querySource === 'repl_main_thread' &&
-      !betasParams.includes(cacheEditingBetaHeader)
-    ) {
-      betasParams.push(cacheEditingBetaHeader)
-      logForDebugging(
-        'Cache editing beta header enabled for cached microcompact',
-      )
-    }
-
-    // Only send temperature when thinking is disabled — the API requires
-    // temperature: 1 when thinking is enabled, which is already the default.
-    const temperature = !hasThinking
-      ? (options.temperatureOverride ?? 1)
-      : undefined
-
-    lastRequestBetas = betasParams
-
-    return {
-      model: normalizeModelStringForAPI(options.model),
-      messages: addCacheBreakpoints(
-        messagesForAPI,
-        enablePromptCaching,
-        options.querySource,
-        useCachedMC,
-        consumedCacheEdits,
-        consumedPinnedEdits,
-        options.skipCacheWrite,
-      ),
+    const result = buildRequestParamsFromContext(retryContext, {
+      options,
+      betas,
+      messagesForAPI,
       system,
-      tools: allTools,
-      tool_choice: options.toolChoice,
-      ...(useBetas && { betas: betasParams }),
-      metadata: getAPIMetadata(),
-      max_tokens: maxOutputTokens,
-      thinking,
-      ...(temperature !== undefined && { temperature }),
-      ...(contextManagement &&
-        useBetas &&
-        betasParams.includes(CONTEXT_MANAGEMENT_BETA_HEADER) && {
-          context_management: contextManagement,
-        }),
-      ...extraBodyParams,
-      ...(Object.keys(outputConfig).length > 0 && {
-        output_config: outputConfig,
-      }),
-      ...(speed !== undefined && { speed }),
-    }
+      allTools,
+      thinkingConfig,
+      useBetas,
+      toolSearchHeader,
+      effort,
+      thinkingClearLatched,
+      cacheEditingHeaderLatched,
+      cacheEditingBetaHeader,
+      cachedMCEnabled,
+      afkHeaderLatched,
+      isAgenticQuery,
+      consumedCacheEdits,
+      consumedPinnedEdits,
+      isFastMode,
+      fastModeHeaderLatched,
+      configureEffortParams,
+    })
+    lastRequestBetas = result.lastRequestBetas
+    return result.params
   }
 
   // Compute log scalars synchronously so the fire-and-forget .then() closure
