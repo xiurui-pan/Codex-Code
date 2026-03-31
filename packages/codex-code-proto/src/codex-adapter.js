@@ -46,6 +46,7 @@ export function buildResponsesRequest(prompt, session, config) {
 function parseSsePayload(rawText) {
   const output = [];
   let responseId = null;
+  let streamError = null;
   const blocks = rawText.split('\n\n');
 
   for (const block of blocks) {
@@ -68,6 +69,11 @@ function parseSsePayload(rawText) {
     }
 
     const payload = JSON.parse(payloadText);
+
+    if (payload.type === 'error' || payload.type === 'response.failed') {
+      streamError = payload.error?.message ?? payload.detail ?? payload.message ?? 'unknown stream error';
+    }
+
     if (payload.type === 'response.output_item.done' && payload.item) {
       output.push(payload.item);
     }
@@ -80,6 +86,7 @@ function parseSsePayload(rawText) {
   return {
     output,
     id: responseId,
+    error: streamError,
   };
 }
 
@@ -111,6 +118,14 @@ export async function runCodexTurn(prompt, session, config) {
   }
 
   const payload = parseSsePayload(await response.text());
+
+  if (payload.error) {
+    throw new Error(`responses stream failed: ${payload.error}`);
+  }
+
+  if (!payload.id) {
+    throw new Error('responses stream ended before response.completed');
+  }
 
   return {
     responseId: payload.id ?? null,
