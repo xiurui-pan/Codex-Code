@@ -53,7 +53,6 @@ import {
   CAPPED_DEFAULT_MAX_TOKENS,
   getModelMaxOutputTokens,
 } from '../../utils/context.js'
-import { resolveAppliedEffort } from '../../utils/effort.js'
 import { isEnvTruthy } from '../../utils/envUtils.js'
 import { errorMessage } from '../../utils/errors.js'
 import { computeFingerprintFromMessages } from '../../utils/fingerprint.js'
@@ -76,7 +75,6 @@ import {
 import { tokenCountFromLastAPIResponse } from '../../utils/tokens.js'
 import { getDynamicConfig_BLOCKS_ON_INIT } from '../analytics/growthbook.js'
 import {
-  currentLimits,
   extractQuotaStatusFromError,
   extractQuotaStatusFromHeaders,
 } from '../claudeAiLimits.js'
@@ -94,24 +92,12 @@ import {
   APIUserAbortError,
 } from '@anthropic-ai/sdk/error'
 import {
-  getAfkModeHeaderLatched,
-  getCacheEditingHeaderLatched,
-  getFastModeHeaderLatched,
-  getLastApiCompletionTimestamp,
   getSessionId,
-  getThinkingClearLatched,
-  setAfkModeHeaderLatched,
-  setCacheEditingHeaderLatched,
-  setFastModeHeaderLatched,
   setLastMainRequestId,
-  setThinkingClearLatched,
 } from 'src/bootstrap/state.js'
 import {
-  AFK_MODE_BETA_HEADER,
-  CONTEXT_1M_BETA_HEADER,
   EFFORT_BETA_HEADER,
   PROMPT_CACHING_SCOPE_BETA_HEADER,
-  TASK_BUDGETS_BETA_HEADER,
 } from 'src/constants/betas.js'
 import type { QuerySource } from 'src/constants/querySource.js'
 import type { Notification } from 'src/context/notifications.js'
@@ -136,12 +122,7 @@ import { CHROME_TOOL_SEARCH_INSTRUCTIONS } from 'src/utils/claudeInChrome/prompt
 import { logForDebugging } from 'src/utils/debug.js'
 import { logForDiagnosticsNoPII } from 'src/utils/diagLogs.js'
 import { type EffortValue, modelSupportsEffort } from 'src/utils/effort.js'
-import {
-  isFastModeAvailable,
-  isFastModeCooldown,
-  isFastModeEnabled,
-  isFastModeSupportedByModel,
-} from 'src/utils/fastMode.js'
+import { isFastModeEnabled } from 'src/utils/fastMode.js'
 import { returnValue } from 'src/utils/generators.js'
 import { headlessProfilerCheckpoint } from 'src/utils/headlessProfiler.js'
 import { isMcpInstructionsDeltaEnabled } from 'src/utils/mcpInstructionsDelta.js'
@@ -173,18 +154,12 @@ import {
 } from '../../utils/sessionActivity.js'
 import { jsonStringify } from '../../utils/slowOperations.js'
 import {
-  isBetaTracingEnabled,
-  type LLMRequestNewContext,
-  startLLMRequestSpan,
-} from '../../utils/telemetry/sessionTracing.js'
 /* eslint-enable @typescript-eslint/no-require-imports */
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
 } from '../analytics/index.js'
 import {
-  consumePendingCacheEdits,
-  getPinnedCacheEdits,
   markToolsSentToAPIState,
 } from '../compact/microCompact.js'
 import { getInitializationStatus } from '../lsp/manager.js'
@@ -206,9 +181,7 @@ import {
   type NonNullableUsage,
 } from './logging.js'
 import {
-  CACHE_TTL_1HOUR_MS,
   checkResponseForCacheBreak,
-  recordPromptState,
 } from './promptCacheBreakDetection.js'
 import {
   CannotRetryError,
@@ -224,6 +197,7 @@ import {
 } from './requestConfig.js'
 import { getRequestCacheControl } from './requestCacheControl.js'
 import { buildRequestParamsFromContext } from './requestParamsBuilder.js'
+import { buildRequestPreflightState } from './requestPreflightState.js'
 import {
   addCacheBreakpoints as addRequestCacheBreakpoints,
   assistantMessageToMessageParam as assistantMessageToRequestParam,
@@ -993,112 +967,30 @@ async function* queryModel(
   }
   const allTools = [...toolSchemas, ...extraToolSchemas]
 
-  const isFastMode =
-    isFastModeEnabled() &&
-    isFastModeAvailable() &&
-    !isFastModeCooldown() &&
-    isFastModeSupportedByModel(options.model) &&
-    !!options.fastMode
-
-  // Sticky-on latches for dynamic beta headers. Each header, once first
-  // sent, keeps being sent for the rest of the session so mid-session
-  // toggles don't change the server-side cache key and bust ~50-70K tokens.
-  // Latches are cleared on /clear and /compact via clearBetaHeaderLatches().
-  // Per-call gates (isAgenticQuery, querySource===repl_main_thread) stay
-  // per-call so non-agentic queries keep their own stable header set.
-
-  let afkHeaderLatched = getAfkModeHeaderLatched() === true
-  if (feature('TRANSCRIPT_CLASSIFIER')) {
-    if (
-      !afkHeaderLatched &&
-      isAgenticQuery &&
-      shouldIncludeFirstPartyOnlyBetas() &&
-      (autoModeStateModule?.isAutoModeActive() ?? false)
-    ) {
-      afkHeaderLatched = true
-      setAfkModeHeaderLatched(true)
-    }
-  }
-
-  let fastModeHeaderLatched = getFastModeHeaderLatched() === true
-  if (!fastModeHeaderLatched && isFastMode) {
-    fastModeHeaderLatched = true
-    setFastModeHeaderLatched(true)
-  }
-
-  let cacheEditingHeaderLatched = getCacheEditingHeaderLatched() === true
-  if (feature('CACHED_MICROCOMPACT')) {
-    if (
-      !cacheEditingHeaderLatched &&
-      cachedMCEnabled &&
-      getAPIProvider() === 'firstParty' &&
-      options.querySource === 'repl_main_thread'
-    ) {
-      cacheEditingHeaderLatched = true
-      setCacheEditingHeaderLatched(true)
-    }
-  }
-
-  // Only latch from agentic queries so a classifier call doesn't flip the
-  // main thread's context_management mid-turn.
-  let thinkingClearLatched = getThinkingClearLatched() === true
-  if (!thinkingClearLatched && isAgenticQuery) {
-    const lastCompletion = getLastApiCompletionTimestamp()
-    if (
-      lastCompletion !== null &&
-      Date.now() - lastCompletion > CACHE_TTL_1HOUR_MS
-    ) {
-      thinkingClearLatched = true
-      setThinkingClearLatched(true)
-    }
-  }
-
-  const effort = resolveAppliedEffort(options.model, options.effortValue)
-
-  if (feature('PROMPT_CACHE_BREAK_DETECTION')) {
-    // Exclude defer_loading tools from the hash -- the API strips them from the
-    // prompt, so they never affect the actual cache key. Including them creates
-    // false-positive "tool schemas changed" breaks when tools are discovered or
-    // MCP servers reconnect.
-    const toolsForCacheDetection = allTools.filter(
-      t => !('defer_loading' in t && t.defer_loading),
-    )
-    // Capture everything that could affect the server-side cache key.
-    // Pass latched header values (not live state) so break detection
-    // reflects what we actually send, not what the user toggled.
-    recordPromptState({
-      system,
-      toolSchemas: toolsForCacheDetection,
-      querySource: options.querySource,
-      model: options.model,
-      agentId: options.agentId,
-      fastMode: fastModeHeaderLatched,
-      globalCacheStrategy,
-      betas,
-      autoModeActive: afkHeaderLatched,
-      isUsingOverage: currentLimits.isUsingOverage ?? false,
-      cachedMCEnabled: cacheEditingHeaderLatched,
-      effortValue: effort,
-      extraBodyParams: getExtraBodyParams(),
-    })
-  }
-
-  const newContext: LLMRequestNewContext | undefined = isBetaTracingEnabled()
-    ? {
-        systemPrompt: systemPrompt.join('\n\n'),
-        querySource: options.querySource,
-        tools: jsonStringify(allTools),
-      }
-    : undefined
-
-  // Capture the span so we can pass it to endLLMRequestSpan later
-  // This ensures responses are matched to the correct request when multiple requests run in parallel
-  const llmSpan = startLLMRequestSpan(
-    options.model,
-    newContext,
-    messagesForAPI,
+  const {
     isFastMode,
-  )
+    afkHeaderLatched,
+    fastModeHeaderLatched,
+    cacheEditingHeaderLatched,
+    thinkingClearLatched,
+    effort,
+    newContext,
+    llmSpan,
+    consumedCacheEdits,
+    consumedPinnedEdits,
+    lastRequestBetas: initialLastRequestBetas,
+  } = buildRequestPreflightState({
+    options,
+    isAgenticQuery,
+    cachedMCEnabled,
+    globalCacheStrategy,
+    betas,
+    system,
+    allTools,
+    systemPrompt,
+    messagesForAPI,
+    autoModeStateModule,
+  })
 
   const startIncludingRetries = Date.now()
   let start = Date.now()
@@ -1123,15 +1015,9 @@ async function* queryModel(
     }
   }
 
-  // Consume pending cache edits ONCE before paramsFromContext is defined.
-  // paramsFromContext is called multiple times (logging, retries), so consuming
-  // inside it would cause the first call to steal edits from subsequent calls.
-  const consumedCacheEdits = cachedMCEnabled ? consumePendingCacheEdits() : null
-  const consumedPinnedEdits = cachedMCEnabled ? getPinnedCacheEdits() : []
-
   // Capture the betas sent in the last API request, including the ones that
   // were dynamically added, so we can log and send it to telemetry.
-  let lastRequestBetas: string[] | undefined
+  let lastRequestBetas = initialLastRequestBetas
 
   const paramsFromContext = (retryContext: RetryContext) => {
     const result = buildRequestParamsFromContext(retryContext, {

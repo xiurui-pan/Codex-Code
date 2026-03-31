@@ -61,21 +61,23 @@
 - `c7e95bd` `refactor: move request prompt assembly out of claude api`
   把请求构造主段从 `claude.ts` 内部继续拆出到 `requestPromptAssembly.ts`，并保持 Claude Code 现有的 system prompt 骨架、提示词内容和拼接顺序不变。
 
-- 未提交：请求参数构造层内移
+- `9a1c7af` `refactor: move request params builder out of claude api`
   把 `paramsFromContext` 这层请求参数构造逻辑搬到 `requestParamsBuilder.ts`，并让 `claude.ts` 改成调用这层；同时保持 system prompt 骨架和流式解析主干不变。
+
+- 未提交：请求前置状态准备层内移
+  把请求前置状态准备这一层搬到 `requestPreflightState.ts`，并让 `claude.ts` 改成调用这层；同时保持 system prompt 骨架、`paramsFromContext` 本体和流式解析主干不变。
 
 ## 当前进行中
 
-- 继续清点 `upstream/claude-code` 里仍然直接从 `services/api/client.ts` 和 `services/api/claude.ts` 取入口的路径。
 - `providerClient`、`model`、`requestConfig` 三条入口已经初步成形，外围外部直连点也已经基本清零，当前已经进入 `services/api/claude.ts` 内部能力拆分阶段。
-- 当前焦点已经从请求构造层继续推进到请求参数构造层，正在把更靠近主循环的请求参数拼装能力从 `claude.ts` 内部拆出来。
+- 当前焦点已经从请求参数构造层继续推进到请求前置状态准备层，正在把 `isFastMode`、锁存状态、`recordPromptState`、`newContext`、`llmSpan` 之前的准备逻辑从 `claude.ts` 内部拆出来。
 - 明确不再保留 Anthropic 专用的 `anti_distillation` 逻辑，后续拆分以通用调用能力为主。
 - 控制改动范围，避免又回到 prototype 扩功能的路线。
 
 ## 下一步
 
-- 继续从 `services/api/claude.ts` 内部挑选最小的高频能力接缝，优先推进请求前置状态准备逻辑的内移，例如 `afk/fast/cacheEditing/thinkingClear` 与 `recordPromptState` 附近。
-- 在请求参数构造层继续稳定后，进一步朝查询主循环入口和回合边界推进。
+- 继续从 `services/api/claude.ts` 内部挑选最小的高频能力接缝，优先推进请求输入准备层的内移，例如 `messagesForAPI` 归一化、deferred tools、Chrome 指令、`extraToolSchemas` / `allTools` 组装这类逻辑。
+- 在请求前置状态准备层继续稳定后，进一步朝查询主循环入口和回合边界推进。
 - 优先选择高频复用、但写入范围还能控制住的主链入口，避免一次跨太大。
 - 在 facade 足够稳定后，再进入下一层：抽更中立的调用类型和回合边界。
 - 每轮都同步更新这份文件，记录已完成提交、当前进行中和下一步。
