@@ -13,8 +13,8 @@ import {
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js'
 import { logEvent } from '../../services/analytics/index.js'
 import type { AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from '../../services/analytics/metadata.js'
-import { getCacheControl } from '../../services/api/claude.js'
 import { parsePromptTooLongTokenCounts } from '../../services/api/errors.js'
+import { getRequestCacheControl } from '../../services/api/requestConfig.js'
 import { getDefaultMaxRetries } from '../../services/api/withRetry.js'
 import type { Tool, ToolPermissionContext, Tools } from '../../Tool.js'
 import type { Message } from '../../types/message.js'
@@ -470,7 +470,7 @@ function buildClaudeMdMessage(): Anthropic.MessageParam | null {
           `instructions the user provided to the agent and should be treated ` +
           `as part of the user's intent when evaluating actions.\n\n` +
           `<user_claude_md>\n${claudeMd}\n</user_claude_md>`,
-        cache_control: getCacheControl({ querySource: 'auto_mode' }),
+        cache_control: getRequestCacheControl({ querySource: 'auto_mode' }),
       },
     ],
   }
@@ -743,7 +743,7 @@ async function classifyYoloActionXml(
     {
       type: 'text' as const,
       text: xmlSystemPrompt,
-      cache_control: getCacheControl({ querySource: 'auto_mode' }),
+      cache_control: getRequestCacheControl({ querySource: 'auto_mode' }),
     },
   ]
   let stage1Usage: ClassifierUsage | undefined
@@ -1091,9 +1091,9 @@ export async function classifyYoloAction(
     )
   }
 
-  // Use getCacheControl for consistency with the main agent loop —
+  // Use request cache control for consistency with the main agent loop —
   // respects GrowthBook TTL allowlist and query-source gating.
-  const cacheControl = getCacheControl({ querySource: 'auto_mode' })
+  const cacheControl = getRequestCacheControl({ querySource: 'auto_mode' })
   // Place cache_control on the action block. In the two-stage classifier,
   // stage 2 shares the same transcript+action prefix as stage 1 — the
   // breakpoint here gives stage 2 a guaranteed cache hit on the full prefix.
@@ -1138,7 +1138,7 @@ export async function classifyYoloAction(
         {
           type: 'text' as const,
           text: systemPrompt,
-          cache_control: getCacheControl({ querySource: 'auto_mode' }),
+          cache_control: getRequestCacheControl({ querySource: 'auto_mode' }),
         },
       ],
       skipSystemPromptPrefix: true,

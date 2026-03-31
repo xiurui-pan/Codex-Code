@@ -23,8 +23,11 @@ import {
 } from '../utils/model/model.js'
 import { jsonStringify } from '../utils/slowOperations.js'
 import { isToolReferenceBlock } from '../utils/toolSearch.js'
-import { getAPIMetadata, getExtraBodyParams } from './api/claude.js'
 import { getProviderClient } from './api/providerClient.js'
+import {
+  getRequestExtraBodyParams,
+  getRequestMetadata,
+} from './api/requestConfig.js'
 import { withTokenCountVCR } from './vcr.js'
 
 // Minimal values for token counting with thinking enabled
@@ -305,8 +308,8 @@ export async function countTokensViaHaikuFallback(
     messages: messagesToSend,
     tools: tools.length > 0 ? tools : undefined,
     ...(filteredBetas.length > 0 && { betas: filteredBetas }),
-    metadata: getAPIMetadata(),
-    ...getExtraBodyParams(),
+    metadata: getRequestMetadata(),
+    ...getRequestExtraBodyParams(),
     // Enable thinking if messages contain thinking blocks
     ...(containsThinking && {
       thinking: {

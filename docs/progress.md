@@ -40,16 +40,29 @@
 - `648e077` `refactor: route token estimation through provider client`
   把 token estimation 的客户端入口接到 `providerClient`，继续沿着 `services/api/client.ts` 侧链做最小替换。
 
+- `1579cb0` `refactor: route query engine usage through model facade`
+  把 `QueryEngine` 需要的 usage helper 接到 `services/api/model.ts`，让主查询链的一部分先从 facade 取入口。
+
+- `1bf24e0` `refactor: route forked agent usage through model facade`
+  把 forked agent 这条 usage 路径接到 `model` facade，继续减少外围代码直接依赖 Claude 专名实现。
+
+- `c4569b7` `refactor: route helper callers through model facade`
+  把一整批非流式和小模型 helper callers 接到 `model` facade，明显扩大了中立调用面的覆盖范围。
+
+- 未提交：API 请求辅助层收口
+  新增 `src/services/api/requestConfig.ts` 作为 `getAPIMetadata`、`getExtraBodyParams`、`getCacheControl` 的统一入口，并把 `claudeAiLimits`、`tokenEstimation`、`sideQuery`、`yoloClassifier` 这 4 个外部调用点从直接依赖 `claude.ts` 改成走这层入口，继续压缩外围代码对 `services/api/claude.ts` 的直连面。
+
 ## 当前进行中
 
 - 继续清点 `upstream/claude-code` 里仍然直接从 `services/api/client.ts` 和 `services/api/claude.ts` 取入口的路径。
-- 继续清理 `services/api/client.ts` 一侧剩余的 Claude 直连点，逐步旁路到 `services/api/providerClient.ts`。
-- 在 client 侧链收窄到一定程度后，准备继续向更核心的 `services/api/claude.ts` 主链靠近。
+- `providerClient`、`model`、`requestConfig` 三条入口已经初步成形，正在收尾外围调用点并准备继续向更核心的 `services/api/claude.ts` 主链靠近。
+- 当前焦点正在从 client 侧链和辅助函数层，逐步转向更核心的主循环入口和回合边界。
 - 控制改动范围，避免又回到 prototype 扩功能的路线。
 
 ## 下一步
 
-- 继续替换 `services/api/client.ts` 一侧剩余的 Claude 直连点，优先处理还在外围但复用面较广的入口。
-- 在 `providerClient` 和 `model` 两条 facade 稳住后，开始挑选最小的 `services/api/claude.ts` 主链接缝做下一轮旁路。
+- 继续替换剩余的外围 Claude 直连点，尽量让新的外部调用先从统一 facade 取入口。
+- 在这一块收口后，开始挑选最小的 `services/api/claude.ts` 主链接缝，继续向查询主循环和回合边界推进。
+- 优先选择高频复用、但写入范围还能控制住的主链入口，避免一次跨太大。
 - 在 facade 足够稳定后，再进入下一层：抽更中立的调用类型和回合边界。
 - 每轮都同步更新这份文件，记录已完成提交、当前进行中和下一步。
