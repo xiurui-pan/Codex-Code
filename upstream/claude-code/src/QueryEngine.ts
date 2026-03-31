@@ -14,7 +14,10 @@ import type {
   SDKStatus,
   SDKUserMessageReplay,
 } from 'src/entrypoints/agentSdkTypes.js'
-import { accumulateUsage, updateUsage } from 'src/services/api/claude.js'
+import {
+  accumulateModelUsage,
+  updateModelUsage,
+} from 'src/services/api/model.js'
 import type { NonNullableUsage } from 'src/services/api/logging.js'
 import { EMPTY_USAGE } from 'src/services/api/logging.js'
 import stripAnsi from 'strip-ansi'
@@ -789,13 +792,13 @@ export class QueryEngine {
           if (message.event.type === 'message_start') {
             // Reset current message usage for new message
             currentMessageUsage = EMPTY_USAGE
-            currentMessageUsage = updateUsage(
+            currentMessageUsage = updateModelUsage(
               currentMessageUsage,
               message.event.message.usage,
             )
           }
           if (message.event.type === 'message_delta') {
-            currentMessageUsage = updateUsage(
+            currentMessageUsage = updateModelUsage(
               currentMessageUsage,
               message.event.usage,
             )
@@ -809,7 +812,7 @@ export class QueryEngine {
           }
           if (message.event.type === 'message_stop') {
             // Accumulate current message usage into total
-            this.totalUsage = accumulateUsage(
+            this.totalUsage = accumulateModelUsage(
               this.totalUsage,
               currentMessageUsage,
             )
