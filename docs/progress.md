@@ -31,16 +31,25 @@
 - `aba4abf` `refactor: route side queries through provider client`
   新增 `services/api/providerClient.ts` 这层最小客户端 facade，并把侧边查询先接到这层入口，继续委托现有 `client.ts`。
 
+- `136206f` `refactor: route model capabilities through provider client`
+  把模型能力相关的一条 client 侧链先接到 `providerClient` facade，继续收窄直接依赖 `client.ts` 的范围。
+
+- `8003f17` `refactor: route claude ai limits through provider client`
+  把 Claude AI limits 这一条 client 侧链旁路到 `providerClient`，继续保持原行为不变。
+
+- `648e077` `refactor: route token estimation through provider client`
+  把 token estimation 的客户端入口接到 `providerClient`，继续沿着 `services/api/client.ts` 侧链做最小替换。
+
 ## 当前进行中
 
 - 继续清点 `upstream/claude-code` 里仍然直接从 `services/api/client.ts` 和 `services/api/claude.ts` 取入口的路径。
-- 优先清理 `services/api/client.ts` 一侧剩余的 Claude 直连点，逐步旁路到 `services/api/providerClient.ts`。
-- 与此同时继续收窄 `services/api/model.ts` 的剩余入口替换面，先只做 facade 接线，不改行为。
+- 继续清理 `services/api/client.ts` 一侧剩余的 Claude 直连点，逐步旁路到 `services/api/providerClient.ts`。
+- 在 client 侧链收窄到一定程度后，准备继续向更核心的 `services/api/claude.ts` 主链靠近。
 - 控制改动范围，避免又回到 prototype 扩功能的路线。
 
 ## 下一步
 
-- 继续替换 `services/api/client.ts` 一侧剩余的 Claude 直连点，优先处理查询主链路附近和少数公共调用点。
-- 补齐 `providerClient` 和 `model` 两条 facade 的首批调用面，减少新代码再直接指向 Claude 专名实现。
+- 继续替换 `services/api/client.ts` 一侧剩余的 Claude 直连点，优先处理还在外围但复用面较广的入口。
+- 在 `providerClient` 和 `model` 两条 facade 稳住后，开始挑选最小的 `services/api/claude.ts` 主链接缝做下一轮旁路。
 - 在 facade 足够稳定后，再进入下一层：抽更中立的调用类型和回合边界。
 - 每轮都同步更新这份文件，记录已完成提交、当前进行中和下一步。
