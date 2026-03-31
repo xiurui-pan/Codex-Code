@@ -18,7 +18,10 @@ import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
 } from '../services/analytics/index.js'
-import { accumulateUsage, updateUsage } from '../services/api/claude.js'
+import {
+  accumulateModelUsage,
+  updateModelUsage,
+} from '../services/api/model.js'
 import { EMPTY_USAGE, type NonNullableUsage } from '../services/api/logging.js'
 import type { ToolUseContext } from '../Tool.js'
 import type { AgentDefinition } from '../tools/AgentTool/loadAgentsDir.js'
@@ -561,8 +564,11 @@ export async function runForkedAgent({
           message.event?.type === 'message_delta' &&
           message.event.usage
         ) {
-          const turnUsage = updateUsage({ ...EMPTY_USAGE }, message.event.usage)
-          totalUsage = accumulateUsage(totalUsage, turnUsage)
+          const turnUsage = updateModelUsage(
+            { ...EMPTY_USAGE },
+            message.event.usage,
+          )
+          totalUsage = accumulateModelUsage(totalUsage, turnUsage)
         }
         continue
       }
