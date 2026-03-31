@@ -22,7 +22,7 @@
 - [`docs/`](./docs)
   正式分析文档、路线图、参考说明。
 - [`packages/codex-code-proto/`](./packages/codex-code-proto)
-  第一轮最小可运行原型。当前已经能读取 `~/.codex/config.toml`，固定 `gpt-5.4` 和 `medium`，并把 Responses 输出标准化成内部中间层对象。
+  协议与 provider 验证样本。当前只用于验证 `~/.codex/config.toml`、Responses 请求形状和最小中间层表达，不是主开发线。
 - [`upstream/claude-code/`](./upstream/claude-code)
   从本地 `claude-code` 仓库导入的源码快照，用作后续改造基线。
 - [`upstream/README.md`](./upstream/README.md)
@@ -49,17 +49,14 @@
 
 ## 第一阶段目标
 
-第一阶段只做 `Codex` 单模型，并先打通本地单会话编码闭环：
+第一阶段只做 `Codex` 单模型，并先在 [`upstream/claude-code/`](./upstream/claude-code) 的真实主链路上抽两层：
 
-- 读代码
-- 调本地命令
-- 请求权限
-- 生成修改建议
-- 输出最终结果
+- 模型接入层
+- 回合中间层
 
-这一步优先保留 Claude Code 的命令行交互、工具使用面、权限体验和主要工作流，再逐步把底层模型层和回合结构改造掉。
+这一步优先保留 Claude Code 现有的命令行交互、工具使用面、权限体验和主要工作流，再逐步替换底层模型接入与回合结构。
 
-## 当前原型命令
+## 实验命令
 
 - `node packages/codex-code-proto/src/main.js --print-config`
   读取 `~/.codex/config.toml`，显示当前 smoke 测试实际使用的 provider、model 和 reasoning。
@@ -67,3 +64,5 @@
   走真实 Responses provider，固定 `gpt-5.4` + `medium`，输出中间层对象。
 - `node --test packages/codex-code-proto/test/*.test.js`
   运行当前原型的配置、请求体和标准化单元测试。
+
+这些命令只用于验证 Codex provider 和 Responses 形状，不代表正式架构方向。

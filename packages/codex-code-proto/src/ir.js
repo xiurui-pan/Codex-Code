@@ -41,3 +41,31 @@ export function createReasoningItem(summaryText, rawContent = []) {
   };
 }
 
+export function createToolCallItem(toolName, callId, argumentsText, argumentsObject = null) {
+  return {
+    type: 'tool_call',
+    id: randomUUID(),
+    toolName,
+    callId,
+    argumentsText,
+    arguments: argumentsObject,
+  };
+}
+
+export function createToolResultItem(
+  toolName,
+  callId,
+  output,
+  status = 'success',
+  extra = {},
+) {
+  return {
+    type: 'tool_result',
+    id: randomUUID(),
+    toolName,
+    callId,
+    status,
+    output,
+    ...extra,
+  };
+}

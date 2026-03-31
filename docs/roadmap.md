@@ -87,22 +87,23 @@
 ## 当前进展
 
 - 阶段 0 已完成：文档基线、上游快照、参考分级已经落稳。
-- 阶段 1 已启动：新增了 `packages/codex-code-proto` 最小原型。
-- 当前原型已经能：
+- 阶段 1 已启动：完成了 `packages/codex-code-proto` 这组协议探测样本。
+- 当前样本已经能：
   - 读取 `~/.codex/config.toml`
   - 固定 `gpt-5.4` 和 `medium`
   - 走真实 Responses provider
   - 把返回结果标准化成内部中间层对象
-- 当前原型还不能：
-  - 统一管理工具调用
-  - 发起权限请求
-  - 跑读文件和本地命令闭环
-  - 承接 Claude Code 的真实查询主循环
+- 正式改造尚未进入 `upstream/claude-code` 主链路。
 
 ## 下一轮目标
 
-- 继续扩展 `packages/codex-code-proto`
-- 在不增加大块结构的前提下，补上阶段 1 里最小的下一个缺口
+- 停止继续扩展 `packages/codex-code-proto` 的功能面
+- 转为定位并改造这些真实接缝：
+  - `src/query/deps.ts`
+  - `src/services/api/claude.ts`
+  - `src/services/api/client.ts`
+  - `src/query.ts`
+  - `src/QueryEngine.ts`
 - 每一轮都保持：
   - 同步文档
   - 复跑测试
@@ -112,4 +113,4 @@
 
 - 先保证旧路径能继续跑，再逐步换内部结构。
 - 先保行为正确，再做体验调优。
-- 每一轮开发都先更新文档，再改代码。
+- 每一轮先检查是否偏离 `claude-code` 基线改造目标，再决定是否保留实验原型。

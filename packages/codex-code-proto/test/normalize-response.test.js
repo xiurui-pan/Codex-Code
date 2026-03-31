@@ -47,3 +47,23 @@ test('normalizeResponseOutput maps reasoning and assistant messages into IR item
   assert.equal(items[2].phase, 'final');
   assert.equal(items[2].content[0].text, 'Done.');
 });
+
+test('normalizeResponseOutput maps function_call into tool_call IR item', () => {
+  const items = normalizeResponseOutput({
+    output: [
+      {
+        type: 'function_call',
+        name: 'read_file',
+        call_id: 'call_123',
+        arguments: '{"path":"src/main.js"}',
+      },
+    ],
+  });
+
+  assert.equal(items.length, 1);
+  assert.equal(items[0].type, 'tool_call');
+  assert.equal(items[0].toolName, 'read_file');
+  assert.equal(items[0].callId, 'call_123');
+  assert.equal(items[0].argumentsText, '{"path":"src/main.js"}');
+  assert.deepEqual(items[0].arguments, { path: 'src/main.js' });
+});
