@@ -97,9 +97,9 @@ import {
   logEvent,
 } from '../analytics/index.js'
 import {
-  getMaxOutputTokensForModel,
-  queryModelWithStreaming,
-} from '../api/claude.js'
+  callModelWithStreaming,
+  getModelMaxOutputTokens,
+} from '../api/model.js'
 import {
   getPromptTooLongTokenGap,
   PROMPT_TOO_LONG_ERROR_MESSAGE,
@@ -1289,7 +1289,7 @@ async function streamCompactSummary({
           )
         : [FileReadTool]
 
-      const streamingGen = queryModelWithStreaming({
+      const streamingGen = callModelWithStreaming({
         messages: normalizeMessagesForAPI(
           stripImagesFromMessages(
             stripReinjectedAttachments([
@@ -1316,7 +1316,7 @@ async function streamCompactSummary({
           hasAppendSystemPrompt: !!context.options.appendSystemPrompt,
           maxOutputTokensOverride: Math.min(
             COMPACT_MAX_OUTPUT_TOKENS,
-            getMaxOutputTokensForModel(context.options.mainLoopModel),
+            getModelMaxOutputTokens(context.options.mainLoopModel),
           ),
           querySource: 'compact',
           agents: context.options.agentDefinitions.activeAgents,
