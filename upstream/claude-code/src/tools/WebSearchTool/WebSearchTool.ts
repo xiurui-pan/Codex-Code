@@ -1,7 +1,4 @@
-import type {
-  BetaContentBlock,
-  BetaWebSearchTool20250305,
-} from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
+import type { BetaWebSearchTool20250305 } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import { getAPIProvider } from 'src/utils/model/providers.js'
 import type { PermissionResult } from 'src/utils/permissions/PermissionResult.js'
 import { z } from 'zod/v4'
@@ -9,12 +6,10 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../services/analytics/gr
 import { callModelTurnWithStreaming } from '../../services/api/model.js'
 import { buildTool, type ToolDef } from '../../Tool.js'
 import { lazySchema } from '../../utils/lazySchema.js'
-import { logError } from '../../utils/log.js'
 import { createUserMessage } from '../../utils/messages.js'
 import { getMainLoopModel, getSmallFastModel } from '../../utils/model/model.js'
-import { jsonParse, jsonStringify } from '../../utils/slowOperations.js'
+import { jsonStringify } from '../../utils/slowOperations.js'
 import { asSystemPrompt } from '../../utils/systemPromptType.js'
-import type { CodexResponseChunk } from '../../services/api/codexResponses.js'
 import { getWebSearchPrompt, WEB_SEARCH_TOOL_NAME } from './prompt.js'
 import {
   getToolUseSummary,
@@ -22,6 +17,7 @@ import {
   renderToolUseMessage,
   renderToolUseProgressMessage,
 } from './UI.js'
+import { collectCodexWebSearchResponse, type SearchResponseBlock } from './codexWebSearchResponse.js'
 
 const inputSchema = lazySchema(() =>
   z.strictObject({
@@ -85,24 +81,16 @@ function makeToolSchema(input: Input): BetaWebSearchTool20250305 {
 }
 
 function makeOutputFromSearchResponse(
-  result: BetaContentBlock[],
+  result: SearchResponseBlock[],
   query: string,
   durationSeconds: number,
 ): Output {
-  // The result is a sequence of these blocks:
-  // - text to start -- always?
-  // [
-  //    - server_tool_use
-  //    - web_search_tool_result
-  //    - text and citation blocks intermingled
-  //  ]+  (this block repeated for each search)
-
   const results: (SearchResult | string)[] = []
   let textAcc = ''
   let inText = true
 
   for (const block of result) {
-    if (block.type === 'server_tool_use') {
+    if (block.type === 'search_call') {
       if (inText) {
         inText = false
         if (textAcc.trim().length > 0) {
@@ -113,19 +101,10 @@ function makeOutputFromSearchResponse(
       continue
     }
 
-    if (block.type === 'web_search_tool_result') {
-      // Handle error case - content is a WebSearchToolResultError
-      if (!Array.isArray(block.content)) {
-        const errorMessage = `Web search error: ${block.content.error_code}`
-        logError(new Error(errorMessage))
-        results.push(errorMessage)
-        continue
-      }
-      // Success case - add results to our collection
-      const hits = block.content.map(r => ({ title: r.title, url: r.url }))
+    if (block.type === 'search_result') {
       results.push({
-        tool_use_id: block.tool_use_id,
-        content: hits,
+        tool_use_id: block.toolUseId,
+        content: [],
       })
     }
 
@@ -291,113 +270,21 @@ export const WebSearchTool = buildTool({
       },
     })
 
-    const allContentBlocks: BetaContentBlock[] = []
-    let currentToolUseId = null
-    let currentToolUseJson = ''
-    let progressCounter = 0
-    const toolUseQueries = new Map() // Map of tool_use_id to query
+    const allContentBlocks: SearchResponseBlock[] = []
 
     for await (const chunk of queryStream) {
       if (chunk.kind === 'api_error') {
         throw new Error(chunk.errorMessage)
       }
 
-      const turnChunk = chunk as Extract<CodexResponseChunk, { kind: 'turn_items' }>
+      const collected = collectCodexWebSearchResponse(chunk.turnItems, query)
+      allContentBlocks.push(...collected.blocks)
 
-      for (const item of turnChunk.turnItems) {
-        if (item.kind === 'raw_model_output') {
-          const payload = item.payload as
-            | {
-                type?: string
-                content_block?: BetaContentBlock
-                delta?: { type?: string; partial_json?: string }
-              }
-            | undefined
-
-          if (payload?.type === 'response.output_item.done') {
-            continue
-          }
-
-          if (
-            payload?.type === 'content_block_start' &&
-            payload.content_block
-          ) {
-            allContentBlocks.push(payload.content_block)
-
-            const contentBlock = payload.content_block
-            if (contentBlock.type === 'server_tool_use') {
-              currentToolUseId = contentBlock.id
-              currentToolUseJson = ''
-              continue
-            }
-
-            if (contentBlock.type === 'web_search_tool_result') {
-              const toolUseId = contentBlock.tool_use_id
-              const actualQuery = toolUseQueries.get(toolUseId) || query
-              const content = contentBlock.content
-
-              progressCounter++
-              if (onProgress) {
-                onProgress({
-                  toolUseID: toolUseId || `search-progress-${progressCounter}`,
-                  data: {
-                    type: 'search_results_received',
-                    resultCount: Array.isArray(content) ? content.length : 0,
-                    query: actualQuery,
-                  },
-                })
-              }
-            }
-            continue
-          }
-
-          if (
-            currentToolUseId &&
-            payload?.type === 'content_block_delta' &&
-            payload.delta?.type === 'input_json_delta' &&
-            payload.delta.partial_json
-          ) {
-            currentToolUseJson += payload.delta.partial_json
-
-            try {
-              const queryMatch = currentToolUseJson.match(
-                /"query"\s*:\s*"((?:[^"\\]|\\.)*)"/,
-              )
-              if (queryMatch && queryMatch[1]) {
-                const parsedQuery = jsonParse('"' + queryMatch[1] + '"')
-
-                if (
-                  !toolUseQueries.has(currentToolUseId) ||
-                  toolUseQueries.get(currentToolUseId) !== parsedQuery
-                ) {
-                  toolUseQueries.set(currentToolUseId, parsedQuery)
-                  progressCounter++
-                  if (onProgress) {
-                    onProgress({
-                      toolUseID: `search-progress-${progressCounter}`,
-                      data: {
-                        type: 'query_update',
-                        query: parsedQuery,
-                      },
-                    })
-                  }
-                }
-              }
-            } catch {
-              // Ignore parsing errors for partial JSON
-            }
-          }
-        }
-
-        if (item.kind === 'final_answer') {
-          allContentBlocks.push({
-            type: 'text',
-            text: item.text,
-          })
+      if (onProgress) {
+        for (const progressEvent of collected.progressEvents) {
+          onProgress(progressEvent)
         }
       }
-
-      continue
     }
 
     // Process the final result

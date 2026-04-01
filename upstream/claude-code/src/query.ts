@@ -6,6 +6,7 @@ import type {
 import { createRequire } from 'module'
 import type { CanUseToolFn } from './hooks/useCanUseTool.js'
 import { FallbackTriggeredError } from './services/api/withRetry.js'
+import { getPlainAssistantTextFromTurnItems } from './query/turnItemText.js'
 import {
   calculateTokenWarningState,
   isAutoCompactEnabled,
@@ -100,7 +101,6 @@ import type { CodexResponseChunk } from './services/api/codexResponses.js'
 import {
   buildAssistantMessageFromTurnItems,
   createSystemMessageFromModelTurnItem,
-  extractFinalAnswerTextFromTurnItems,
 } from './services/api/modelTurnItems.js'
 import { StreamingToolExecutor } from './services/tools/StreamingToolExecutor.js'
 import { queryCheckpoint } from './utils/queryProfiler.js'
@@ -752,19 +752,15 @@ async function* queryLoop(
                 yield systemMessage
               }
 
-              const finalAnswerText = extractFinalAnswerTextFromTurnItems(
+              const plainAssistantText = getPlainAssistantTextFromTurnItems(
                 turnChunk.turnItems,
               )
-              const hasToolCall = turnChunk.turnItems.some(
-                item => item.kind === 'tool_call',
-              )
-              const assistantCandidate =
-                !hasToolCall && finalAnswerText
-                  ? createAssistantMessage({
-                      content: finalAnswerText,
-                      modelTurnItems: turnChunk.turnItems,
-                    })
-                  : buildAssistantMessageFromTurnItems(turnChunk.turnItems)
+              const assistantCandidate = plainAssistantText
+                ? createAssistantMessage({
+                    content: plainAssistantText,
+                    modelTurnItems: turnChunk.turnItems,
+                  })
+                : buildAssistantMessageFromTurnItems(turnChunk.turnItems)
               if (assistantCandidate.message.content.length > 0) {
                 internalAssistantMessage = assistantCandidate
                 if (assistantMessageContainsRenderableText(assistantCandidate)) {

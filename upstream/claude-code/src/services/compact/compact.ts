@@ -100,7 +100,7 @@ import {
   callModelWithStreaming,
   getModelMaxOutputTokens,
 } from '../api/model.js'
-import { extractFinalAnswerTextFromTurnItems } from '../api/modelTurnItems.js'
+import { getCompactSummaryText } from './summaryText.js'
 import {
   getPromptTooLongTokenGap,
   PROMPT_TOO_LONG_ERROR_MESSAGE,
@@ -228,17 +228,11 @@ export const ERROR_MESSAGE_NOT_ENOUGH_MESSAGES =
 const MAX_PTL_RETRIES = 3
 const PTL_RETRY_MARKER = '[earlier conversation truncated for compaction retry]'
 
-function getCompactSummaryText(message: AssistantMessage): string | null {
-  const turnItemText =
-    message.modelTurnItems && message.modelTurnItems.length > 0
-      ? extractFinalAnswerTextFromTurnItems(message.modelTurnItems).trim()
-      : ''
-
-  if (turnItemText) {
-    return turnItemText
-  }
-
-  return getAssistantMessageText(message)
+function getCompactSummaryTextForMessage(message: AssistantMessage): string | null {
+  return getCompactSummaryText({
+    assistantText: getAssistantMessageText(message),
+    modelTurnItems: message.modelTurnItems,
+  })
 }
 
 
@@ -471,7 +465,7 @@ export async function compactConversation(
         preCompactTokenCount,
         cacheSafeParams: retryCacheSafeParams,
       })
-      summary = getCompactSummaryText(summaryResponse)
+      summary = getCompactSummaryTextForMessage(summaryResponse)
       if (!summary?.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE)) break
 
       // CC-1180: compact request itself hit prompt-too-long. Truncate the
@@ -883,7 +877,7 @@ export async function partialCompactConversation(
         preCompactTokenCount,
         cacheSafeParams: retryCacheSafeParams,
       })
-      summary = getCompactSummaryText(summaryResponse)
+      summary = getCompactSummaryTextForMessage(summaryResponse)
       if (!summary?.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE)) break
 
       ptlAttempts++
@@ -1215,7 +1209,7 @@ async function streamCompactSummary({
         })
         const assistantMsg = getLastAssistantMessage(result.messages)
         const assistantText = assistantMsg
-          ? getCompactSummaryText(assistantMsg)
+          ? getCompactSummaryTextForMessage(assistantMsg)
           : null
         // Guard isApiErrorMessage: query() catches API errors (including
         // APIUserAbortError on ESC) and yields them as synthetic assistant
