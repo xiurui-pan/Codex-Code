@@ -11,6 +11,7 @@ import { FILE_READ_TOOL_NAME } from '../../tools/FileReadTool/prompt.js'
 import { GLOB_TOOL_NAME } from '../../tools/GlobTool/prompt.js'
 import { GREP_TOOL_NAME } from '../../tools/GrepTool/prompt.js'
 import type { Message } from '../../types/message.js'
+import { getCodexConfiguredModel } from '../../utils/codexConfig.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import { createAssistantAPIErrorMessage } from '../../utils/messages.js'
 import { zodToJsonSchema } from '../../utils/zodToJsonSchema.js'
@@ -338,7 +339,7 @@ async function buildResponsesBody({
 }: Omit<CodexStreamingArgs, 'signal'>) {
   const profile = getCodexProviderProfile()
   const body: Record<string, unknown> = {
-    model: options.model ?? process.env.ANTHROPIC_MODEL ?? 'gpt-5.4',
+    model: options.model ?? getCodexConfiguredModel() ?? 'gpt-5.1-codex-mini',
     stream: true,
     input: buildResponsesInput(messages),
   }

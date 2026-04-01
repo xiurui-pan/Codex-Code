@@ -2,8 +2,60 @@ import type {
   ContentBlock,
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/index.mjs'
-import type { AssistantMessage } from '../../types/message.js'
+import type { AssistantMessage, SystemMessage } from '../../types/message.js'
 import { createAssistantMessage } from '../../utils/messages.js'
+
+export function getRenderableModelTurnItems(
+  items: ModelTurnItem[],
+): ModelTurnItem[] {
+  return items.filter(
+    item => item.kind !== 'raw_model_output' && item.kind !== 'ui_message',
+  )
+}
+
+export function createSystemMessageFromModelTurnItem(
+  item: ModelTurnItem,
+): SystemMessage | null {
+  switch (item.kind) {
+    case 'local_shell_call':
+      return {
+        type: 'system',
+        subtype: 'informational',
+        level: 'info',
+        content:
+          item.phase === 'requested'
+            ? `准备执行 ${item.toolName}: ${item.command}`
+            : `已结束 ${item.toolName}: ${item.command || item.toolUseId}`,
+        modelTurnItem: item,
+      }
+    case 'permission_request':
+      return {
+        type: 'system',
+        subtype: 'informational',
+        level: 'info',
+        content: `等待权限确认: ${item.toolName}`,
+        modelTurnItem: item,
+      }
+    case 'permission_decision':
+      return {
+        type: 'system',
+        subtype: 'informational',
+        level: item.decision === 'deny' ? 'warn' : 'info',
+        content: `权限${item.decision === 'deny' ? '已拒绝' : item.decision === 'allow' ? '已允许' : '待确认'}: ${item.toolName}`,
+        modelTurnItem: item,
+      }
+    case 'execution_result':
+      return {
+        type: 'system',
+        subtype: 'informational',
+        level: item.status === 'success' ? 'success' : 'warn',
+        content: `${item.toolName} 执行${item.status === 'success' ? '完成' : item.status === 'denied' ? '被拒绝' : '失败'}`,
+        modelTurnItem: item,
+      }
+    default:
+      return null
+  }
+}
 
 export type RawModelOutputItem = {
   kind: 'raw_model_output'
@@ -36,7 +88,7 @@ export type ModelShellExecutionItem = {
   toolName: string
   command: string
   phase: 'requested' | 'completed'
-  source: 'provider' | 'history'
+  source: 'provider' | 'history' | 'tool_execution'
 }
 
 export type ModelPermissionRequestItem = {
@@ -44,7 +96,7 @@ export type ModelPermissionRequestItem = {
   provider: string
   toolUseId: string
   toolName: string
-  source: 'provider' | 'history'
+  source: 'provider' | 'history' | 'tool_execution'
 }
 
 export type ModelPermissionDecisionItem = {
@@ -53,7 +105,7 @@ export type ModelPermissionDecisionItem = {
   toolUseId: string
   toolName: string
   decision: 'allow' | 'deny' | 'ask'
-  source: 'provider' | 'history'
+  source: 'provider' | 'history' | 'tool_execution'
   details?: Record<string, unknown>
 }
 
@@ -97,8 +149,9 @@ export function buildAssistantMessageFromTurnItems(
   items: ModelTurnItem[],
 ): AssistantMessage {
   const content: ContentBlock[] = []
+  const renderableItems = getRenderableModelTurnItems(items)
 
-  for (const item of items) {
+  for (const item of renderableItems) {
     if (item.kind === 'final_answer' && item.text) {
       content.push({
         type: 'text',
@@ -117,5 +170,8 @@ export function buildAssistantMessageFromTurnItems(
     }
   }
 
-  return createAssistantMessage({ content })
+  return createAssistantMessage({
+    content,
+    modelTurnItems: renderableItems,
+  })
 }

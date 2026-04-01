@@ -332,6 +332,13 @@ export function normalizeResponsesOutputToTurnItems(
 
     const fallbackToolCall = extractTextFallbackToolCall(text)
     if (fallbackToolCall) {
+      turnItems.push({
+        kind: 'ui_message',
+        provider: 'custom',
+        level: 'warn',
+        text: 'Provider emitted a text fallback tool call; using temporary parser.',
+        source: 'text_fallback_tool_call',
+      })
       if (fallbackToolCall.prefixText) {
         turnItems.push({
           kind: 'final_answer',

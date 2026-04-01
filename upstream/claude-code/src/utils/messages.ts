@@ -37,6 +37,7 @@ import {
   getPdfTooLargeErrorMessage,
   getRequestTooLargeErrorMessage,
 } from '../services/api/errors.js'
+import type { ModelTurnItem } from '../services/api/modelTurnItems.js'
 import type { AnyObject, Progress } from '../Tool.js'
 import { isConnectorTextBlock } from '../types/connectorText.js'
 import type {
@@ -413,12 +414,14 @@ export function createAssistantMessage({
   content,
   usage,
   isVirtual,
+  modelTurnItems,
 }: {
   content: string | BetaContentBlock[]
   usage?: Usage
   isVirtual?: true
+  modelTurnItems?: ModelTurnItem[]
 }): AssistantMessage {
-  return baseCreateAssistantMessage({
+  const message = baseCreateAssistantMessage({
     content:
       typeof content === 'string'
         ? [
@@ -431,6 +434,10 @@ export function createAssistantMessage({
     usage,
     isVirtual,
   })
+  if (modelTurnItems?.length) {
+    message.modelTurnItems = modelTurnItems
+  }
+  return message
 }
 
 export function createAssistantAPIErrorMessage({
@@ -473,6 +480,7 @@ export function createUserMessage({
   sourceToolAssistantUUID,
   permissionMode,
   origin,
+  modelTurnItems,
 }: {
   content: string | ContentBlockParam[]
   isMeta?: true
@@ -499,6 +507,7 @@ export function createUserMessage({
   }
   // Provenance of this message. undefined = human (keyboard).
   origin?: MessageOrigin
+  modelTurnItems?: ModelTurnItem[]
 }): UserMessage {
   const m: UserMessage = {
     type: 'user',
@@ -519,6 +528,7 @@ export function createUserMessage({
     sourceToolAssistantUUID,
     permissionMode,
     origin,
+    modelTurnItems,
   }
   return m
 }

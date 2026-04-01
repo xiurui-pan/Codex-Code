@@ -36,7 +36,10 @@ export function useMainLoopModel(): ModelName {
   if (isCurrentPhase) {
     const configuredModel = getCodexConfiguredModel()
     return parseUserSpecifiedModel(
-      mainLoopModelForSession ?? mainLoopModel ?? configuredModel ?? 'gpt-5.4',
+      mainLoopModelForSession ??
+        mainLoopModel ??
+        configuredModel ??
+        'gpt-5.1-codex-mini',
     )
   }
 

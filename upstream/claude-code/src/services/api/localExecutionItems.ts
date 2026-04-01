@@ -69,13 +69,6 @@ export function buildToolCallItemsForLocalExecution(
     phase: 'requested',
     source: source === 'history' ? 'history' : 'provider',
   } satisfies ModelShellExecutionItem)
-  items.push({
-    kind: 'permission_request',
-    provider: 'custom',
-    toolUseId,
-    toolName,
-    source: source === 'history' ? 'history' : 'provider',
-  } satisfies ModelPermissionRequestItem)
 
   return items
 }
@@ -84,6 +77,7 @@ export function buildToolResultItemsForLocalExecution(
   toolUseId: string,
   toolName: string | undefined,
   block: ToolResultBlockParam,
+  source: 'history' | 'tool_execution' = 'history',
 ): ModelTurnItem[] {
   const outputText = normalizeToolResultText(block.content)
   const items: ModelTurnItem[] = [
@@ -92,7 +86,7 @@ export function buildToolResultItemsForLocalExecution(
       provider: 'custom',
       toolUseId,
       outputText,
-      source: 'history',
+      source,
     } satisfies ModelToolResultItem,
   ]
 
@@ -116,17 +110,8 @@ export function buildToolResultItemsForLocalExecution(
     toolName,
     command: '',
     phase: 'completed',
-    source: 'history',
+    source,
   } satisfies ModelShellExecutionItem)
-  items.push({
-    kind: 'permission_decision',
-    provider: 'custom',
-    toolUseId,
-    toolName,
-    decision: denied ? 'deny' : 'allow',
-    source: 'history',
-    details: block.is_error ? { is_error: true } : undefined,
-  } satisfies ModelPermissionDecisionItem)
   items.push({
     kind: 'execution_result',
     provider: 'custom',
@@ -134,9 +119,37 @@ export function buildToolResultItemsForLocalExecution(
     toolName,
     status,
     outputText,
-    source: 'history',
+    source,
   } satisfies ModelExecutionResultItem)
 
+  return items
+}
+
+export function buildPermissionItemsForLocalExecution(
+  toolUseId: string,
+  toolName: string,
+  decision: 'allow' | 'deny' | 'ask',
+  source: 'provider' | 'history' | 'tool_execution',
+  includeRequest = true,
+): ModelTurnItem[] {
+  const items: ModelTurnItem[] = []
+  if (includeRequest) {
+    items.push({
+      kind: 'permission_request',
+      provider: 'custom',
+      toolUseId,
+      toolName,
+      source,
+    } satisfies ModelPermissionRequestItem)
+  }
+  items.push({
+    kind: 'permission_decision',
+    provider: 'custom',
+    toolUseId,
+    toolName,
+    decision,
+    source,
+  } satisfies ModelPermissionDecisionItem)
   return items
 }
 

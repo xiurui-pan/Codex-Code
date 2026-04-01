@@ -19,6 +19,7 @@ import {
   accumulateModelUsage,
   updateModelUsage,
 } from 'src/services/api/model.js'
+import type { ModelTurnItem } from 'src/services/api/modelTurnItems.js'
 import type { NonNullableUsage } from 'src/services/api/logging.js'
 import { EMPTY_USAGE } from 'src/services/api/logging.js'
 import stripAnsi from 'strip-ansi'
@@ -227,6 +228,31 @@ export class QueryEngine {
     this.permissionDenials = []
     this.readFileState = config.readFileCache
     this.totalUsage = EMPTY_USAGE
+  }
+
+  private *emitExecutionItemMessages(
+    items: readonly ModelTurnItem[] | undefined,
+  ): Generator<SDKMessage> {
+    for (const item of items ?? []) {
+      if (
+        item.kind !== 'local_shell_call' &&
+        item.kind !== 'permission_request' &&
+        item.kind !== 'tool_output' &&
+        item.kind !== 'execution_result'
+      ) {
+        continue
+      }
+
+      yield {
+        type: 'system',
+        subtype: 'model_turn_item',
+        item_kind: item.kind,
+        item,
+        parent_tool_use_id: 'toolUseId' in item ? item.toolUseId : null,
+        session_id: getSessionId(),
+        uuid: randomUUID(),
+      } as SDKMessage
+    }
   }
 
   async *submitMessage(
@@ -802,6 +828,7 @@ export class QueryEngine {
             lastStopReason = message.message.stop_reason
           }
           this.mutableMessages.push(message)
+          yield* this.emitExecutionItemMessages(message.modelTurnItems)
           yield* normalizeMessage(message)
           break
         case 'progress':
@@ -819,6 +846,7 @@ export class QueryEngine {
           break
         case 'user':
           this.mutableMessages.push(message)
+          yield* this.emitExecutionItemMessages(message.modelTurnItems)
           yield* normalizeMessage(message)
           break
         case 'stream_event':

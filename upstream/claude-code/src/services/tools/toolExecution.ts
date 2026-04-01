@@ -107,6 +107,11 @@ import {
   processToolResultBlock,
 } from '../../utils/toolResultStorage.js'
 import {
+  buildPermissionItemsForLocalExecution,
+  buildToolResultItemsForLocalExecution,
+} from '../api/localExecutionItems.js'
+import { createSystemMessageFromModelTurnItem } from '../api/modelTurnItems.js'
+import {
   extractDiscoveredToolNames,
   isToolSearchEnabledOptimistic,
   isToolSearchToolAvailable,
@@ -118,6 +123,18 @@ import {
 import { mcpInfoFromString } from '../mcp/mcpStringUtils.js'
 import { normalizeNameForMCP } from '../mcp/normalization.js'
 import type { MCPServerConnection } from '../mcp/types.js'
+
+function appendModelTurnItemMessages(
+  resultingMessages: Array<{ message: Message; contextModifier?: unknown }>,
+  items: readonly import('../api/modelTurnItems.js').ModelTurnItem[],
+): void {
+  for (const item of items) {
+    const systemMessage = createSystemMessageFromModelTurnItem(item)
+    if (systemMessage) {
+      resultingMessages.push({ message: systemMessage })
+    }
+  }
+}
 import {
   getLoggingSafeMcpBaseUrl,
   getMcpServerScopeFromToolName,
@@ -1035,6 +1052,7 @@ async function checkPermissionsAndCallTool(
         tool_use_id: toolUseID,
       },
     ]
+    const toolResultBlock = messageContent[0] as ToolResultBlockParam
 
     // Add image blocks at top level (not inside tool_result, which rejects non-text with is_error)
     const rejectContentBlocks =
@@ -1061,12 +1079,38 @@ async function checkPermissionsAndCallTool(
       }
     }
 
+    const permissionItems =
+      decisionInfo?.source === 'user'
+        ? buildPermissionItemsForLocalExecution(
+            toolUseID,
+            tool.name,
+            'deny',
+            'tool_execution',
+          )
+        : []
+    const modelTurnItems = [
+      ...permissionItems,
+      ...buildToolResultItemsForLocalExecution(
+        toolUseID,
+        tool.name,
+        toolResultBlock,
+        'tool_execution',
+      ),
+    ]
+
+    appendModelTurnItemMessages(resultingMessages, permissionItems)
+    appendModelTurnItemMessages(
+      resultingMessages,
+      modelTurnItems.filter(item => item.kind === 'execution_result'),
+    )
+
     resultingMessages.push({
       message: createUserMessage({
         content: messageContent,
         imagePasteIds: rejectImageIds,
         toolUseResult: `Error: ${errorMessage}`,
         sourceToolAssistantUUID: assistantMessage.uuid,
+        modelTurnItems,
       }),
     })
 
@@ -1453,6 +1497,31 @@ async function checkPermissionsAndCallTool(
         }
       }
 
+      const permissionItems =
+        decisionInfo?.source === 'user'
+          ? buildPermissionItemsForLocalExecution(
+              toolUseID,
+              tool.name,
+              'allow',
+              'tool_execution',
+            )
+          : []
+      const modelTurnItems = [
+        ...permissionItems,
+        ...buildToolResultItemsForLocalExecution(
+          toolUseID,
+          tool.name,
+          toolResultBlock,
+          'tool_execution',
+        ),
+      ]
+
+      appendModelTurnItemMessages(resultingMessages, permissionItems)
+      appendModelTurnItemMessages(
+        resultingMessages,
+        modelTurnItems.filter(item => item.kind === 'execution_result'),
+      )
+
       resultingMessages.push({
         message: createUserMessage({
           content: contentBlocks,
@@ -1463,6 +1532,7 @@ async function checkPermissionsAndCallTool(
               : toolUseResult,
           mcpMeta: toolUseContext.agentId ? undefined : mcpMeta,
           sourceToolAssistantUUID: assistantMessage.uuid,
+          modelTurnItems,
         }),
         contextModifier: toolContextModifier
           ? {

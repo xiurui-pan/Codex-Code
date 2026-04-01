@@ -234,6 +234,7 @@ import {
 import { createModelSwitchBreadcrumbs } from 'src/utils/messages.js'
 import { collectContextData } from 'src/commands/context/context-noninteractive.js'
 import { LOCAL_COMMAND_STDOUT_TAG } from 'src/constants/xml.js'
+import { getCodexConfiguredModel } from 'src/utils/codexConfig.js'
 import {
   statusListeners,
   type ClaudeAILimits,
@@ -1411,7 +1412,9 @@ function runHeadlessStreaming(
 
   let activeUserSpecifiedModel = options.userSpecifiedModel
   const currentPhaseResolvedModel =
-    activeUserSpecifiedModel ?? getDefaultMainLoopModel()
+    activeUserSpecifiedModel ??
+    getCodexConfiguredModel() ??
+    'gpt-5.1-codex-mini'
   const modelInfos = currentPhaseDisableLegacyHeadlessModules
     ? [
         {

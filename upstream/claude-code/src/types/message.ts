@@ -11,6 +11,7 @@ import type {
 } from '@anthropic-ai/sdk/resources/index.mjs'
 import type { UUID } from 'crypto'
 import type { AgentId } from './ids.js'
+import type { ModelTurnItem } from '../services/api/modelTurnItems.js'
 
 export type MessageOrigin =
   | 'user'
@@ -71,7 +72,9 @@ export type UserMessage = BaseContentMessage<
     role?: 'user'
     content: ContentBlockParam[]
   }
->
+> & {
+  modelTurnItems?: ModelTurnItem[]
+}
 
 export type AssistantMessage = BaseContentMessage<
   'assistant',
@@ -82,6 +85,7 @@ export type AssistantMessage = BaseContentMessage<
 > & {
   model?: string
   stopReason?: string
+  modelTurnItems?: ModelTurnItem[]
 }
 
 export type AttachmentMessage<
@@ -133,6 +137,7 @@ export type SystemMessage = BaseEnvelope & {
   level?: SystemMessageLevel
   text?: string
   message?: string
+  modelTurnItem?: ModelTurnItem
 }
 
 export type SystemInformationalMessage = SystemMessage

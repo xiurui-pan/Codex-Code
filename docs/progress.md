@@ -91,7 +91,7 @@
   - `pnpm -C upstream/claude-code build`
   - `node dist/cli.js --version`
   - `node dist/cli.js --help`
-  - 按 `~/.codex/config.toml` 和 `gpt-5.4 medium` 跑真实非交互 smoke，并返回 `CODEX_CODE_SMOKE_OK`
+  - 按 `~/.codex/config.toml` 和 `gpt-5.1-codex-mini medium` 跑真实非交互 smoke，并返回 `CODEX_CODE_SMOKE_OK`
   这说明当前阶段至少已经跑通了真实源码入口下的本地构建、CLI 启动和非交互主链，而不是停留在假入口或协议样机。
 
 - 当前阶段里，`main import -> 可见 TUI -> 可输入 -> 真实问答` 这一整块已经完成。
