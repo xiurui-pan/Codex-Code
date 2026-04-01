@@ -100,6 +100,7 @@ import {
   callModelWithStreaming,
   getModelMaxOutputTokens,
 } from '../api/model.js'
+import { extractFinalAnswerTextFromTurnItems } from '../api/modelTurnItems.js'
 import {
   getPromptTooLongTokenGap,
   PROMPT_TOO_LONG_ERROR_MESSAGE,
@@ -226,6 +227,19 @@ export const ERROR_MESSAGE_NOT_ENOUGH_MESSAGES =
   'Not enough messages to compact.'
 const MAX_PTL_RETRIES = 3
 const PTL_RETRY_MARKER = '[earlier conversation truncated for compaction retry]'
+
+function getCompactSummaryText(message: AssistantMessage): string | null {
+  const turnItemText =
+    message.modelTurnItems && message.modelTurnItems.length > 0
+      ? extractFinalAnswerTextFromTurnItems(message.modelTurnItems).trim()
+      : ''
+
+  if (turnItemText) {
+    return turnItemText
+  }
+
+  return getAssistantMessageText(message)
+}
 
 /**
  * Drops the oldest API-round groups from messages until tokenGap is covered.
@@ -456,7 +470,7 @@ export async function compactConversation(
         preCompactTokenCount,
         cacheSafeParams: retryCacheSafeParams,
       })
-      summary = getAssistantMessageText(summaryResponse)
+      summary = getCompactSummaryText(summaryResponse)
       if (!summary?.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE)) break
 
       // CC-1180: compact request itself hit prompt-too-long. Truncate the
@@ -868,7 +882,7 @@ export async function partialCompactConversation(
         preCompactTokenCount,
         cacheSafeParams: retryCacheSafeParams,
       })
-      summary = getAssistantMessageText(summaryResponse)
+      summary = getCompactSummaryText(summaryResponse)
       if (!summary?.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE)) break
 
       ptlAttempts++
@@ -1200,7 +1214,7 @@ async function streamCompactSummary({
         })
         const assistantMsg = getLastAssistantMessage(result.messages)
         const assistantText = assistantMsg
-          ? getAssistantMessageText(assistantMsg)
+          ? getCompactSummaryText(assistantMsg)
           : null
         // Guard isApiErrorMessage: query() catches API errors (including
         // APIUserAbortError on ESC) and yields them as synthetic assistant

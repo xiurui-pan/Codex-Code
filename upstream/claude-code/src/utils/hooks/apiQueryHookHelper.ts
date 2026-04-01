@@ -118,7 +118,7 @@ export function createApiQueryHook<TResult>(
             type: 'success',
             queryName: config.name,
             result,
-            messageId: response.message.id,
+            messageId: uuid,
             model,
             uuid,
           },

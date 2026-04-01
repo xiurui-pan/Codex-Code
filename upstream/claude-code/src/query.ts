@@ -50,6 +50,7 @@ import {
   createUserInterruptionMessage,
   normalizeMessagesForAPI,
   createSystemMessage,
+  createAssistantMessage,
   createAssistantAPIErrorMessage,
   getMessagesAfterCompactBoundary,
   createToolUseSummaryMessage,
@@ -99,6 +100,7 @@ import type { CodexResponseChunk } from './services/api/codexResponses.js'
 import {
   buildAssistantMessageFromTurnItems,
   createSystemMessageFromModelTurnItem,
+  extractFinalAnswerTextFromTurnItems,
 } from './services/api/modelTurnItems.js'
 import { StreamingToolExecutor } from './services/tools/StreamingToolExecutor.js'
 import { queryCheckpoint } from './utils/queryProfiler.js'
@@ -750,9 +752,19 @@ async function* queryLoop(
                 yield systemMessage
               }
 
-              const assistantCandidate = buildAssistantMessageFromTurnItems(
+              const finalAnswerText = extractFinalAnswerTextFromTurnItems(
                 turnChunk.turnItems,
               )
+              const hasToolCall = turnChunk.turnItems.some(
+                item => item.kind === 'tool_call',
+              )
+              const assistantCandidate =
+                !hasToolCall && finalAnswerText
+                  ? createAssistantMessage({
+                      content: finalAnswerText,
+                      modelTurnItems: turnChunk.turnItems,
+                    })
+                  : buildAssistantMessageFromTurnItems(turnChunk.turnItems)
               if (assistantCandidate.message.content.length > 0) {
                 internalAssistantMessage = assistantCandidate
                 if (assistantMessageContainsRenderableText(assistantCandidate)) {
