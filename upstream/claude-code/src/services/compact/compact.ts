@@ -241,6 +241,7 @@ function getCompactSummaryText(message: AssistantMessage): string | null {
   return getAssistantMessageText(message)
 }
 
+
 /**
  * Drops the oldest API-round groups from messages until tokenGap is covered.
  * Falls back to dropping 20% of groups when the gap is unparseable (some

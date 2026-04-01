@@ -113,6 +113,9 @@
 - 已补一组更贴近行为的本地验证材料：除了现有单元测试，还新增 `upstream/claude-code/tests/headlessStreaming.smoke.mjs`，专门用本地假 Responses 服务和真实 headless CLI 去验证 request shape、SSE 增量进入主链、以及执行对象输出。
 
 ## 当前新增判断
+- 这一轮把 `WebSearchTool` 也从旧 streaming assistant 壳上往里挪了：它现在直接消费 Codex turn-item streaming，再从原始输出项里提取搜索进度和结果。
+- 同时补了两条就近行为测试，明确 `query.ts` 在纯文本 turn-item 且不含 `tool_call` 时优先产出普通 assistant 文本，`compact.ts` 在摘要消息带 `modelTurnItems.final_answer` 时优先取 turn-item 文本。
+
 - 这一轮先把 `apiQueryHookHelper` 里的静默偏差修掉了：迁到 turn-item 主路后，成功分支不再去读旧 `response.message.id`，避免把成功结果错误打进异常路径。
 - 然后继续从核心边界往里收：`query.ts` 的纯文本 chunk 现在优先直接产出普通 assistant 文本消息，`services/compact/compact.ts` 的摘要提取会优先读 turn items，不再先退回旧 assistant 文本壳。
 

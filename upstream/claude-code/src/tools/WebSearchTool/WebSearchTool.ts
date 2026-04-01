@@ -6,7 +6,7 @@ import { getAPIProvider } from 'src/utils/model/providers.js'
 import type { PermissionResult } from 'src/utils/permissions/PermissionResult.js'
 import { z } from 'zod/v4'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js'
-import { callModelWithStreaming } from '../../services/api/model.js'
+import { callModelTurnWithStreaming } from '../../services/api/model.js'
 import { buildTool, type ToolDef } from '../../Tool.js'
 import { lazySchema } from '../../utils/lazySchema.js'
 import { logError } from '../../utils/log.js'
@@ -14,6 +14,7 @@ import { createUserMessage } from '../../utils/messages.js'
 import { getMainLoopModel, getSmallFastModel } from '../../utils/model/model.js'
 import { jsonParse, jsonStringify } from '../../utils/slowOperations.js'
 import { asSystemPrompt } from '../../utils/systemPromptType.js'
+import type { CodexResponseChunk } from '../../services/api/codexResponses.js'
 import { getWebSearchPrompt, WEB_SEARCH_TOOL_NAME } from './prompt.js'
 import {
   getToolUseSummary,
@@ -265,7 +266,7 @@ export const WebSearchTool = buildTool({
     )
 
     const appState = context.getAppState()
-    const queryStream = callModelWithStreaming({
+    const queryStream = callModelTurnWithStreaming({
       messages: [userMessage],
       systemPrompt: asSystemPrompt([
         'You are an assistant for performing a web search tool use',
@@ -296,95 +297,107 @@ export const WebSearchTool = buildTool({
     let progressCounter = 0
     const toolUseQueries = new Map() // Map of tool_use_id to query
 
-    for await (const event of queryStream) {
-      if (event.type === 'assistant') {
-        allContentBlocks.push(...event.message.content)
-        continue
+    for await (const chunk of queryStream) {
+      if (chunk.kind === 'api_error') {
+        throw new Error(chunk.errorMessage)
       }
 
-      // Track tool use ID when server_tool_use starts
-      if (
-        event.type === 'stream_event' &&
-        event.event?.type === 'content_block_start'
-      ) {
-        const contentBlock = event.event.content_block
-        if (contentBlock && contentBlock.type === 'server_tool_use') {
-          currentToolUseId = contentBlock.id
-          currentToolUseJson = ''
-          // Note: The ServerToolUseBlock doesn't contain input.query
-          // The actual query comes through input_json_delta events
-          continue
-        }
-      }
+      const turnChunk = chunk as Extract<CodexResponseChunk, { kind: 'turn_items' }>
 
-      // Accumulate JSON for current tool use
-      if (
-        currentToolUseId &&
-        event.type === 'stream_event' &&
-        event.event?.type === 'content_block_delta'
-      ) {
-        const delta = event.event.delta
-        if (delta?.type === 'input_json_delta' && delta.partial_json) {
-          currentToolUseJson += delta.partial_json
+      for (const item of turnChunk.turnItems) {
+        if (item.kind === 'raw_model_output') {
+          const payload = item.payload as
+            | {
+                type?: string
+                content_block?: BetaContentBlock
+                delta?: { type?: string; partial_json?: string }
+              }
+            | undefined
 
-          // Try to extract query from partial JSON for progress updates
-          try {
-            // Look for a complete query field
-            const queryMatch = currentToolUseJson.match(
-              /"query"\s*:\s*"((?:[^"\\]|\\.)*)"/,
-            )
-            if (queryMatch && queryMatch[1]) {
-              // The regex properly handles escaped characters
-              const query = jsonParse('"' + queryMatch[1] + '"')
+          if (payload?.type === 'response.output_item.done') {
+            continue
+          }
 
-              if (
-                !toolUseQueries.has(currentToolUseId) ||
-                toolUseQueries.get(currentToolUseId) !== query
-              ) {
-                toolUseQueries.set(currentToolUseId, query)
-                progressCounter++
-                if (onProgress) {
-                  onProgress({
-                    toolUseID: `search-progress-${progressCounter}`,
-                    data: {
-                      type: 'query_update',
-                      query,
-                    },
-                  })
-                }
+          if (
+            payload?.type === 'content_block_start' &&
+            payload.content_block
+          ) {
+            allContentBlocks.push(payload.content_block)
+
+            const contentBlock = payload.content_block
+            if (contentBlock.type === 'server_tool_use') {
+              currentToolUseId = contentBlock.id
+              currentToolUseJson = ''
+              continue
+            }
+
+            if (contentBlock.type === 'web_search_tool_result') {
+              const toolUseId = contentBlock.tool_use_id
+              const actualQuery = toolUseQueries.get(toolUseId) || query
+              const content = contentBlock.content
+
+              progressCounter++
+              if (onProgress) {
+                onProgress({
+                  toolUseID: toolUseId || `search-progress-${progressCounter}`,
+                  data: {
+                    type: 'search_results_received',
+                    resultCount: Array.isArray(content) ? content.length : 0,
+                    query: actualQuery,
+                  },
+                })
               }
             }
-          } catch {
-            // Ignore parsing errors for partial JSON
+            continue
           }
+
+          if (
+            currentToolUseId &&
+            payload?.type === 'content_block_delta' &&
+            payload.delta?.type === 'input_json_delta' &&
+            payload.delta.partial_json
+          ) {
+            currentToolUseJson += payload.delta.partial_json
+
+            try {
+              const queryMatch = currentToolUseJson.match(
+                /"query"\s*:\s*"((?:[^"\\]|\\.)*)"/,
+              )
+              if (queryMatch && queryMatch[1]) {
+                const parsedQuery = jsonParse('"' + queryMatch[1] + '"')
+
+                if (
+                  !toolUseQueries.has(currentToolUseId) ||
+                  toolUseQueries.get(currentToolUseId) !== parsedQuery
+                ) {
+                  toolUseQueries.set(currentToolUseId, parsedQuery)
+                  progressCounter++
+                  if (onProgress) {
+                    onProgress({
+                      toolUseID: `search-progress-${progressCounter}`,
+                      data: {
+                        type: 'query_update',
+                        query: parsedQuery,
+                      },
+                    })
+                  }
+                }
+              }
+            } catch {
+              // Ignore parsing errors for partial JSON
+            }
+          }
+        }
+
+        if (item.kind === 'final_answer') {
+          allContentBlocks.push({
+            type: 'text',
+            text: item.text,
+          })
         }
       }
 
-      // Yield progress when search results come in
-      if (
-        event.type === 'stream_event' &&
-        event.event?.type === 'content_block_start'
-      ) {
-        const contentBlock = event.event.content_block
-        if (contentBlock && contentBlock.type === 'web_search_tool_result') {
-          // Get the actual query that was used for this search
-          const toolUseId = contentBlock.tool_use_id
-          const actualQuery = toolUseQueries.get(toolUseId) || query
-          const content = contentBlock.content
-
-          progressCounter++
-          if (onProgress) {
-            onProgress({
-              toolUseID: toolUseId || `search-progress-${progressCounter}`,
-              data: {
-                type: 'search_results_received',
-                resultCount: Array.isArray(content) ? content.length : 0,
-                query: actualQuery,
-              },
-            })
-          }
-        }
-      }
+      continue
     }
 
     // Process the final result
