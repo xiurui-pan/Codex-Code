@@ -70,6 +70,7 @@ import type {
   ImageBlockParam,
   Base64ImageSource,
 } from '@anthropic-ai/sdk/resources/messages.mjs'
+import { createRequire } from 'module'
 import { maybeResizeAndDownsampleImageBlock } from './imageResizer.js'
 import type { PastedContent } from './config.js'
 import { getGlobalConfig } from './config.js'
@@ -92,6 +93,7 @@ import type { DiscoverySignal } from '../services/skillSearch/signals.js'
 // the skill_listing suppression check (uses the same skillSearchModules null
 // check). The type-only DiscoverySignal import above is erased at compile time.
 /* eslint-disable @typescript-eslint/no-require-imports */
+const require = createRequire(import.meta.url)
 const skillSearchModules = feature('EXPERIMENTAL_SKILL_SEARCH')
   ? {
       featureCheck:

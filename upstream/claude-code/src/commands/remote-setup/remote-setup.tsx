@@ -1,4 +1,3 @@
-import { execa } from 'execa';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { Select } from '../../components/CustomSelect/index.js';
@@ -10,6 +9,7 @@ import type { LocalJSXCommandOnDone } from '../../types/command.js';
 import { openBrowser } from '../../utils/browser.js';
 import { getGhAuthStatus } from '../../utils/github/ghAuthStatus.js';
 import { createDefaultEnvironment, getCodeWebUrl, type ImportTokenError, importGithubToken, isSignedIn, RedactedGithubToken } from './api.js';
+const getExeca = async () => (await import('execa')).execa
 type CheckResult = {
   status: 'not_signed_in';
 } | {
@@ -42,7 +42,7 @@ async function checkLoginState(): Promise<CheckResult> {
   // (telemetry-safe); spawn once more with stdout:'pipe' to read the token.
   const {
     stdout
-  } = await execa('gh', ['auth', 'token'], {
+  } = await (await getExeca())('gh', ['auth', 'token'], {
     stdout: 'pipe',
     stderr: 'ignore',
     timeout: 5000,

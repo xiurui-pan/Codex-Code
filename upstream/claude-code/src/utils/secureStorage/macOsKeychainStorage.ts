@@ -1,4 +1,4 @@
-import { execaSync } from 'execa'
+import { spawnSync } from 'node:child_process'
 import { logForDebugging } from '../debug.js'
 import { execFileNoThrow } from '../execFileNoThrow.js'
 import { execSyncWithDefaults_DEPRECATED } from '../execFileNoThrowPortable.js'
@@ -119,33 +119,32 @@ export const macOsKeychainStorage = {
 
       let result
       if (command.length <= SECURITY_STDIN_LINE_LIMIT) {
-        result = execaSync('security', ['-i'], {
+        result = spawnSync('security', ['-i'], {
           input: command,
           stdio: ['pipe', 'pipe', 'pipe'],
-          reject: false,
+          encoding: 'utf8',
         })
       } else {
         logForDebugging(
           `Keychain payload (${jsonString.length}B JSON) exceeds security -i stdin limit; using argv`,
           { level: 'warn' },
         )
-        result = execaSync(
-          'security',
-          [
-            'add-generic-password',
-            '-U',
-            '-a',
-            username,
-            '-s',
-            storageServiceName,
-            '-X',
-            hexValue,
-          ],
-          { stdio: ['ignore', 'pipe', 'pipe'], reject: false },
-        )
+        result = spawnSync('security', [
+          'add-generic-password',
+          '-U',
+          '-a',
+          username,
+          '-s',
+          storageServiceName,
+          '-X',
+          hexValue,
+        ], {
+          stdio: ['ignore', 'pipe', 'pipe'],
+          encoding: 'utf8',
+        })
       }
 
-      if (result.exitCode !== 0) {
+      if (result.status !== 0) {
         return { success: false }
       }
 
@@ -217,12 +216,12 @@ export function isMacOsKeychainLocked(): boolean {
   }
 
   try {
-    const result = execaSync('security', ['show-keychain-info'], {
-      reject: false,
+    const result = spawnSync('security', ['show-keychain-info'], {
       stdio: ['ignore', 'pipe', 'pipe'],
+      encoding: 'utf8',
     })
     // Exit code 36 indicates the keychain is locked
-    keychainLockedCache = result.exitCode === 36
+    keychainLockedCache = result.status === 36
   } catch {
     // If the command fails for any reason, assume keychain is not locked
     keychainLockedCache = false

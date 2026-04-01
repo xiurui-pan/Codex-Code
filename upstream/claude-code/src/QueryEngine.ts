@@ -1,6 +1,7 @@
 import { feature } from 'bun:bundle'
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs'
 import { randomUUID } from 'crypto'
+import { createRequire } from 'module'
 import last from 'lodash-es/last.js'
 import {
   getSessionId,
@@ -47,9 +48,9 @@ import type { OrphanedPermission } from './types/textInputTypes.js'
 import { createAbortController } from './utils/abortController.js'
 import type { AttributionState } from './utils/commitAttribution.js'
 import { getGlobalConfig } from './utils/config.js'
+import { isCurrentPhaseCustomCodexProvider } from './utils/currentPhase.js'
 import { getCwd } from './utils/cwd.js'
 import { isBareMode, isEnvTruthy } from './utils/envUtils.js'
-import { getFastModeState } from './utils/fastMode.js'
 import {
   type FileHistoryState,
   fileHistoryEnabled,
@@ -67,7 +68,6 @@ import {
   getMainLoopModel,
   parseUserSpecifiedModel,
 } from './utils/model/model.js'
-import { loadAllPluginsCacheOnly } from './utils/plugins/pluginLoader.js'
 import {
   type ProcessUserInputContext,
   processUserInput,
@@ -87,6 +87,26 @@ import {
 
 // Lazy: MessageSelector.tsx pulls React/ink; only needed for message filtering at query time
 /* eslint-disable @typescript-eslint/no-require-imports */
+const require = createRequire(import.meta.url)
+const currentPhaseDisableLegacyFastMode = isCurrentPhaseCustomCodexProvider()
+const loadAllPluginsCacheOnly = () =>
+  currentPhaseDisableLegacyFastMode
+    ? Promise.resolve({
+        enabled: [],
+        disabled: [],
+        errors: [],
+      })
+    : (
+        require('./utils/plugins/pluginLoader.js') as typeof import('./utils/plugins/pluginLoader.js')
+      ).loadAllPluginsCacheOnly()
+const getFastModeState = (
+  ...args: Parameters<typeof import('./utils/fastMode.js')['getFastModeState']>
+) =>
+  currentPhaseDisableLegacyFastMode
+    ? undefined
+    : (
+        require('./utils/fastMode.js') as typeof import('./utils/fastMode.js')
+      ).getFastModeState(...args)
 const messageSelector =
   (): typeof import('src/components/MessageSelector.js') =>
     require('src/components/MessageSelector.js')
@@ -274,13 +294,16 @@ export class QueryEngine {
     }
 
     const initialAppState = getAppState()
+    const currentPhaseCustomCodexProvider = isCurrentPhaseCustomCodexProvider()
     const initialMainLoopModel = userSpecifiedModel
       ? parseUserSpecifiedModel(userSpecifiedModel)
       : getMainLoopModel()
 
     const initialThinkingConfig: ThinkingConfig = thinkingConfig
       ? thinkingConfig
-      : shouldEnableThinkingByDefault() !== false
+      : currentPhaseCustomCodexProvider
+        ? { type: 'adaptive' }
+        : shouldEnableThinkingByDefault() !== false
         ? { type: 'adaptive' }
         : { type: 'disabled' }
 
@@ -292,22 +315,30 @@ export class QueryEngine {
       defaultSystemPrompt,
       userContext: baseUserContext,
       systemContext,
-    } = await fetchSystemPromptParts({
-      tools,
-      mainLoopModel: initialMainLoopModel,
-      additionalWorkingDirectories: Array.from(
-        initialAppState.toolPermissionContext.additionalWorkingDirectories.keys(),
-      ),
-      mcpClients,
-      customSystemPrompt: customPrompt,
-    })
+    } = currentPhaseCustomCodexProvider
+      ? {
+          defaultSystemPrompt: [] as string[],
+          userContext: {} as Record<string, string>,
+          systemContext: [] as string[],
+        }
+      : await fetchSystemPromptParts({
+          tools,
+          mainLoopModel: initialMainLoopModel,
+          additionalWorkingDirectories: Array.from(
+            initialAppState.toolPermissionContext.additionalWorkingDirectories.keys(),
+          ),
+          mcpClients,
+          customSystemPrompt: customPrompt,
+        })
     headlessProfilerCheckpoint('after_getSystemPrompt')
     const userContext = {
       ...baseUserContext,
-      ...getCoordinatorUserContext(
-        mcpClients,
-        isScratchpadEnabled() ? getScratchpadDir() : undefined,
-      ),
+      ...(currentPhaseCustomCodexProvider
+        ? {}
+        : getCoordinatorUserContext(
+            mcpClients,
+            isScratchpadEnabled() ? getScratchpadDir() : undefined,
+          )),
     }
 
     // When an SDK caller provides a custom system prompt AND has set
@@ -317,7 +348,9 @@ export class QueryEngine {
     // Write/Edit tools to call, MEMORY.md filename, loading semantics).
     // The caller can layer their own policy text via appendSystemPrompt.
     const memoryMechanicsPrompt =
-      customPrompt !== undefined && hasAutoMemPathOverride()
+      !currentPhaseCustomCodexProvider &&
+      customPrompt !== undefined &&
+      hasAutoMemPathOverride()
         ? await loadMemoryPrompt()
         : null
 

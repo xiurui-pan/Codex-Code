@@ -119,6 +119,7 @@
 - 阶段 0 已完成：文档基线、上游快照、参考分级已经落稳。
 - 阶段 1 已不再停留在协议探测样本，正式改造已经进入 `upstream/claude-code` 主链路。
 - 当前阶段已经完成两块基础打通：
+  - 真实工具调用、权限申请、结果回灌的最小闭环已经在 headless/structured 路径下完成允许/拒绝两条分支验证
   - 自定义 Codex provider 的本地 CLI 启动链与非交互主链
   - `main import -> 可见 TUI -> 可输入 -> 真实问答`
 - 当前阶段边界已经明确：只推进 Codex provider 主链；Anthropic 专属的登录、OAuth、Bridge、assistant mode、proactive 能力不纳入这一阶段。

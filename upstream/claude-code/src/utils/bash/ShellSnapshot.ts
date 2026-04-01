@@ -1,5 +1,4 @@
 import { execFile } from 'child_process'
-import { execa } from 'execa'
 import { mkdir, stat } from 'fs/promises'
 import * as os from 'os'
 import { join } from 'path'
@@ -19,6 +18,10 @@ import { getPlatform } from '../platform.js'
 import { ripgrepCommand } from '../ripgrep.js'
 import { subprocessEnv } from '../subprocessEnv.js'
 import { quote } from './shellQuote.js'
+
+async function getExeca() {
+  return (await import('execa')).execa
+}
 
 const LITERAL_BACKSLASH = '\\'
 const SNAPSHOT_CREATION_TIMEOUT = 10000 // 10 seconds
@@ -271,6 +274,7 @@ async function getClaudeCodeSnapshotContent(): Promise<string> {
   let pathValue = process.env.PATH
   if (getPlatform() === 'windows') {
     // On Windows with git-bash, read the Cygwin PATH
+    const execa = await getExeca()
     const cygwinResult = await execa('echo $PATH', {
       shell: true,
       reject: false,

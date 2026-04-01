@@ -5,7 +5,7 @@ import {
   type Token,
   tokenize,
   undoAnsiCodes,
-} from '@alcalzone/ansi-tokenize'
+} from './vendor/ansiTokenize.js'
 import type { Theme } from './theme.js'
 
 export type TextHighlight = {

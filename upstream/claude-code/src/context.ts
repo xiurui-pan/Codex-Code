@@ -16,6 +16,7 @@ import { execFileNoThrow } from './utils/execFileNoThrow.js'
 import { getBranch, getDefaultBranch, getIsGit, gitExe } from './utils/git.js'
 import { shouldIncludeGitInstructions } from './utils/gitSettings.js'
 import { logError } from './utils/log.js'
+import { getAPIProvider } from './utils/model/providers.js'
 
 const MAX_STATUS_CHARS = 2000
 
@@ -123,6 +124,7 @@ export const getSystemContext = memoize(
     // Skip git status in CCR (unnecessary overhead on resume) or when git instructions are disabled
     const gitStatus =
       isEnvTruthy(process.env.CLAUDE_CODE_REMOTE) ||
+      getAPIProvider() === 'custom' ||
       !shouldIncludeGitInstructions()
         ? null
         : await getGitStatus()

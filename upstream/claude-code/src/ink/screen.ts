@@ -2,7 +2,7 @@ import {
   type AnsiCode,
   ansiCodesToString,
   diffAnsiCodes,
-} from '@alcalzone/ansi-tokenize'
+} from '../utils/vendor/ansiTokenize.js'
 import {
   type Point,
   type Rectangle,

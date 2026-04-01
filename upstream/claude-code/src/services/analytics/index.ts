@@ -83,6 +83,10 @@ const eventQueue: QueuedEvent[] = []
 // Sink - initialized during app startup
 let sink: AnalyticsSink | null = null
 
+function shouldSkipAnalyticsForCurrentPhase(): boolean {
+  return process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+}
+
 /**
  * Attach the analytics sink that will receive all events.
  * Queued events are drained asynchronously via queueMicrotask to avoid
@@ -93,6 +97,9 @@ let sink: AnalyticsSink | null = null
  * the default command) without coordination.
  */
 export function attachAnalyticsSink(newSink: AnalyticsSink): void {
+  if (shouldSkipAnalyticsForCurrentPhase()) {
+    return
+  }
   if (sink !== null) {
     return
   }
@@ -136,6 +143,9 @@ export function logEvent(
   // to avoid accidentally logging code/filepaths
   metadata: LogEventMetadata,
 ): void {
+  if (shouldSkipAnalyticsForCurrentPhase()) {
+    return
+  }
   if (sink === null) {
     eventQueue.push({ eventName, metadata, async: false })
     return
@@ -156,6 +166,9 @@ export async function logEventAsync(
   // intentionally no strings, to avoid accidentally logging code/filepaths
   metadata: LogEventMetadata,
 ): Promise<void> {
+  if (shouldSkipAnalyticsForCurrentPhase()) {
+    return
+  }
   if (sink === null) {
     eventQueue.push({ eventName, metadata, async: true })
     return

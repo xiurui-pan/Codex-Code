@@ -1,4 +1,3 @@
-import { execa } from 'execa'
 import { readFile, realpath } from 'fs/promises'
 import { homedir } from 'os'
 import { delimiter, join, posix, win32 } from 'path'
@@ -42,6 +41,10 @@ import {
 } from './shellConfig.js'
 import { jsonParse } from './slowOperations.js'
 import { which } from './which.js'
+
+async function getExeca() {
+  return (await import('execa')).execa
+}
 
 export type InstallationType =
   | 'npm-global'
@@ -132,6 +135,7 @@ export async function getCurrentInstallationType(): Promise<InstallationType> {
     return 'npm-global'
   }
 
+  const execa = await getExeca()
   const npmConfigResult = await execa('npm config get prefix', {
     shell: true,
     reject: false,

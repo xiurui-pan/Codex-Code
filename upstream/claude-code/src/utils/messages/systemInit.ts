@@ -1,5 +1,6 @@
 import { feature } from 'bun:bundle'
 import { randomUUID } from 'crypto'
+import { createRequire } from 'module'
 import { getSdkBetas, getSessionId } from 'src/bootstrap/state.js'
 import { DEFAULT_OUTPUT_STYLE_NAME } from 'src/constants/outputStyles.js'
 import type {
@@ -11,10 +12,34 @@ import {
   AGENT_TOOL_NAME,
   LEGACY_AGENT_TOOL_NAME,
 } from 'src/tools/AgentTool/constants.js'
-import { getAnthropicApiKeyWithSource } from '../auth.js'
 import { getCwd } from '../cwd.js'
-import { getFastModeState } from '../fastMode.js'
+import { isCurrentPhaseCustomCodexProvider } from '../currentPhase.js'
 import { getSettings_DEPRECATED } from '../settings/settings.js'
+
+const require = createRequire(import.meta.url)
+
+function getApiKeySourceForCurrentStage(): ApiKeySource {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return 'api' as ApiKeySource
+  }
+  return (
+    (
+      require('../auth.js') as typeof import('../auth.js')
+    ).getAnthropicApiKeyWithSource().source as ApiKeySource
+  )
+}
+
+function getFastModeStateForCurrentStage(
+  model: string,
+  fastMode: boolean | undefined,
+): SDKMessage['fast_mode_state'] {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return undefined
+  }
+  return (
+    require('../fastMode.js') as typeof import('../fastMode.js')
+  ).getFastModeState(model, fastMode)
+}
 
 // TODO(next-minor): remove this translation once SDK consumers have migrated
 // to the 'Agent' tool name. The wire name was renamed Task → Agent in #19647,
@@ -69,7 +94,7 @@ export function buildSystemInitMessage(inputs: SystemInitInputs): SDKMessage {
     slash_commands: inputs.commands
       .filter(c => c.userInvocable !== false)
       .map(c => c.name),
-    apiKeySource: getAnthropicApiKeyWithSource().source as ApiKeySource,
+    apiKeySource: getApiKeySourceForCurrentStage(),
     betas: getSdkBetas(),
     claude_code_version: MACRO.VERSION,
     output_style: outputStyle,
@@ -91,6 +116,9 @@ export function buildSystemInitMessage(inputs: SystemInitInputs): SDKMessage {
       require('../udsMessaging.js').getUdsMessagingSocketPath()
     /* eslint-enable @typescript-eslint/no-require-imports */
   }
-  initMessage.fast_mode_state = getFastModeState(inputs.model, inputs.fastMode)
+  initMessage.fast_mode_state = getFastModeStateForCurrentStage(
+    inputs.model,
+    inputs.fastMode,
+  )
   return initMessage
 }

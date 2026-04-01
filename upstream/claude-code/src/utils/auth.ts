@@ -1,6 +1,5 @@
 import chalk from 'chalk'
 import { exec } from 'child_process'
-import { execa } from 'execa'
 import { mkdir, stat } from 'fs/promises'
 import memoize from 'lodash-es/memoize.js'
 import { join } from 'path'
@@ -76,6 +75,8 @@ import {
 import { sleep } from './sleep.js'
 import { jsonParse } from './slowOperations.js'
 import { clearToolSchemaCache } from './toolSchemaCache.js'
+
+const getExeca = async () => (await import('execa')).execa
 
 /** Default TTL for API key helper cache in milliseconds (5 minutes) */
 const DEFAULT_API_KEY_HELPER_TTL = 5 * 60 * 1000
@@ -555,7 +556,7 @@ async function _executeApiKeyHelper(
     }
   }
 
-  const result = await execa(apiKeyHelper, {
+  const result = await (await getExeca())(apiKeyHelper, {
     shell: true,
     timeout: 10 * 60 * 1000,
     reject: false,
@@ -740,7 +741,7 @@ async function getAwsCredsFromCredentialExport(): Promise<{
     // only actually do the export if caller-identity calls
     try {
       logForDebugging('Running AWS credential export command')
-      const result = await execa(awsCredentialExport, {
+      const result = await (await getExeca())(awsCredentialExport, {
         shell: true,
         reject: false,
       })
@@ -1115,7 +1116,7 @@ export async function saveApiKey(apiKey: string): Promise<void> {
       // Process monitors only see "security -i", not the password
       const command = `add-generic-password -U -a "${username}" -s "${storageServiceName}" -X "${hexValue}"\n`
 
-      await execa('security', ['-i'], {
+      await (await getExeca())('security', ['-i'], {
         input: command,
         reject: false,
       })

@@ -1,8 +1,9 @@
-import { execa } from 'execa'
 import { logForDebugging } from '../debug.js'
 import { memoizeWithLRU } from '../memoize.js'
 import { getCachedPowerShellPath } from '../shell/powershellDetection.js'
 import { jsonParse } from '../slowOperations.js'
+
+const getExeca = async () => (await import('execa')).execa
 
 // ---------------------------------------------------------------------------
 // Public types describing the parsed output returned to callers.
@@ -1192,7 +1193,7 @@ async function parsePowerShellCommandImpl(
   let timedOut = false
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
-      const result = await execa(pwshPath, args, {
+      const result = await (await getExeca())(pwshPath, args, {
         timeout: parseTimeoutMs,
         reject: false,
       })

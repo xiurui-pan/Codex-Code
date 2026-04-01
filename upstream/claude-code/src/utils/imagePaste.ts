@@ -1,6 +1,5 @@
 import { feature } from 'bun:bundle'
 import { randomBytes } from 'crypto'
-import { execa } from 'execa'
 import { basename, extname, isAbsolute, join } from 'path'
 import {
   IMAGE_MAX_HEIGHT,
@@ -18,6 +17,10 @@ import {
   maybeResizeAndDownsampleImageBuffer,
 } from './imageResizer.js'
 import { logError } from './log.js'
+
+async function getExeca() {
+  return (await import('execa')).execa
+}
 
 // Native NSPasteboard reader. GrowthBook gate tengu_collage_kaleidoscope is
 // a kill switch (default on). Falls through to osascript when off.
@@ -186,6 +189,7 @@ export async function getImageFromClipboard(): Promise<ImageWithDimensions | nul
   const { commands, screenshotPath } = getClipboardCommands()
   try {
     // Check if clipboard has image
+    const execa = await getExeca()
     const checkResult = await execa(commands.checkImage, {
       shell: true,
       reject: false,
@@ -195,7 +199,8 @@ export async function getImageFromClipboard(): Promise<ImageWithDimensions | nul
     }
 
     // Save the image
-    const saveResult = await execa(commands.saveImage, {
+    const saveExeca = await getExeca()
+    const saveResult = await saveExeca(commands.saveImage, {
       shell: true,
       reject: false,
     })
@@ -229,7 +234,9 @@ export async function getImageFromClipboard(): Promise<ImageWithDimensions | nul
     const mediaType = detectImageFormatFromBase64(base64Image)
 
     // Cleanup (fire-and-forget, don't await)
-    void execa(commands.deleteFile, { shell: true, reject: false })
+    void getExeca().then(execa =>
+      execa(commands.deleteFile, { shell: true, reject: false }),
+    )
 
     return {
       base64: base64Image,
@@ -246,6 +253,7 @@ export async function getImagePathFromClipboard(): Promise<string | null> {
 
   try {
     // Try to get text from clipboard
+    const execa = await getExeca()
     const result = await execa(commands.getPath, {
       shell: true,
       reject: false,

@@ -1,4 +1,4 @@
-import { type Options as ExecaOptions, execaSync } from 'execa'
+import { spawnSync } from 'node:child_process'
 import { getCwd } from '../utils/cwd.js'
 import { slowLogging } from './slowOperations.js'
 
@@ -9,7 +9,7 @@ type ExecSyncOptions = {
   abortSignal?: AbortSignal
   timeout?: number
   input?: string
-  stdio?: ExecaOptions['stdio']
+  stdio?: 'pipe' | 'ignore' | 'inherit' | Array<'pipe' | 'ignore' | 'inherit'>
 }
 
 /**
@@ -69,17 +69,17 @@ export function execSyncWithDefaults_DEPRECATED(
   abortSignal?.throwIfAborted()
   using _ = slowLogging`exec: ${command.slice(0, 200)}`
   try {
-    const result = execaSync(command, {
+    const result = spawnSync(command, {
       env: process.env,
       maxBuffer: 1_000_000,
       timeout: finalTimeout,
       cwd: getCwd(),
       stdio,
-      shell: true, // execSync typically runs shell commands
-      reject: false, // Don't throw on non-zero exit codes
+      shell: true,
       input,
+      encoding: 'utf8',
     })
-    if (!result.stdout) {
+    if (typeof result.stdout !== 'string' || result.status !== 0) {
       return null
     }
     return result.stdout.trim() || null

@@ -4,7 +4,7 @@ import {
   reduceAnsiCodes,
   tokenize,
   undoAnsiCodes,
-} from '@alcalzone/ansi-tokenize'
+} from './vendor/ansiTokenize.js'
 import { stringWidth } from '../ink/stringWidth.js'
 
 // A code is an "end code" if its code equals its endCode (e.g., hyperlink close)

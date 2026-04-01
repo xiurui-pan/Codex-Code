@@ -22,6 +22,9 @@ export async function logOTelEvent(
   eventName: string,
   metadata: { [key: string]: string | undefined } = {},
 ): Promise<void> {
+  if (process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1') {
+    return
+  }
   const eventLogger = getEventLogger()
   if (!eventLogger) {
     if (!hasWarnedNoEventLogger) {

@@ -3,7 +3,7 @@ import {
   type StyledChar,
   styledCharsFromTokens,
   tokenize,
-} from '@alcalzone/ansi-tokenize'
+} from '../utils/vendor/ansiTokenize.js'
 import { logForDebugging } from '../utils/debug.js'
 import { getGraphemeSegmenter } from '../utils/intl.js'
 import sliceAnsi from '../utils/sliceAnsi.js'

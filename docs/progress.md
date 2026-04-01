@@ -8,6 +8,17 @@
 
 ## 已完成
 
+- 当前阶段里，真实工具闭环与真实权限闭环已经打通。
+  这一轮已经完成的关键结果包括：
+  - 修掉 `upstream/claude-code` 在 ESM 运行时里的残留 `require(...)`，越过 `before-ask` 处的 `require is not defined`
+  - 打通自定义 Codex provider 在 headless/structured 路径下的真实工具调用适配，不再只停留在纯文本“伪工具输出”
+  - 打通 `--permission-prompt-tool stdio` 下的真实 `can_use_tool -> control_response` 权限协议
+  - 已分别验证允许/拒绝两条分支：
+    - 允许分支：`cd src && echo ok > perm-check.txt`
+    - 拒绝分支：同一命令由宿主返回 deny
+  - 两条分支都已确认走完整个闭环：工具调用、权限事件、结果回灌、最终回答
+  这说明当前已经不只是“模型能回复”或“工具能偶发执行”，而是 Claude Code 原有的本地权限与工具主循环，已经在 Codex 适配层下形成最小真实闭环。
+
 - `44637ed` `docs: add codex code baseline and upstream snapshot`
   固定了文档基线、分析结论和 `upstream/claude-code` 源码快照，明确项目不是单纯协议替换。
 
@@ -105,10 +116,14 @@
 - 明确不再保留 Anthropic 专用的 `anti_distillation` 逻辑，后续拆分以通用调用能力为主。
 - 控制改动范围，避免又回到 prototype 扩功能的路线。
 - 当前新的重点已经不是登录、OAuth 或远端传输链路，也不是“能不能显示首个 REPL 画面”，而是让已经打通的真实交互问答链继续稳定下来，并逐步接上后续能力。
+- 当前这一整块主线已经从“打通最小权限闭环”推进到“收尾与稳定化”：后续重点不再是找权限事件，而是继续减少 provider 文本输出形状带来的适配脆弱点，并逐步把更多工具场景收进同一条稳定路径。
 
 ## 下一步
 
 - 下一整块建议转到“交互式 TUI 真实问答回路的稳定化与扩展”。
+- 下一轮可以优先整理两类稳定化工作：
+  - 继续收窄 Codex provider 文本工具输出的兼容面，减少非常规文本形状带来的解析抖动
+  - 把当前已验证的 headless 权限闭环继续扩到更多工具与更多权限场景
 - 继续围绕 Codex provider 主链拆 `services/api/claude.ts`，优先处理与交互式问答稳定性、回合边界、模型调用中间层直接相关的能力。
 - 停止为 Anthropic 专属链路补缺模块；claude.ai 登录、OAuth、Bridge、assistant mode、proactive 这些能力后续是否恢复，放到后续阶段单独评估。
 - 优先围绕 `main.tsx -> replLauncher.tsx -> screens/REPL.tsx -> QueryEngine.ts -> query.ts` 这条主链，继续把真实问答、结果回灌和交互状态传递做稳。

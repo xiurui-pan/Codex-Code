@@ -34,7 +34,6 @@ import { addToHistory } from './history.js';
 import type { Root } from './ink.js';
 import { launchRepl } from './replLauncher.js';
 import { fetchBootstrapData } from './services/api/bootstrap.js';
-import { queryCodexResponses } from './services/api/codexResponses.js';
 import { type DownloadResult, downloadSessionFiles, type FilesApiConfig, parseFileSpecs } from './services/api/filesApi.js';
 import { prefetchOfficialMcpUrls } from './services/mcp/officialRegistry.js';
 import type { McpSdkServerConfig, McpServerConfig, ScopedMcpServerConfig } from './services/mcp/types.js';
@@ -495,7 +494,9 @@ export function startDeferredPrefetches(): void {
       m.initializeAnalyticsGates(),
     )
   }
-  void prefetchOfficialMcpUrls();
+  if (!isCurrentPhaseCustomCodexProvider()) {
+    void prefetchOfficialMcpUrls();
+  }
   void refreshModelCapabilities();
 
   // File change detectors deferred from init() to unblock first render
@@ -939,90 +940,6 @@ async function getInputPrompt(prompt: string, inputFormat: 'text' | 'stream-json
   return prompt;
 }
 
-function extractAssistantTextForCurrentPhase(message: MessageType): string {
-  if (message.type !== 'assistant') {
-    return ''
-  }
-
-  return message.message.content.map(block => {
-    if ('text' in block && typeof block.text === 'string') {
-      return block.text
-    }
-    return ''
-  }).join('')
-}
-
-async function runCurrentPhaseBarePrintRequest({
-  inputPrompt,
-  systemPrompt,
-  appendSystemPrompt,
-  model,
-  effort,
-}: {
-  inputPrompt: string | AsyncIterable<string>
-  systemPrompt?: string
-  appendSystemPrompt?: string
-  model?: string
-  effort?: string
-}): Promise<void> {
-  if (typeof inputPrompt !== 'string') {
-    writeToStderr('Error: 当前阶段的自定义 Codex provider 仅支持文本输入，不支持 --input-format=stream-json。\n')
-    process.exit(1)
-  }
-
-  const assistantMessage = await queryCodexResponses({
-    messages: [createUserMessage({ content: inputPrompt })],
-    systemPrompt: asSystemPrompt(
-      [systemPrompt, appendSystemPrompt].filter(
-        (value): value is string => Boolean(value && value.length > 0),
-      ),
-    ),
-    options: {
-      model,
-      effortValue: effort,
-    },
-    signal: new AbortController().signal,
-  })
-
-  const output = extractAssistantTextForCurrentPhase(assistantMessage)
-  if (!output.trim()) {
-    writeToStderr('Error: 自定义 Codex provider 没有返回可打印的文本结果。\n')
-    process.exit(1)
-  }
-
-  process.stdout.write(output.endsWith('\n') ? output : `${output}\n`)
-}
-
-async function queryCurrentPhasePrompt({
-  inputPrompt,
-  systemPrompt,
-  appendSystemPrompt,
-  model,
-  effort,
-}: {
-  inputPrompt: string
-  systemPrompt?: string
-  appendSystemPrompt?: string
-  model?: string
-  effort?: string
-}): Promise<MessageType[]> {
-  const userMessage = createUserMessage({ content: inputPrompt })
-  const assistantMessage = await queryCodexResponses({
-    messages: [userMessage],
-    systemPrompt: asSystemPrompt(
-      [systemPrompt, appendSystemPrompt].filter(
-        (value): value is string => Boolean(value && value.length > 0),
-      ),
-    ),
-    options: {
-      model,
-      effortValue: effort,
-    },
-    signal: new AbortController().signal,
-  })
-
-  return [userMessage, assistantMessage]
-}
 async function run(): Promise<CommanderCommand> {
   profileCheckpoint('run_function_start');
   const writeStartupProbe = (message: string): void => {
@@ -2004,28 +1921,6 @@ async function run(): Promise<CommanderCommand> {
     logForDebugging('[STARTUP] getInputPrompt done');
     profileCheckpoint('action_after_input_prompt');
 
-      if (currentPhaseCustomCodexProvider && isNonInteractiveSession && isBareMode()) {
-        if ((outputFormat ?? 'text') !== 'text') {
-          writeToStderr('Error: 当前阶段的自定义 Codex provider 仅支持 --output-format=text。\n');
-          process.exit(1);
-      }
-      if (options.continue || options.resume || teleport || sdkUrl || options.permissionPromptTool) {
-        writeToStderr('Error: 当前阶段的自定义 Codex provider 只支持本地单次 --bare -p 请求，不支持 resume、continue、teleport、sdk-url 或 permission-prompt-tool。\n');
-        process.exit(1);
-      }
-
-      logForDebugging('[STARTUP] current-phase bare print shortcut start');
-      await runCurrentPhaseBarePrintRequest({
-        inputPrompt,
-        systemPrompt,
-        appendSystemPrompt,
-        model: options.model ?? codexConfiguredModel,
-        effort: options.effort ?? codexConfiguredReasoningEffort
-      });
-      gracefulShutdownSync(0);
-      return;
-    }
-
     // Activate proactive mode BEFORE getTools() so SleepTool.isEnabled()
     // (which returns isProactiveActive()) passes and Sleep is included.
     // The later REPL-path maybeActivateProactive() calls are idempotent.
@@ -2115,6 +2010,7 @@ async function run(): Promise<CommanderCommand> {
     // Callers who inject and also want those injections visible in the
     // stream pass --messaging-socket-path explicitly (or --replay-user-messages).
     writeStartupProbe('action:after-setup-pre-replay');
+    process.stderr.write('[PROBE] after-setup-pre-replay\n');
     let effectiveReplayUserMessages = !!options.replayUserMessages;
     if (feature('UDS_INBOX')) {
       if (!effectiveReplayUserMessages && outputFormat === 'stream-json') {
@@ -2123,7 +2019,8 @@ async function run(): Promise<CommanderCommand> {
         }).messagingSocketPath;
       }
     }
-    if (getIsNonInteractiveSession()) {
+    process.stderr.write('[PROBE] after-replay-flags\n');
+    if (getIsNonInteractiveSession() && !currentPhaseCustomCodexProvider) {
       // Apply full merged settings env now (including project-scoped
       // .claude/settings.json PATH/GIT_DIR/GIT_WORK_TREE) so gitExe() and
       // the git spawn below see it. Trust is implicit in -p mode; the
@@ -2162,6 +2059,7 @@ async function run(): Promise<CommanderCommand> {
       // early-return (zero-cost).
       void ensureModelStringsInitialized();
     }
+    process.stderr.write('[PROBE] after-noninteractive-block\n');
 
     // Apply --name: cache-only so no orphan file is created before the
     // session ID is finalized by --continue/--resume. materializeSessionFile
@@ -2186,8 +2084,10 @@ async function run(): Promise<CommanderCommand> {
     //  - flag absent from disk (== null also catches pre-#22279 poisoned null)
     const selectedModelOption = options.model ?? codexConfiguredModel;
     const explicitModel = selectedModelOption || process.env.ANTHROPIC_MODEL;
-    if ("external" === 'ant' && explicitModel && explicitModel !== 'default' && !hasGrowthBookEnvOverride('tengu_ant_model_override') && getGlobalConfig().cachedGrowthBookFeatures?.['tengu_ant_model_override'] == null) {
+    if (!currentPhaseCustomCodexProvider && "external" === 'ant' && explicitModel && explicitModel !== 'default' && !hasGrowthBookEnvOverride('tengu_ant_model_override') && getGlobalConfig().cachedGrowthBookFeatures?.['tengu_ant_model_override'] == null) {
+      logForDebugging('[STARTUP] initializeGrowthBook start');
       await initializeGrowthBook();
+      logForDebugging('[STARTUP] initializeGrowthBook done');
     }
 
     // Special case the default model with the null keyword
@@ -2198,6 +2098,7 @@ async function run(): Promise<CommanderCommand> {
     // Reuse preSetupCwd unless setup() chdir'd (worktreeEnabled). Saves a
     // getCwd() syscall in the common path.
     writeStartupProbe('action:before-current-cwd');
+    logForDebugging('[STARTUP] before currentCwd/commands load');
     const currentCwd = worktreeEnabled ? getCwd() : preSetupCwd;
     logForDebugging('[STARTUP] Loading commands and agents...');
     const commandsStart = Date.now();
@@ -2747,7 +2648,11 @@ async function run(): Promise<CommanderCommand> {
     // mode doesn't apply to the Agent SDK anyway (see getFastModeUnavailableReason).
     const bgRefreshThrottleMs = getFeatureValue_CACHED_MAY_BE_STALE('tengu_cicada_nap_ms', 0);
     const lastPrefetched = getGlobalConfig().startupPrefetchedAt ?? 0;
-    const skipStartupPrefetches = isBareMode() || bgRefreshThrottleMs > 0 && Date.now() - lastPrefetched < bgRefreshThrottleMs;
+    const skipStartupPrefetches =
+      currentPhaseCustomCodexProvider ||
+      isBareMode() ||
+      (bgRefreshThrottleMs > 0 &&
+        Date.now() - lastPrefetched < bgRefreshThrottleMs);
     if (!skipStartupPrefetches) {
       const lastPrefetchedInfo = lastPrefetched > 0 ? ` last ran ${Math.round((Date.now() - lastPrefetched) / 1000)}s ago` : '';
       logForDebugging(`Starting background startup prefetches${lastPrefetchedInfo}`);
@@ -2777,6 +2682,7 @@ async function run(): Promise<CommanderCommand> {
       // Resolve fast mode org status from cache (no network)
       resolveFastModeStatusFromCache();
     }
+    process.stderr.write('[PROBE] after-startup-prefetch-section\n');
     if (!isNonInteractiveSession) {
       void refreshExampleCommands(); // Pre-fetch example commands (runs git log, no API call)
     }
@@ -2785,6 +2691,7 @@ async function run(): Promise<CommanderCommand> {
     const {
       servers: existingMcpConfigs
     } = await mcpConfigPromise;
+    process.stderr.write('[PROBE] after-mcp-config-await\n');
     logForDebugging(`[STARTUP] MCP configs resolved in ${mcpConfigResolvedMs}ms (awaited at +${Date.now() - mcpConfigStart}ms)`);
     // CLI flag (--mcp-config) should override file-based configs, matching settings precedence
     const allMcpConfigs = {
@@ -2945,8 +2852,6 @@ async function run(): Promise<CommanderCommand> {
           }
         });
       });
-    } else {
-      logForDebugging('[STARTUP] current-phase telemetry/session registration skipped');
     }
 
     // Initialize versioned plugins system (triggers V1→V2 migration if
@@ -2960,7 +2865,7 @@ async function run(): Promise<CommanderCommand> {
     // are install/upgrade bookkeeping that scripted calls don't need —
     // the next interactive session will reconcile. The await here was
     // blocking -p on a marketplace round-trip.
-    if (isBareMode()) {
+    if (isBareMode() || currentPhaseCustomCodexProvider) {
       // skip — no-op
     } else if (isNonInteractiveSession) {
       // In headless mode, await to ensure plugin sync completes before CLI exits
@@ -2991,18 +2896,21 @@ async function run(): Promise<CommanderCommand> {
 
     // --print mode
     if (isNonInteractiveSession) {
+      process.stderr.write('[PROBE] headless-branch-enter\n');
       if (outputFormat === 'stream-json' || outputFormat === 'json') {
         setHasFormattedOutput(true);
       }
 
-      // Apply full environment variables in print mode since trust dialog is bypassed
-      // This includes potentially dangerous environment variables from untrusted sources
-      // but print mode is considered trusted (as documented in help text)
-      applyConfigEnvironmentVariables();
+      if (!currentPhaseBareLocalMode) {
+        // Apply full environment variables in print mode since trust dialog is bypassed
+        // This includes potentially dangerous environment variables from untrusted sources
+        // but print mode is considered trusted (as documented in help text)
+        applyConfigEnvironmentVariables();
 
-      // Initialize telemetry after env vars are applied so OTEL endpoint env vars and
-      // otelHeadersHelper (which requires trust to execute) are available.
-      initializeTelemetryAfterTrust();
+        // Initialize telemetry after env vars are applied so OTEL endpoint env vars and
+        // otelHeadersHelper (which requires trust to execute) are available.
+        initializeTelemetryAfterTrust();
+      }
 
       // Kick SessionStart hooks now so the subprocess spawn overlaps with
       // MCP connect + plugin init + print.ts import below. loadInitialMessages
@@ -3012,23 +2920,127 @@ async function run(): Promise<CommanderCommand> {
       // undefined and the ?? fallback runs). Also skip when setupTrigger is
       // set — those paths run setup hooks first (print.ts:544), and session
       // start hooks must wait until setup completes.
-      const sessionStartHooksPromise = options.continue || options.resume || teleport || setupTrigger ? undefined : processSessionStartHooks('startup');
+      const sessionStartHooksPromise = currentPhaseBareLocalMode || options.continue || options.resume || teleport || setupTrigger ? undefined : processSessionStartHooks('startup');
       // Suppress transient unhandledRejection if this rejects before
       // loadInitialMessages awaits it. Downstream await still observes the
       // rejection — this just prevents the spurious global handler fire.
       sessionStartHooksPromise?.catch(() => {});
       profileCheckpoint('before_validateForceLoginOrg');
-      // Validate org restriction for non-interactive sessions
-      const orgValidation = await validateForceLoginOrg();
-      if (!orgValidation.valid) {
-        process.stderr.write(orgValidation.message + '\n');
-        process.exit(1);
+      process.stderr.write('[PROBE] before-validateForceLoginOrg\n');
+      if (!currentPhaseBareLocalMode) {
+        // Validate org restriction for non-interactive sessions
+        const orgValidation = await validateForceLoginOrg();
+        if (!orgValidation.valid) {
+          process.stderr.write(orgValidation.message + '\n');
+          process.exit(1);
+        }
       }
+      process.stderr.write('[PROBE] after-validateForceLoginOrg\n');
 
       // Headless mode supports all prompt commands and some local commands
       // If disableSlashCommands is true, return empty array
       const commandsHeadless = disableSlashCommands ? [] : commands.filter(command => command.type === 'prompt' && !command.disableNonInteractive || command.type === 'local' && command.supportsNonInteractive);
-      const defaultState = getDefaultAppState();
+      const defaultState = currentPhaseBareLocalMode ? {
+        settings: getInitialSettings(),
+        tasks: {},
+        agentNameRegistry: new Map(),
+        verbose: false,
+        mainLoopModel: null,
+        mainLoopModelForSession: null,
+        statusLineText: undefined,
+        expandedView: 'none' as const,
+        isBriefOnly: false,
+        showTeammateMessagePreview: false,
+        selectedIPAgentIndex: -1,
+        coordinatorTaskIndex: -1,
+        viewSelectionMode: 'none' as const,
+        footerSelection: null,
+        kairosEnabled: false,
+        remoteSessionUrl: undefined,
+        remoteConnectionStatus: 'connecting' as const,
+        remoteBackgroundTaskCount: 0,
+        replBridgeEnabled: false,
+        replBridgeExplicit: false,
+        replBridgeOutboundOnly: false,
+        replBridgeConnected: false,
+        replBridgeSessionActive: false,
+        replBridgeReconnecting: false,
+        replBridgeConnectUrl: undefined,
+        replBridgeSessionUrl: undefined,
+        replBridgeEnvironmentId: undefined,
+        replBridgeSessionId: undefined,
+        replBridgeError: undefined,
+        replBridgeInitialName: undefined,
+        showRemoteCallout: false,
+        toolPermissionContext: {
+          ...getEmptyToolPermissionContext(),
+          mode: 'default' as const
+        },
+        agent: undefined,
+        agentDefinitions: { activeAgents: [], allAgents: [] },
+        fileHistory: {
+          snapshots: [],
+          trackedFiles: new Set(),
+          snapshotSequence: 0
+        },
+        attribution: createEmptyAttributionState(),
+        mcp: {
+          clients: [],
+          tools: [],
+          commands: [],
+          resources: {},
+          pluginReconnectKey: 0
+        },
+        plugins: {
+          enabled: [],
+          disabled: [],
+          commands: [],
+          errors: [],
+          installationStatus: {
+            marketplaces: [],
+            plugins: []
+          },
+          needsRefresh: false
+        },
+        todos: {},
+        remoteAgentTaskSuggestions: [],
+        notifications: {
+          current: null,
+          queue: []
+        },
+        elicitation: {
+          queue: []
+        },
+        thinkingEnabled: false,
+        promptSuggestionEnabled: false,
+        sessionHooks: new Map(),
+        inbox: {
+          messages: []
+        },
+        workerSandboxPermissions: {
+          queue: [],
+          selectedIndex: 0
+        },
+        pendingWorkerRequest: null,
+        pendingSandboxRequest: null,
+        promptSuggestion: {
+          text: null,
+          promptId: null,
+          shownAt: 0,
+          acceptedAt: 0,
+          generationRequestId: null
+        },
+        speculation: IDLE_SPECULATION_STATE,
+        speculationSessionTimeSavedMs: 0,
+        skillImprovement: {
+          suggestion: null
+        },
+        authVersion: 0,
+        initialMessage: null,
+        effortValue: undefined,
+        activeOverlays: new Set<string>(),
+        fastMode: false
+      } satisfies AppState : getDefaultAppState();
       const headlessInitialState: AppState = {
         ...defaultState,
         mcp: {
@@ -3039,10 +3051,10 @@ async function run(): Promise<CommanderCommand> {
         },
         toolPermissionContext,
         effortValue: parseEffortValue(options.effort ?? codexConfiguredReasoningEffort) ?? getInitialEffortSetting(),
-        ...(isFastModeEnabled() && {
+        ...(!currentPhaseBareLocalMode && isFastModeEnabled() && {
           fastMode: getInitialFastModeSetting(effectiveModel ?? null)
         }),
-        ...(isAdvisorEnabled() && advisorModel && {
+        ...(!currentPhaseBareLocalMode && isAdvisorEnabled() && advisorModel && {
           advisorModel
         }),
         // kairosEnabled gates the async fire-and-forget path in
@@ -3090,7 +3102,10 @@ async function run(): Promise<CommanderCommand> {
 
       // Store SDK betas in global state for context window calculation
       // Only store allowed betas (filters by allowlist and subscriber status)
-      setSdkBetas(filterAllowedSdkBetas(betas));
+      if (!currentPhaseBareLocalMode) {
+        setSdkBetas(filterAllowedSdkBetas(betas));
+      }
+      process.stderr.write('[PROBE] after-setSdkBetas\n');
 
       // Print-mode MCP: per-server incremental push into headlessStore.
       // Mirrors useManageMCPConnections — push pending first (so ToolSearch's
@@ -3133,110 +3148,109 @@ async function run(): Promise<CommanderCommand> {
       // (processBatched with Promise.all). claude.ai is awaited too — its
       // fetch was kicked off early (line ~2558) so only residual time blocks
       // here. --bare skips claude.ai entirely for perf-sensitive scripts.
-      profileCheckpoint('before_connectMcp');
-      await connectMcpBatch(regularMcpConfigs, 'regular');
-      profileCheckpoint('after_connectMcp');
-      // Dedup: suppress plugin MCP servers that duplicate a claude.ai
-      // connector (connector wins), then connect claude.ai servers.
-      // Bounded wait — #23725 made this blocking so single-turn -p sees
-      // connectors, but with 40+ slow connectors tengu_startup_perf p99
-      // climbed to 76s. If fetch+connect doesn't finish in time, proceed;
-      // the promise keeps running and updates headlessStore in the
-      // background so turn 2+ still sees connectors.
-      const CLAUDE_AI_MCP_TIMEOUT_MS = 5_000;
-      const claudeaiConnect = claudeaiConfigPromise.then(claudeaiConfigs => {
-        if (Object.keys(claudeaiConfigs).length > 0) {
-          const claudeaiSigs = new Set<string>();
-          for (const config of Object.values(claudeaiConfigs)) {
-            const sig = getMcpServerSignature(config);
-            if (sig) claudeaiSigs.add(sig);
-          }
-          const suppressed = new Set<string>();
-          for (const [name, config] of Object.entries(regularMcpConfigs)) {
-            if (!name.startsWith('plugin:')) continue;
-            const sig = getMcpServerSignature(config);
-            if (sig && claudeaiSigs.has(sig)) suppressed.add(name);
-          }
-          if (suppressed.size > 0) {
-            logForDebugging(`[MCP] Lazy dedup: suppressing ${suppressed.size} plugin server(s) that duplicate claude.ai connectors: ${[...suppressed].join(', ')}`);
-            // Disconnect before filtering from state. Only connected
-            // servers need cleanup — clearServerCache on a never-connected
-            // server triggers a real connect just to kill it (memoize
-            // cache-miss path, see useManageMCPConnections.ts:870).
-            for (const c of headlessStore.getState().mcp.clients) {
-              if (!suppressed.has(c.name) || c.type !== 'connected') continue;
-              c.client.onclose = undefined;
-              void clearServerCache(c.name, c.config).catch(() => {});
+      if (!currentPhaseBareLocalMode) {
+        profileCheckpoint('before_connectMcp');
+        await connectMcpBatch(regularMcpConfigs, 'regular');
+        profileCheckpoint('after_connectMcp');
+        // Dedup: suppress plugin MCP servers that duplicate a claude.ai
+        // connector (connector wins), then connect claude.ai servers.
+        // Bounded wait — #23725 made this blocking so single-turn -p sees
+        // connectors, but with 40+ slow connectors tengu_startup_perf p99
+        // climbed to 76s. If fetch+connect doesn't finish in time, proceed;
+        // the promise keeps running and updates headlessStore in the
+        // background so turn 2+ still sees connectors.
+        const CLAUDE_AI_MCP_TIMEOUT_MS = 5_000;
+        const claudeaiConnect = claudeaiConfigPromise.then(claudeaiConfigs => {
+          if (Object.keys(claudeaiConfigs).length > 0) {
+            const claudeaiSigs = new Set<string>();
+            for (const config of Object.values(claudeaiConfigs)) {
+              const sig = getMcpServerSignature(config);
+              if (sig) claudeaiSigs.add(sig);
             }
-            headlessStore.setState(prev => {
-              let {
-                clients,
-                tools,
-                commands,
-                resources
-              } = prev.mcp;
-              clients = clients.filter(c => !suppressed.has(c.name));
-              tools = tools.filter(t => !t.mcpInfo || !suppressed.has(t.mcpInfo.serverName));
-              for (const name of suppressed) {
-                commands = excludeCommandsByServer(commands, name);
-                resources = excludeResourcesByServer(resources, name);
+            const suppressed = new Set<string>();
+            for (const [name, config] of Object.entries(regularMcpConfigs)) {
+              if (!name.startsWith('plugin:')) continue;
+              const sig = getMcpServerSignature(config);
+              if (sig && claudeaiSigs.has(sig)) suppressed.add(name);
+            }
+            if (suppressed.size > 0) {
+              logForDebugging(`[MCP] Lazy dedup: suppressing ${suppressed.size} plugin server(s) that duplicate claude.ai connectors: ${[...suppressed].join(', ')}`);
+              for (const c of headlessStore.getState().mcp.clients) {
+                if (!suppressed.has(c.name) || c.type !== 'connected') continue;
+                c.client.onclose = undefined;
+                void clearServerCache(c.name, c.config).catch(() => {});
               }
-              return {
-                ...prev,
-                mcp: {
-                  ...prev.mcp,
+              headlessStore.setState(prev => {
+                let {
                   clients,
                   tools,
                   commands,
                   resources
+                } = prev.mcp;
+                clients = clients.filter(c => !suppressed.has(c.name));
+                tools = tools.filter(t => !t.mcpInfo || !suppressed.has(t.mcpInfo.serverName));
+                for (const name of suppressed) {
+                  commands = excludeCommandsByServer(commands, name);
+                  resources = excludeResourcesByServer(resources, name);
                 }
-              };
-            });
+                return {
+                  ...prev,
+                  mcp: {
+                    ...prev.mcp,
+                    clients,
+                    tools,
+                    commands,
+                    resources
+                  }
+                };
+              });
+            }
           }
+          const nonPluginConfigs = pickBy(regularMcpConfigs, (_, n) => !n.startsWith('plugin:'));
+          const {
+            servers: dedupedClaudeAi
+          } = dedupClaudeAiMcpServers(claudeaiConfigs, nonPluginConfigs);
+          return connectMcpBatch(dedupedClaudeAi, 'claudeai');
+        });
+        let claudeaiTimer: ReturnType<typeof setTimeout> | undefined;
+        const claudeaiTimedOut = await Promise.race([claudeaiConnect.then(() => false), new Promise<boolean>(resolve => {
+          claudeaiTimer = setTimeout(r => r(true), CLAUDE_AI_MCP_TIMEOUT_MS, resolve);
+        })]);
+        if (claudeaiTimer) clearTimeout(claudeaiTimer);
+        if (claudeaiTimedOut) {
+          logForDebugging(`[MCP] claude.ai connectors not ready after ${CLAUDE_AI_MCP_TIMEOUT_MS}ms — proceeding; background connection continues`);
         }
-        // Suppress claude.ai connectors that duplicate an enabled
-        // manual server (URL-signature match). Plugin dedup above only
-        // handles `plugin:*` keys; this catches manual `.mcp.json` entries.
-        // plugin:* must be excluded here — step 1 already suppressed
-        // those (claude.ai wins); leaving them in suppresses the
-        // connector too, and neither survives (gh-39974).
-        const nonPluginConfigs = pickBy(regularMcpConfigs, (_, n) => !n.startsWith('plugin:'));
-        const {
-          servers: dedupedClaudeAi
-        } = dedupClaudeAiMcpServers(claudeaiConfigs, nonPluginConfigs);
-        return connectMcpBatch(dedupedClaudeAi, 'claudeai');
-      });
-      let claudeaiTimer: ReturnType<typeof setTimeout> | undefined;
-      const claudeaiTimedOut = await Promise.race([claudeaiConnect.then(() => false), new Promise<boolean>(resolve => {
-        claudeaiTimer = setTimeout(r => r(true), CLAUDE_AI_MCP_TIMEOUT_MS, resolve);
-      })]);
-      if (claudeaiTimer) clearTimeout(claudeaiTimer);
-      if (claudeaiTimedOut) {
-        logForDebugging(`[MCP] claude.ai connectors not ready after ${CLAUDE_AI_MCP_TIMEOUT_MS}ms — proceeding; background connection continues`);
+        profileCheckpoint('after_connectMcp_claudeai');
       }
-      profileCheckpoint('after_connectMcp_claudeai');
 
       // In headless mode, start deferred prefetches immediately (no user typing delay)
       // --bare / SIMPLE: startDeferredPrefetches early-returns internally.
       // backgroundHousekeeping (initExtractMemories, pruneShellSnapshots,
       // cleanupOldMessageFiles) and sdkHeapDumpMonitor are all bookkeeping
       // that scripted calls don't need — the next interactive session reconciles.
-      if (!isBareMode()) {
+      if (!currentPhaseBareLocalMode && !isBareMode()) {
         startDeferredPrefetches();
         void import('./utils/backgroundHousekeeping.js').then(m => m.startBackgroundHousekeeping());
         if ("external" === 'ant') {
           void import('./utils/sdkHeapDumpMonitor.js').then(m => m.startSdkMemoryMonitor());
         }
       }
-      logSessionTelemetry();
+      process.stderr.write('[PROBE] before-headless-telemetry\n');
+      if (!currentPhaseBareLocalMode) {
+        logSessionTelemetry();
+      }
+      process.stderr.write('[PROBE] after-headless-telemetry\n');
       logForDebugging('[STARTUP] before print import');
       profileCheckpoint('before_print_import');
+      process.stderr.write('[PROBE] before-headless-import\n');
       const {
         runHeadless
       } = await import('src/cli/print.js');
+      process.stderr.write('[PROBE] after-headless-import\n');
       logForDebugging('[STARTUP] after print import');
       profileCheckpoint('after_print_import');
       logForDebugging('[STARTUP] before runHeadless');
+      process.stderr.write('[PROBE] before-runHeadless-call\n');
       void runHeadless(inputPrompt, () => headlessStore.getState(), headlessStore.setState, commandsHeadless, tools, sdkMcpConfigs, agentDefinitions.activeAgents, {
         continue: options.continue,
         resume: options.resume,
@@ -3268,6 +3282,7 @@ async function run(): Promise<CommanderCommand> {
         setupTrigger: setupTrigger ?? undefined,
         sessionStartHooksPromise
       });
+      process.stderr.write('[PROBE] after-runHeadless-call\n');
       return;
     }
 
@@ -3281,9 +3296,11 @@ async function run(): Promise<CommanderCommand> {
         agent: agentSetting as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
       });
     }
+    process.stderr.write('[PROBE] after-startup-manual-model-config\n');
 
     // Get deprecation warning for the initial model (resolvedInitialModel computed earlier for hooks parallelization)
     const deprecationWarning = currentPhaseBareLocalMode ? null : getModelDeprecationWarning(resolvedInitialModel);
+    process.stderr.write('[PROBE] after-deprecation-warning\n');
 
     // Build initial notification queue
     const initialNotifications: Array<{
@@ -3319,6 +3336,7 @@ async function run(): Promise<CommanderCommand> {
         priority: 'high'
       });
     }
+    process.stderr.write('[PROBE] after-initial-notifications\n');
     const effectiveToolPermissionContext = currentPhaseBareLocalMode ? toolPermissionContext : {
       ...toolPermissionContext,
       mode: isAgentSwarmsEnabled() && getTeammateUtils().isPlanModeRequired() ? 'plan' as const : toolPermissionContext.mode
@@ -3552,6 +3570,7 @@ async function run(): Promise<CommanderCommand> {
       // teammates reading their own identity, not the assistant-mode leader.
       teamContext: feature('KAIROS') ? assistantTeamContext ?? computeInitialTeamContext?.() : computeInitialTeamContext?.()
     };
+    process.stderr.write('[PROBE] after-initial-state\n');
     logForDebugging(`[STARTUP] initialState prepared (currentPhaseBareLocalMode=${currentPhaseBareLocalMode})`);
 
     // Add CLI initial prompt to history
@@ -4279,31 +4298,6 @@ async function run(): Promise<CommanderCommand> {
         });
       }
     } else {
-      if (currentPhaseBareLocalMode && typeof inputPrompt === 'string' && inputPrompt.trim().length > 0) {
-        logForDebugging('[STARTUP] current-phase interactive initial prompt shortcut start');
-        const currentPhaseMessages = await queryCurrentPhasePrompt({
-          inputPrompt,
-          systemPrompt,
-          appendSystemPrompt,
-          model: options.model ?? codexConfiguredModel,
-          effort: options.effort ?? codexConfiguredReasoningEffort
-        });
-        logForDebugging('[STARTUP] current-phase interactive initial prompt shortcut done');
-
-        await launchRepl(root, {
-          getFpsMetrics,
-          stats,
-          initialState: {
-            ...initialState,
-            initialMessage: null
-          }
-        }, {
-          ...sessionConfig,
-          initialMessages: currentPhaseMessages
-        }, renderAndRun);
-        return;
-      }
-
       // Pass unresolved hooks promise to REPL so it can render immediately
       // instead of blocking ~500ms waiting for SessionStart hooks to finish.
       // REPL will inject hook messages when they resolve and await them before

@@ -3,11 +3,6 @@ import { feature } from 'bun:bundle'
 import { readFile, stat } from 'fs/promises'
 import { createRequire } from 'module'
 import { dirname } from 'path'
-import {
-  downloadUserSettings,
-  redownloadUserSettings,
-} from 'src/services/settingsSync/index.js'
-import { waitForRemoteManagedSettingsToLoad } from 'src/services/remoteManagedSettings/index.js'
 import { StructuredIO } from 'src/cli/structuredIO.js'
 import {
   type Command,
@@ -26,7 +21,6 @@ import {
   logEvent,
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
 } from 'src/services/analytics/index.js'
-import { getFeatureValue_CACHED_MAY_BE_STALE } from 'src/services/analytics/growthbook.js'
 import { logForDebugging } from 'src/utils/debug.js'
 import {
   logForDiagnosticsNoPII,
@@ -58,7 +52,6 @@ import {
   type RequiresActionDetails,
   type SessionExternalMetadata,
 } from 'src/utils/sessionState.js'
-import { externalMetadataToAppState } from 'src/state/onChangeAppState.js'
 import { getInMemoryErrors, logError, logMCPDebug } from 'src/utils/log.js'
 import {
   writeToStdout,
@@ -98,7 +91,6 @@ import {
 import { expandPath } from 'src/utils/path.js'
 import { extractReadFilesFromMessages } from 'src/utils/queryHelpers.js'
 import { registerHookEventHandler } from 'src/utils/hooks/hookEvents.js'
-import { executeFilePersistence } from 'src/utils/filePersistence/filePersistence.js'
 import { finalizePendingAsyncHooks } from 'src/utils/hooks/AsyncHookRegistry.js'
 import {
   gracefulShutdown,
@@ -133,7 +125,6 @@ import { cwd } from 'process'
 import { getCwd } from 'src/utils/cwd.js'
 import omit from 'lodash-es/omit.js'
 import reject from 'lodash-es/reject.js'
-import { isPolicyAllowed } from 'src/services/policyLimits/index.js'
 import type { ReplBridgeHandle } from 'src/bridge/replBridge.js'
 import { getRemoteSessionUrl } from 'src/constants/product.js'
 import { buildBridgeConnectUrl } from 'src/bridge/bridgeStatusUtil.js'
@@ -167,12 +158,6 @@ import {
 } from 'src/utils/settings/settings.js'
 import { settingsChangeDetector } from 'src/utils/settings/changeDetector.js'
 import { applySettingsChange } from 'src/utils/settings/applySettingsChange.js'
-import {
-  isFastModeAvailable,
-  isFastModeEnabled,
-  isFastModeSupportedByModel,
-  getFastModeState,
-} from 'src/utils/fastMode.js'
 import {
   isAutoModeGateEnabled,
   getAutoModeUnavailableNotification,
@@ -227,10 +212,6 @@ import {
   setMcpServerEnabled,
 } from 'src/services/mcp/config.js'
 import {
-  performMCPOAuthFlow,
-  revokeServerTokens,
-} from 'src/services/mcp/auth.js'
-import {
   runElicitationHooks,
   runElicitationResultHooks,
 } from 'src/services/mcp/elicitationHandler.js'
@@ -246,10 +227,6 @@ import {
 } from 'src/services/mcp/utils.js'
 import { setupVscodeSdkMcp } from 'src/services/mcp/vscodeSdkMcp.js'
 import { getAllMcpConfigs } from 'src/services/mcp/config.js'
-import {
-  isQualifiedForGrove,
-  checkGroveForNonInteractive,
-} from 'src/services/api/grove.js'
 import {
   toInternalMessages,
   toSDKRateLimitInfo,
@@ -345,21 +322,213 @@ import { getRunningTasks } from '../utils/task/framework.js'
 import { isBackgroundTask } from '../tasks/types.js'
 import { stopTask } from '../tasks/stopTask.js'
 import { drainSdkEvents } from '../utils/sdkEventQueue.js'
-import { initializeGrowthBook } from '../services/analytics/growthbook.js'
 import { errorMessage, toError } from '../utils/errors.js'
 import { sleep } from '../utils/sleep.js'
 import { isExtractModeActive } from '../memdir/paths.js'
+import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js'
 
 type AuthModule = typeof import('../utils/auth.js')
 type AuthHandlerModule = typeof import('./handlers/auth.js')
 type OAuthServiceModule = typeof import('../services/oauth/index.js')
+type SettingsSyncModule = typeof import('../services/settingsSync/index.js')
+type RemoteManagedSettingsModule =
+  typeof import('../services/remoteManagedSettings/index.js')
+type GrowthbookModule = typeof import('../services/analytics/growthbook.js')
+type OnChangeAppStateModule = typeof import('../state/onChangeAppState.js')
+type FilePersistenceModule =
+  typeof import('../utils/filePersistence/filePersistence.js')
+type PolicyLimitsModule = typeof import('../services/policyLimits/index.js')
+type McpAuthModule = typeof import('../services/mcp/auth.js')
+type GroveModule = typeof import('../services/api/grove.js')
+type FastModeModule = typeof import('../utils/fastMode.js')
 type AccountInformation = ReturnType<AuthModule['getAccountInformation']>
 type OAuthServiceLike = InstanceType<OAuthServiceModule['OAuthService']>
 
 const require = createRequire(import.meta.url)
+const currentPhaseDisableLegacyHeadlessModules =
+  isCurrentPhaseCustomCodexProvider()
 
 function isCustomProviderStage(): boolean {
   return getAPIProvider() === 'custom'
+}
+
+function getSettingsSyncModule(): SettingsSyncModule {
+  return require('../services/settingsSync/index.js') as SettingsSyncModule
+}
+
+function getRemoteManagedSettingsModule(): RemoteManagedSettingsModule {
+  return require(
+    '../services/remoteManagedSettings/index.js',
+  ) as RemoteManagedSettingsModule
+}
+
+function getGrowthbookModule(): GrowthbookModule {
+  return require('../services/analytics/growthbook.js') as GrowthbookModule
+}
+
+function getOnChangeAppStateModule(): OnChangeAppStateModule {
+  return require('../state/onChangeAppState.js') as OnChangeAppStateModule
+}
+
+function getFilePersistenceModule(): FilePersistenceModule {
+  return require(
+    '../utils/filePersistence/filePersistence.js',
+  ) as FilePersistenceModule
+}
+
+function getPolicyLimitsModule(): PolicyLimitsModule {
+  return require('../services/policyLimits/index.js') as PolicyLimitsModule
+}
+
+function getMcpAuthModule(): McpAuthModule {
+  return require('../services/mcp/auth.js') as McpAuthModule
+}
+
+function getGroveModule(): GroveModule {
+  return require('../services/api/grove.js') as GroveModule
+}
+
+function getFastModeModule(): FastModeModule {
+  return require('../utils/fastMode.js') as FastModeModule
+}
+
+function downloadUserSettings(): ReturnType<SettingsSyncModule['downloadUserSettings']> {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    return Promise.resolve(undefined)
+  }
+  return getSettingsSyncModule().downloadUserSettings()
+}
+
+function redownloadUserSettings(): ReturnType<SettingsSyncModule['redownloadUserSettings']> {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    return Promise.resolve(false)
+  }
+  return getSettingsSyncModule().redownloadUserSettings()
+}
+
+function waitForRemoteManagedSettingsToLoad(): ReturnType<
+  RemoteManagedSettingsModule['waitForRemoteManagedSettingsToLoad']
+> {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    return Promise.resolve()
+  }
+  return getRemoteManagedSettingsModule().waitForRemoteManagedSettingsToLoad()
+}
+
+function getFeatureValue_CACHED_MAY_BE_STALE<T>(
+  featureKey: string,
+  defaultValue: T,
+): T {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    return defaultValue
+  }
+  return getGrowthbookModule().getFeatureValue_CACHED_MAY_BE_STALE(
+    featureKey,
+    defaultValue,
+  )
+}
+
+function initializeGrowthBook(): ReturnType<GrowthbookModule['initializeGrowthBook']> {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    return Promise.resolve(undefined)
+  }
+  return getGrowthbookModule().initializeGrowthBook()
+}
+
+function externalMetadataToAppState(
+  ...args: Parameters<OnChangeAppStateModule['externalMetadataToAppState']>
+): ReturnType<OnChangeAppStateModule['externalMetadataToAppState']> {
+  return getOnChangeAppStateModule().externalMetadataToAppState(...args)
+}
+
+function executeFilePersistence(
+  ...args: Parameters<FilePersistenceModule['executeFilePersistence']>
+): ReturnType<FilePersistenceModule['executeFilePersistence']> {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    return undefined as ReturnType<FilePersistenceModule['executeFilePersistence']>
+  }
+  return getFilePersistenceModule().executeFilePersistence(...args)
+}
+
+function isPolicyAllowed(
+  ...args: Parameters<PolicyLimitsModule['isPolicyAllowed']>
+): ReturnType<PolicyLimitsModule['isPolicyAllowed']> {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    return true as ReturnType<PolicyLimitsModule['isPolicyAllowed']>
+  }
+  return getPolicyLimitsModule().isPolicyAllowed(...args)
+}
+
+function performMCPOAuthFlow(
+  ...args: Parameters<McpAuthModule['performMCPOAuthFlow']>
+): ReturnType<McpAuthModule['performMCPOAuthFlow']> {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    throw new Error(
+      'Current stage only supports custom Codex provider local entry; MCP OAuth is disabled.',
+    )
+  }
+  return getMcpAuthModule().performMCPOAuthFlow(...args)
+}
+
+function revokeServerTokens(
+  ...args: Parameters<McpAuthModule['revokeServerTokens']>
+): ReturnType<McpAuthModule['revokeServerTokens']> {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    return Promise.resolve(undefined)
+  }
+  return getMcpAuthModule().revokeServerTokens(...args)
+}
+
+function isQualifiedForGrove(): ReturnType<GroveModule['isQualifiedForGrove']> {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    return Promise.resolve(false)
+  }
+  return getGroveModule().isQualifiedForGrove()
+}
+
+function checkGroveForNonInteractive(): ReturnType<
+  GroveModule['checkGroveForNonInteractive']
+> {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    return Promise.resolve(undefined)
+  }
+  return getGroveModule().checkGroveForNonInteractive()
+}
+
+function isFastModeAvailable(
+  ...args: Parameters<FastModeModule['isFastModeAvailable']>
+): ReturnType<FastModeModule['isFastModeAvailable']> {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    return false as ReturnType<FastModeModule['isFastModeAvailable']>
+  }
+  return getFastModeModule().isFastModeAvailable(...args)
+}
+
+function isFastModeEnabled(
+  ...args: Parameters<FastModeModule['isFastModeEnabled']>
+): ReturnType<FastModeModule['isFastModeEnabled']> {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    return false as ReturnType<FastModeModule['isFastModeEnabled']>
+  }
+  return getFastModeModule().isFastModeEnabled(...args)
+}
+
+function isFastModeSupportedByModel(
+  ...args: Parameters<FastModeModule['isFastModeSupportedByModel']>
+): ReturnType<FastModeModule['isFastModeSupportedByModel']> {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    return false as ReturnType<FastModeModule['isFastModeSupportedByModel']>
+  }
+  return getFastModeModule().isFastModeSupportedByModel(...args)
+}
+
+function getFastModeState(
+  ...args: Parameters<FastModeModule['getFastModeState']>
+): ReturnType<FastModeModule['getFastModeState']> {
+  if (currentPhaseDisableLegacyHeadlessModules) {
+    return 'unavailable' as ReturnType<FastModeModule['getFastModeState']>
+  }
+  return getFastModeModule().getFastModeState(...args)
 }
 
 function ensureSdkUrlSupported(sdkUrl: string | undefined): void {
@@ -721,6 +890,7 @@ export async function runHeadless(
     await processSetupHooks(options.setupTrigger)
   }
 
+  process.stderr.write('[HEADLESS_PROBE] before-loadInitialMessages\n')
   headlessProfilerCheckpoint('before_loadInitialMessages')
   const appState = getAppState()
   const {
@@ -776,6 +946,7 @@ export async function runHeadless(
   if (initialMessages.length === 0 && process.exitCode !== undefined) {
     return
   }
+  process.stderr.write('[HEADLESS_PROBE] after-loadInitialMessages\n')
 
   // Handle --rewind-files: restore filesystem and exit immediately
   if (options.rewindFiles) {
@@ -880,7 +1051,9 @@ export async function runHeadless(
 
   // Ensure model strings are initialized before generating model options.
   // For Bedrock users, this waits for the profile fetch to get correct region strings.
+  process.stderr.write('[HEADLESS_PROBE] before-ensureModelStringsInitialized\n')
   await ensureModelStringsInitialized()
+  process.stderr.write('[HEADLESS_PROBE] after-ensureModelStringsInitialized\n')
   headlessProfilerCheckpoint('after_modelStrings')
 
   // UDS inbox store registration is deferred until after `run` is defined
@@ -903,6 +1076,7 @@ export async function runHeadless(
       : null
 
   headlessProfilerCheckpoint('before_runHeadlessStreaming')
+  process.stderr.write('[HEADLESS_PROBE] before-runHeadlessStreaming\n')
   for await (const message of runHeadlessStreaming(
     structuredIO,
     appState.mcp.clients,
@@ -1049,6 +1223,7 @@ function runHeadlessStreaming(
   },
   turnInterruptionState?: TurnInterruptionState,
 ): AsyncIterable<StdoutMessage> {
+  process.stderr.write('[HEADLESS_PROBE] runHeadlessStreaming-enter\n')
   let running = false
   let runPhase:
     | 'draining_commands'
@@ -1164,6 +1339,7 @@ function runHeadlessStreaming(
       })
     })
   }
+  process.stderr.write('[HEADLESS_PROBE] runHeadlessStreaming-after-auth-status\n')
 
   // Set up rate limit status listener to emit SDKRateLimitEvent for all status changes.
   // Emitting for all statuses (including 'allowed') ensures consumers can clear warnings
@@ -1233,33 +1409,49 @@ function runHeadlessStreaming(
     })
   }
 
-  const modelOptions = getModelOptions()
-  const modelInfos = modelOptions.map(option => {
-    const modelId = option.value === null ? 'default' : option.value
-    const resolvedModel =
-      modelId === 'default'
-        ? getDefaultMainLoopModel()
-        : parseUserSpecifiedModel(modelId)
-    const hasEffort = modelSupportsEffort(resolvedModel)
-    const hasAdaptiveThinking = modelSupportsAdaptiveThinking(resolvedModel)
-    const hasFastMode = isFastModeSupportedByModel(option.value)
-    const hasAutoMode = modelSupportsAutoMode(resolvedModel)
-    return {
-      value: modelId,
-      displayName: option.label,
-      description: option.description,
-      ...(hasEffort && {
-        supportsEffort: true,
-        supportedEffortLevels: modelSupportsMaxEffort(resolvedModel)
-          ? [...EFFORT_LEVELS]
-          : EFFORT_LEVELS.filter(l => l !== 'max'),
-      }),
-      ...(hasAdaptiveThinking && { supportsAdaptiveThinking: true }),
-      ...(hasFastMode && { supportsFastMode: true }),
-      ...(hasAutoMode && { supportsAutoMode: true }),
-    }
-  })
   let activeUserSpecifiedModel = options.userSpecifiedModel
+  const currentPhaseResolvedModel =
+    activeUserSpecifiedModel ?? getDefaultMainLoopModel()
+  const modelInfos = currentPhaseDisableLegacyHeadlessModules
+    ? [
+        {
+          value: activeUserSpecifiedModel ?? 'default',
+          displayName: currentPhaseResolvedModel,
+          description: 'Current stage custom Codex provider model',
+          ...(modelSupportsEffort(currentPhaseResolvedModel) && {
+            supportsEffort: true,
+            supportedEffortLevels: modelSupportsMaxEffort(currentPhaseResolvedModel)
+              ? [...EFFORT_LEVELS]
+              : EFFORT_LEVELS.filter(l => l !== 'max'),
+          }),
+        },
+      ]
+    : getModelOptions().map(option => {
+        const modelId = option.value === null ? 'default' : option.value
+        const resolvedModel =
+          modelId === 'default'
+            ? getDefaultMainLoopModel()
+            : parseUserSpecifiedModel(modelId)
+        const hasEffort = modelSupportsEffort(resolvedModel)
+        const hasAdaptiveThinking = modelSupportsAdaptiveThinking(resolvedModel)
+        const hasFastMode = isFastModeSupportedByModel(option.value)
+        const hasAutoMode = modelSupportsAutoMode(resolvedModel)
+        return {
+          value: modelId,
+          displayName: option.label,
+          description: option.description,
+          ...(hasEffort && {
+            supportsEffort: true,
+            supportedEffortLevels: modelSupportsMaxEffort(resolvedModel)
+              ? [...EFFORT_LEVELS]
+              : EFFORT_LEVELS.filter(l => l !== 'max'),
+          }),
+          ...(hasAdaptiveThinking && { supportsAdaptiveThinking: true }),
+          ...(hasFastMode && { supportsFastMode: true }),
+          ...(hasAutoMode && { supportsAutoMode: true }),
+        }
+      })
+  process.stderr.write('[HEADLESS_PROBE] runHeadlessStreaming-after-model-options\n')
 
   function injectModelSwitchBreadcrumbs(
     modelArg: string,
@@ -1869,6 +2061,7 @@ function runHeadlessStreaming(
       currentCommands = newCommands
     })
   })
+  process.stderr.write('[HEADLESS_PROBE] runHeadlessStreaming-before-async-loop\n')
 
   // Proactive mode: schedule a tick to keep the model looping autonomously.
   // setTimeout(0) yields to the event loop so pending stdin messages
@@ -1905,7 +2098,9 @@ function runHeadlessStreaming(
   })
 
   const run = async () => {
+    process.stderr.write('[HEADLESS_PROBE] run-enter\n')
     if (running) {
+      process.stderr.write('[HEADLESS_PROBE] run-skip-already-running\n')
       return
     }
 
@@ -1919,6 +2114,7 @@ function runHeadlessStreaming(
 
     await updateSdkMcp()
     headlessProfilerCheckpoint('after_updateSdkMcp')
+    process.stderr.write('[HEADLESS_PROBE] after-updateSdkMcp\n')
 
     // Resolve deferred plugin installation (CLAUDE_CODE_SYNC_PLUGIN_INSTALL).
     // The promise was started eagerly so installation overlaps with other init.
@@ -1947,6 +2143,7 @@ function runHeadlessStreaming(
         await pluginInstallPromise
       }
       pluginInstallPromise = null
+      process.stderr.write('[HEADLESS_PROBE] after-pluginInstallPromise\n')
 
       // Refresh commands, agents, and hooks now that plugins are installed
       await refreshPluginState()
@@ -2172,6 +2369,7 @@ function runHeadlessStreaming(
             : undefined
 
           headlessProfilerCheckpoint('before_ask')
+          process.stderr.write('[HEADLESS_PROBE] before-ask\n')
           startQueryProfile()
           // Per-iteration ALS context so bg agents spawned inside ask()
           // inherit workload across their detached awaits. In-process cron
@@ -2458,6 +2656,13 @@ function runHeadlessStreaming(
         }
       }
     } catch (error) {
+      try {
+        const stack =
+          error instanceof Error && error.stack
+            ? error.stack
+            : String(error)
+        process.stderr.write(`[HEADLESS_PROBE] run-error:${stack}\n`)
+      } catch {}
       // Emit error result message before shutting down
       // Write directly to structuredIO to ensure immediate delivery
       try {
@@ -2807,6 +3012,7 @@ function runHeadlessStreaming(
       },
     })
   })
+  process.stderr.write('[HEADLESS_PROBE] runHeadlessStreaming-before-return\n')
 
   // Track active OAuth flows per server so we can abort a previous flow
   // when a new mcp_authenticate request arrives for the same server.
@@ -2844,7 +3050,11 @@ function runHeadlessStreaming(
   void (async () => {
     let initialized = false
     logForDiagnosticsNoPII('info', 'cli_message_loop_started')
+    process.stderr.write('[HEADLESS_PROBE] structuredInput-loop-start\n')
     for await (const message of structuredIO.structuredInput) {
+      process.stderr.write(
+        `[HEADLESS_PROBE] structuredInput-message:${message.type}${message.type === 'control_request' ? `:${message.request.subtype}` : ''}\n`,
+      )
       // Non-user events are handled inline (no queue). started→completed in
       // the same tick carries no information, so only fire completed.
       // control_response is reported by StructuredIO.processLine (which also

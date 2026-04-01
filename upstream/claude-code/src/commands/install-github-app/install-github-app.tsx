@@ -1,4 +1,3 @@
-import { execa } from 'execa';
 import React, { useCallback, useState } from 'react';
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from 'src/services/analytics/index.js';
 import { WorkflowMultiselectDialog } from '../../components/WorkflowMultiselectDialog.js';
@@ -25,6 +24,7 @@ import { SuccessStep } from './SuccessStep.js';
 import { setupGitHubActions } from './setupGitHubActions.js';
 import type { State, Warning, Workflow } from './types.js';
 import { WarningsStep } from './WarningsStep.js';
+const getExeca = async () => (await import('execa')).execa
 const INITIAL_STATE: State = {
   step: 'check-gh',
   selectedRepoName: '',
@@ -60,7 +60,7 @@ function InstallGitHubApp(props: {
     const warnings: Warning[] = [];
 
     // Check if gh is installed
-    const ghVersionResult = await execa('gh --version', {
+    const ghVersionResult = await (await getExeca())('gh --version', {
       shell: true,
       reject: false
     });
@@ -73,7 +73,7 @@ function InstallGitHubApp(props: {
     }
 
     // Check auth status
-    const authResult = await execa('gh auth status -a', {
+    const authResult = await (await getExeca())('gh auth status -a', {
       shell: true,
       reject: false
     });

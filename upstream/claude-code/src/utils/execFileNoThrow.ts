@@ -2,7 +2,7 @@
 // These wrappers ease error handling and cross-platform compatbility
 // By using execa, Windows automatically gets shell escaping + BAT / CMD handling
 
-import { type ExecaError, execa } from 'execa'
+import { spawn } from 'node:child_process'
 import { getCwd } from '../utils/cwd.js'
 import { logError } from './log.js'
 
@@ -55,30 +55,9 @@ type ExecFileWithCwdOptions = {
   input?: string
 }
 
-type ExecaResultWithError = {
-  shortMessage?: string
-  signal?: string
-}
-
-/**
- * Extracts a human-readable error message from an execa result.
- *
- * Priority order:
- * 1. shortMessage - execa's human-readable error (e.g., "Command failed with exit code 1: ...")
- *    This is preferred because it already includes signal info when a process is killed,
- *    making it more informative than just the signal name.
- * 2. signal - the signal that killed the process (e.g., "SIGTERM")
- * 3. errorCode - fallback to just the numeric exit code
- */
-function getErrorMessage(
-  result: ExecaResultWithError,
-  errorCode: number,
-): string {
-  if (result.shortMessage) {
-    return result.shortMessage
-  }
-  if (typeof result.signal === 'string') {
-    return result.signal
+function getErrorMessage(signal: NodeJS.Signals | null, errorCode: number): string {
+  if (typeof signal === 'string') {
+    return signal
   }
   return String(errorCode)
 }
@@ -106,45 +85,69 @@ export function execFileNoThrowWithCwd(
   },
 ): Promise<{ stdout: string; stderr: string; code: number; error?: string }> {
   return new Promise(resolve => {
-    // Use execa for cross-platform .bat/.cmd compatibility on Windows
-    execa(file, args, {
-      maxBuffer,
+    const child = spawn(file, args, {
       signal: abortSignal,
       timeout: finalTimeout,
       cwd: finalCwd,
       env: finalEnv,
       shell,
-      stdin: finalStdin,
-      input: finalInput,
-      reject: false, // Don't throw on non-zero exit codes
+      stdio: [finalStdin ?? 'pipe', 'pipe', 'pipe'],
+      windowsHide: true,
     })
-      .then(result => {
-        if (result.failed) {
-          if (finalPreserveOutput) {
-            const errorCode = result.exitCode ?? 1
-            void resolve({
-              stdout: result.stdout || '',
-              stderr: result.stderr || '',
-              code: errorCode,
-              error: getErrorMessage(
-                result as unknown as ExecaResultWithError,
-                errorCode,
-              ),
-            })
-          } else {
-            void resolve({ stdout: '', stderr: '', code: result.exitCode ?? 1 })
-          }
-        } else {
-          void resolve({
-            stdout: result.stdout,
-            stderr: result.stderr,
-            code: 0,
+
+    let stdout = ''
+    let stderr = ''
+    let settled = false
+
+    const finish = (result: { stdout: string; stderr: string; code: number; error?: string }) => {
+      if (settled) return
+      settled = true
+      resolve(result)
+    }
+
+    child.stdout?.setEncoding('utf8')
+    child.stderr?.setEncoding('utf8')
+
+    child.stdout?.on('data', chunk => {
+      stdout += chunk
+      if (maxBuffer && stdout.length + stderr.length > maxBuffer) {
+        child.kill()
+      }
+    })
+    child.stderr?.on('data', chunk => {
+      stderr += chunk
+      if (maxBuffer && stdout.length + stderr.length > maxBuffer) {
+        child.kill()
+      }
+    })
+
+    child.on('error', error => {
+      logError(error)
+      finish({ stdout: '', stderr: '', code: 1 })
+    })
+
+    child.on('close', (code, signal) => {
+      const exitCode = code ?? 1
+      if (exitCode !== 0 || signal) {
+        if (finalPreserveOutput) {
+          finish({
+            stdout,
+            stderr,
+            code: exitCode,
+            error: getErrorMessage(signal, exitCode),
           })
+          return
         }
-      })
-      .catch((error: ExecaError) => {
-        logError(error)
-        void resolve({ stdout: '', stderr: '', code: 1 })
-      })
+        finish({ stdout: '', stderr: '', code: exitCode })
+        return
+      }
+      finish({ stdout, stderr, code: 0 })
+    })
+
+    if (finalInput !== undefined) {
+      child.stdin?.end(finalInput)
+    } else if (finalStdin !== 'inherit') {
+      child.stdin?.end()
+    }
   })
 }
