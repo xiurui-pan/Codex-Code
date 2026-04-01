@@ -3,12 +3,14 @@ import assert from 'node:assert/strict'
 import {
   createPreferredAssistantResponsePayloadFromTurnItems,
   createSyntheticPayloadFromTurnItems,
-  createAssistantMessageFromSyntheticPayload,
   createSyntheticAssistantPayloadFromPreferredContent,
-  maybeCreateAssistantMessageFromPreferredAssistantResponsePayload,
   preferredAssistantResponsePayloadHasContent,
   resolvePreferredAssistantTurnContent,
 } from '../src/services/api/modelTurnItems.js'
+import {
+  createAssistantMessageFromSyntheticPayload,
+  maybeCreateAssistantMessageFromPreferredAssistantResponsePayload,
+} from '../src/services/api/assistantEnvelope.js'
 
 test('preferred assistant content resolves plain text when no tool call exists', () => {
   const preferred = resolvePreferredAssistantTurnContent([

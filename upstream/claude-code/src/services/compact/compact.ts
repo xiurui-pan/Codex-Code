@@ -106,7 +106,7 @@ import {
 } from './preferredStreaming.js'
 import {
   maybeCreateAssistantMessageFromPreferredAssistantResponsePayload,
-} from '../api/modelTurnItems.js'
+} from '../api/assistantEnvelope.js'
 import { getCompactSummaryText } from './summaryText.js'
 import {
   getPromptTooLongTokenGap,

@@ -17,7 +17,7 @@ import {
   createRemotePermissionPayload,
   createToolStub,
 } from '../remote/remotePermissionBridge.js'
-import { createAssistantMessageFromSyntheticPayload } from '../services/api/modelTurnItems.js'
+import { createAssistantMessageFromSyntheticPayload } from '../services/api/assistantEnvelope.js'
 import {
   convertSDKMessage,
   isSessionEndMessage,

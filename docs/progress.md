@@ -168,6 +168,7 @@
 - 这一轮又往外推了一层 synthetic assistant 包壳：`compact` 的 `api_error` 不再在边界手写 assistant 结构，而是回到统一的 preferred payload 包装；`query.ts` 和 `model.ts` 也开始优先在 payload 层传递，再在更外层按需生成 `AssistantMessage`。
 - 这轮还把 `empty` 语义单独站稳了：主链里先保留显式的空 payload，再只在最外层旧兼容入口按需变成空 assistant，避免后面继续迁调用方时把“没有可显示回答”和“生成了一个空壳回答”混在一起。
 - 这一轮继续把集中包壳往外推：`query.ts` 里的流式 `api_error` 已并回统一 preferred payload 链，`compact` 的流式聚合先收口到 payload 再在外围决定是否包 assistant，远端权限请求也改成先产 payload、再只在 hooks 的 UI 边界生成 assistant。
+- 这轮又把包壳中心往外移了一步：`modelTurnItems.ts` 现在更集中在 turn item 和 preferred payload，本来的 synthetic assistant 生成与统一 assistant 包装已经抽到单独的 `assistantEnvelope.ts`；Codex 主链上的若干旧 `createAssistantAPIErrorMessage(...)` 也已经并回统一错误包装链。
 
 ## 下一步
 

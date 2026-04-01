@@ -51,7 +51,6 @@ import {
   normalizeMessagesForAPI,
   createSystemMessage,
   createAssistantMessage,
-  createAssistantAPIErrorMessage,
   getMessagesAfterCompactBoundary,
   createToolUseSummaryMessage,
   createMicrocompactBoundaryMessage,
@@ -98,12 +97,15 @@ import type { QuerySource } from './constants/querySource.js'
 import { createDumpPromptsFetch } from './services/api/dumpPrompts.js'
 import type { CodexResponseChunk } from './services/api/codexResponses.js'
 import {
-  createAssistantMessageFromPreferredAssistantResponsePayload,
   createPreferredAssistantResponsePayloadFromTurnItems,
   createSystemMessageFromModelTurnItem,
   preferredAssistantResponsePayloadHasContent,
 } from './services/api/modelTurnItems.js'
-import { preferredTurnResultToPayload } from './services/api/preferredAssistantResponse.js'
+import { createAssistantMessageFromPreferredAssistantResponsePayload } from './services/api/assistantEnvelope.js'
+import {
+  createAssistantMessageFromApiErrorText,
+  preferredTurnResultToPayload,
+} from './services/api/preferredAssistantResponse.js'
 import { StreamingToolExecutor } from './services/tools/StreamingToolExecutor.js'
 import { queryCheckpoint } from './utils/queryProfiler.js'
 import { runTools } from './services/tools/toolOrchestration.js'
@@ -658,10 +660,7 @@ async function* queryLoop(
         toolUseContext.options.mainLoopModel,
       )
       if (isAtBlockingLimit) {
-        yield createAssistantAPIErrorMessage({
-          content: PROMPT_TOO_LONG_ERROR_MESSAGE,
-          error: 'invalid_request',
-        })
+        yield createAssistantMessageFromApiErrorText(PROMPT_TOO_LONG_ERROR_MESSAGE)
         return { reason: 'blocking_limit' }
       }
     }
@@ -1053,9 +1052,7 @@ async function* queryLoop(
         error instanceof ImageSizeError ||
         error instanceof ImageResizeError
       ) {
-        yield createAssistantAPIErrorMessage({
-          content: error.message,
-        })
+        yield createAssistantMessageFromApiErrorText(error.message)
         return { reason: 'image_error' }
       }
 
@@ -1069,9 +1066,7 @@ async function* queryLoop(
       // by user]" — this path is a model/runtime failure, not a user action.
       // SDK consumers were seeing phantom interrupts on e.g. Node 18's missing
       // Array.prototype.with(), masking the actual cause.
-      yield createAssistantAPIErrorMessage({
-        content: errorMessage,
-      })
+      yield createAssistantMessageFromApiErrorText(errorMessage)
 
       // To help track down bugs, log loudly for ants
       logAntError('Query error', error)

@@ -29,7 +29,7 @@ function withEnv(overrides, fn) {
 
 async function runMerge() {
   const { mergeStreamedAssistantMessages } = await import(
-    '../../src/services/api/modelTurnItems.ts'
+    '../../src/services/api/assistantEnvelope.ts'
   )
 
   const merged = mergeStreamedAssistantMessages([

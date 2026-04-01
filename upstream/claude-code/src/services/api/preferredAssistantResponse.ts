@@ -1,10 +1,10 @@
 import type { AssistantMessage } from '../../types/message.js'
 import {
-  createAssistantMessageFromPreferredAssistantResponsePayload,
   createPreferredAssistantResponsePayloadFromPreferredContent,
   type PreferredAssistantResponsePayload,
   type PreferredAssistantTurnContent,
 } from './modelTurnItems.js'
+import { createAssistantMessageFromPreferredAssistantResponsePayload } from './assistantEnvelope.js'
 
 export type PreferredAssistantTurnResult =
   | {
@@ -45,4 +45,13 @@ export function preferredTurnResultToAssistantMessage(
   return payload.kind === 'empty'
     ? null
     : createAssistantMessageFromPreferredAssistantResponsePayload(payload)
+}
+
+export function createAssistantMessageFromApiErrorText(
+  errorMessage: string,
+): AssistantMessage {
+  return createAssistantMessageFromPreferredAssistantResponsePayload({
+    kind: 'api_error',
+    errorMessage,
+  })
 }

@@ -4,7 +4,7 @@ import {
   applyRemotePermissionAssistantFields,
   buildRemotePermissionPayload,
 } from '../src/remote/remotePermissionShape.js'
-import { createAssistantMessageFromSyntheticPayload } from '../src/services/api/modelTurnItems.js'
+import { createAssistantMessageFromSyntheticPayload } from '../src/services/api/assistantEnvelope.js'
 
 test('remote permission bridge keeps payload and UI-edge assistant message in sync', () => {
   const request = {

@@ -4,11 +4,11 @@ import {
 } from '../api/preferredAssistantResponse.js'
 import {
   createPreferredAssistantResponsePayloadFromPreferredContent,
-  maybeCreateAssistantMessageFromPreferredAssistantResponsePayload,
   type PreferredAssistantResponsePayload,
   resolvePreferredAssistantTurnContent,
   type ModelTurnItem,
 } from '../api/modelTurnItems.js'
+import { maybeCreateAssistantMessageFromPreferredAssistantResponsePayload } from '../api/assistantEnvelope.js'
 
 export type PreferredStreamingAggregation = {
   hasStartedStreaming: boolean

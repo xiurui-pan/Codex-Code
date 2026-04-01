@@ -12,12 +12,14 @@ import {
 } from './codexResponses.js'
 import type { PreferredAssistantResponsePayload } from './modelTurnItems.js'
 import {
-  createAssistantMessageFromPreferredAssistantResponsePayload,
   getRenderableModelTurnItems,
   isEmptyPreferredAssistantResponsePayload,
-  maybeCreateAssistantMessageFromPreferredAssistantResponsePayload,
   resolvePreferredAssistantTurnContent,
 } from './modelTurnItems.js'
+import {
+  createAssistantMessageFromPreferredAssistantResponsePayload,
+  maybeCreateAssistantMessageFromPreferredAssistantResponsePayload,
+} from './assistantEnvelope.js'
 import {
   preferredTurnResultToPayload,
   type PreferredAssistantTurnResult,

@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import {
   createAssistantMessageFromPreferredAssistantResponsePayload,
-} from '../src/services/api/modelTurnItems.js'
+} from '../src/services/api/assistantEnvelope.js'
 import { preferredTurnResultToPayload } from '../src/services/api/preferredAssistantResponse.js'
 
 async function readModelSource(): Promise<string> {
