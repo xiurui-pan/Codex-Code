@@ -194,6 +194,11 @@ export type PreferredAssistantTurnContent = {
   contentBlocks?: ContentBlock[]
 }
 
+export type SyntheticAssistantPayload = {
+  content: ContentBlock[]
+  modelTurnItems: ModelTurnItem[]
+}
+
 export type ModelTurnItem =
   | RawModelOutputItem
   | ModelToolCallItem
@@ -279,15 +284,18 @@ export function resolvePreferredAssistantTurnContent(
 export function buildAssistantMessageFromPreferredContent(
   preferred: PreferredAssistantTurnContent,
 ): AssistantMessage {
-  const message =
-    preferred.kind === 'text'
-      ? createSyntheticAssistantMessage(preferred.text ?? '')
-      : createSyntheticAssistantMessage(preferred.contentBlocks ?? [])
+  return createAssistantMessageFromSyntheticPayload(
+    createSyntheticAssistantPayloadFromPreferredContent(preferred),
+  )
+}
 
-  if (preferred.renderableItems.length > 0) {
-    message.modelTurnItems = preferred.renderableItems
+export function createSyntheticAssistantPayloadFromPreferredContent(
+  preferred: PreferredAssistantTurnContent,
+): SyntheticAssistantPayload {
+  return {
+    content: normalizePreferredContentBlocks(preferred),
+    modelTurnItems: preferred.renderableItems,
   }
-  return message
 }
 
 export function buildPreferredAssistantMessageFromTurnItems(
@@ -345,18 +353,8 @@ export function mergeStreamedAssistantMessages(
 }
 
 function createSyntheticAssistantMessage(
-  content: ContentBlock[] | string,
+  content: ContentBlock[],
 ): AssistantMessage {
-  const normalizedContent =
-    typeof content === 'string'
-      ? [
-          {
-            type: 'text' as const,
-            text: content === '' ? NO_CONTENT_MESSAGE : content,
-          },
-        ]
-      : content
-
   return {
     type: 'assistant',
     uuid: randomUUID(),
@@ -384,8 +382,33 @@ function createSyntheticAssistantMessage(
         iterations: null,
         speed: null,
       },
-      content: normalizedContent,
+      content,
       context_management: null,
     },
   }
+}
+
+export function createAssistantMessageFromSyntheticPayload(
+  payload: SyntheticAssistantPayload,
+): AssistantMessage {
+  const message = createSyntheticAssistantMessage(payload.content)
+  if (payload.modelTurnItems.length > 0) {
+    message.modelTurnItems = payload.modelTurnItems
+  }
+  return message
+}
+
+function normalizePreferredContentBlocks(
+  preferred: PreferredAssistantTurnContent,
+): ContentBlock[] {
+  if (preferred.kind === 'text') {
+    return [
+      {
+        type: 'text',
+        text: preferred.text === '' ? NO_CONTENT_MESSAGE : (preferred.text ?? NO_CONTENT_MESSAGE),
+      },
+    ]
+  }
+
+  return preferred.contentBlocks ?? []
 }

@@ -117,6 +117,8 @@
 - 同时把 `WebSearchTool` 的多 citation 边界补稳：同一次搜索的多个 citation 文本块会合并回同一个搜索结果；如果中间某次搜索没有 citation，后续 citation 至少不会错位挂到前一条，前面的空搜索会保留成零链接结果。
 - 这轮又把 `model.ts` 往前推了一步：现在 streaming、非 streaming、小模型这三条文本入口都会先形成首选回答对象，再按外围兼容边界需要时才包装回 synthetic assistant。
 - 还补了一条更值钱的 WebSearch 多 citation 用例：同一条 assistant message 同时承载两个搜索时，如果前一个搜索有多段 citation、后一个也有 citation，前一个会优先吃掉前面的多段 citation，后一个保留自己的 citation，不会再被前一个并吞。
+- 这轮继续把 assistant 兼容壳往外推：`modelTurnItems` 里先单独产出 synthetic payload，再由外层决定何时包装成 `AssistantMessage`，`query.ts` 和 `model.ts` 都已经接到这层更薄的 payload。
+- 同时把 WebSearch 的多 citation 分配从“轮转平均分配”改成“前面的搜索优先吃掉前面的连续 citation，后面的搜索至少保留自己的尾部 citation”，补上了“前一次 3 段 citation、后一次 1 段 citation”的不均匀分布用例。
 - 这轮继续把核心兼容边界往里收：`query.ts` 和 `services/api/model.ts` 不再各自手搓“纯文本时直接出 assistant、否则退回 synthetic 壳”的分支，而是统一改成走 `modelTurnItems` 里的首选回答构造逻辑。
 - 同时补稳了 `WebSearchTool` 的多次搜索归属：当同一轮里有多次 `web_search_call` 时，带 citation 的结果会按完成顺序归到对应的 `toolUseId`，不再全挂到最后一次搜索上。
 - 这轮把 `WebSearchTool` 的 Codex 数据源假设修正成当前主路真实能看到的形状：不再按 `content_block_start/content_block_delta` 读 Anthropic 风格块事件，而是直接从 `response.output_item.done -> web_search_call` 和 assistant `message.output_text.annotations` 提取搜索进度、链接和来源文本，不再把结果降成 `No links found.` 空壳。

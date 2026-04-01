@@ -98,7 +98,8 @@ import type { QuerySource } from './constants/querySource.js'
 import { createDumpPromptsFetch } from './services/api/dumpPrompts.js'
 import type { CodexResponseChunk } from './services/api/codexResponses.js'
 import {
-  buildAssistantMessageFromPreferredContent,
+  createAssistantMessageFromSyntheticPayload,
+  createSyntheticAssistantPayloadFromPreferredContent,
   createSystemMessageFromModelTurnItem,
   resolvePreferredAssistantTurnContent,
 } from './services/api/modelTurnItems.js'
@@ -759,8 +760,11 @@ async function* queryLoop(
                 continue
               }
 
-              const assistantCandidate =
-                buildAssistantMessageFromPreferredContent(preferredAssistant)
+              const assistantCandidate = createAssistantMessageFromSyntheticPayload(
+                createSyntheticAssistantPayloadFromPreferredContent(
+                  preferredAssistant,
+                ),
+              )
               if (assistantCandidate.message.content.length > 0) {
                 internalAssistantMessage = assistantCandidate
                 if (assistantMessageContainsRenderableText(assistantCandidate)) {

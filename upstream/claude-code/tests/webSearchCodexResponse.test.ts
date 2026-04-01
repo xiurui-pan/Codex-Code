@@ -417,6 +417,111 @@ test('web search response parsing keeps multi-citation first search separate fro
   ])
 })
 
+test('web search response parsing keeps uneven multi-citation distribution stable across two searches', () => {
+  const result = collectCodexWebSearchResponse(
+    [
+      {
+        kind: 'raw_model_output',
+        provider: 'custom',
+        itemType: 'web_search_call',
+        payload: {
+          type: 'web_search_call',
+          id: 'ws-1',
+          status: 'completed',
+          action: { type: 'search', query: 'front-heavy query' },
+        },
+      },
+      {
+        kind: 'raw_model_output',
+        provider: 'custom',
+        itemType: 'web_search_call',
+        payload: {
+          type: 'web_search_call',
+          id: 'ws-2',
+          status: 'completed',
+          action: { type: 'search', query: 'tail query' },
+        },
+      },
+      {
+        kind: 'raw_model_output',
+        provider: 'custom',
+        itemType: 'message',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          content: [
+            {
+              type: 'output_text',
+              text: 'Front result one.',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  title: 'Front Link One',
+                  url: 'https://example.com/front-one',
+                },
+              ],
+            },
+            {
+              type: 'output_text',
+              text: 'Front result two.',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  title: 'Front Link Two',
+                  url: 'https://example.com/front-two',
+                },
+              ],
+            },
+            {
+              type: 'output_text',
+              text: 'Front result three.',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  title: 'Front Link Three',
+                  url: 'https://example.com/front-three',
+                },
+              ],
+            },
+            {
+              type: 'output_text',
+              text: 'Tail result one.',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  title: 'Tail Link One',
+                  url: 'https://example.com/tail-one',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+    'fallback query',
+  )
+
+  const searchResults = result.blocks.filter(block => block.type === 'search_result')
+  assert.deepEqual(searchResults, [
+    {
+      type: 'search_result',
+      toolUseId: 'ws-1',
+      query: 'front-heavy query',
+      hits: [
+        { title: 'Front Link One', url: 'https://example.com/front-one' },
+        { title: 'Front Link Two', url: 'https://example.com/front-two' },
+        { title: 'Front Link Three', url: 'https://example.com/front-three' },
+      ],
+    },
+    {
+      type: 'search_result',
+      toolUseId: 'ws-2',
+      query: 'tail query',
+      hits: [{ title: 'Tail Link One', url: 'https://example.com/tail-one' }],
+    },
+  ])
+})
+
 test('web search response parsing falls back to the requested query when action details are missing', () => {
   const result = collectCodexWebSearchResponse(
     [

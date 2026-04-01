@@ -1,7 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  buildAssistantMessageFromPreferredContent,
+  createAssistantMessageFromSyntheticPayload,
+  createSyntheticAssistantPayloadFromPreferredContent,
   resolvePreferredAssistantTurnContent,
 } from '../src/services/api/modelTurnItems.js'
 
@@ -18,7 +19,15 @@ test('preferred assistant content resolves plain text when no tool call exists',
   assert.equal(preferred.kind, 'text')
   assert.equal(preferred.text, 'plain reply')
 
-  const message = buildAssistantMessageFromPreferredContent(preferred)
+  const payload = createSyntheticAssistantPayloadFromPreferredContent(preferred)
+  assert.deepEqual(payload.content, [
+    {
+      type: 'text',
+      text: 'plain reply',
+    },
+  ])
+
+  const message = createAssistantMessageFromSyntheticPayload(payload)
   assert.deepEqual(message.message.content, [
     {
       type: 'text',
@@ -46,6 +55,9 @@ test('preferred assistant content keeps tool_use blocks when turn items contain 
   ])
 
   assert.equal(preferred.kind, 'tool_use_message')
-  const message = buildAssistantMessageFromPreferredContent(preferred)
+  const payload = createSyntheticAssistantPayloadFromPreferredContent(preferred)
+  assert.equal(payload.content.some(block => block.type === 'tool_use'), true)
+
+  const message = createAssistantMessageFromSyntheticPayload(payload)
   assert.equal(message.message.content.some(block => block.type === 'tool_use'), true)
 })

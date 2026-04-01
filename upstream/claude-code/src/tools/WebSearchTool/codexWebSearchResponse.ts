@@ -171,12 +171,9 @@ function flushCitationGroups(
   }
 
   const groupCounts = pendingContexts.map(() => 1)
-  let extraGroups = groups.length - pendingContexts.length
-  let distributionIndex = 0
-  while (extraGroups > 0) {
-    groupCounts[distributionIndex] += 1
-    distributionIndex = (distributionIndex + 1) % pendingContexts.length
-    extraGroups -= 1
+  const extraGroups = groups.length - pendingContexts.length
+  if (extraGroups > 0) {
+    groupCounts[0] += extraGroups
   }
 
   let groupIndex = 0

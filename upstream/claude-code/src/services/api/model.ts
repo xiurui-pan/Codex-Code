@@ -14,7 +14,8 @@ import {
   queryCodexResponsesStream,
 } from './codexResponses.js'
 import {
-  buildAssistantMessageFromPreferredContent,
+  createAssistantMessageFromSyntheticPayload,
+  createSyntheticAssistantPayloadFromPreferredContent,
   getRenderableModelTurnItems,
   type PreferredAssistantTurnContent,
   resolvePreferredAssistantTurnContent,
@@ -170,7 +171,9 @@ function preferredTurnResultToAssistantMessage(
     return null
   }
 
-  return buildAssistantMessageFromPreferredContent(result.preferred)
+  return createAssistantMessageFromSyntheticPayload(
+    createSyntheticAssistantPayloadFromPreferredContent(result.preferred),
+  )
 }
 
 export const callModelPreferredWithStreaming: StreamingPreferredModelCaller =
