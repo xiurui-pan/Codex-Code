@@ -108,6 +108,86 @@ test('web search response parsing keeps citation links from assistant message co
   assert.equal(toolResultContent.includes('No links found.'), false)
 })
 
+
+test('web search response parsing keeps multiple search result citations on their own tool use ids', () => {
+  const result = collectCodexWebSearchResponse(
+    [
+      {
+        kind: 'raw_model_output',
+        provider: 'custom',
+        itemType: 'web_search_call',
+        payload: {
+          type: 'web_search_call',
+          id: 'ws-1',
+          status: 'completed',
+          action: { type: 'search', query: 'first query' },
+        },
+      },
+      {
+        kind: 'raw_model_output',
+        provider: 'custom',
+        itemType: 'web_search_call',
+        payload: {
+          type: 'web_search_call',
+          id: 'ws-2',
+          status: 'completed',
+          action: { type: 'search', query: 'second query' },
+        },
+      },
+      {
+        kind: 'raw_model_output',
+        provider: 'custom',
+        itemType: 'message',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          content: [
+            {
+              type: 'output_text',
+              text: 'First result.',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  title: 'First Link',
+                  url: 'https://example.com/first',
+                },
+              ],
+            },
+            {
+              type: 'output_text',
+              text: 'Second result.',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  title: 'Second Link',
+                  url: 'https://example.com/second',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+    'fallback query',
+  )
+
+  const searchResults = result.blocks.filter(block => block.type === 'search_result')
+  assert.deepEqual(searchResults, [
+    {
+      type: 'search_result',
+      toolUseId: 'ws-1',
+      query: 'first query',
+      hits: [{ title: 'First Link', url: 'https://example.com/first' }],
+    },
+    {
+      type: 'search_result',
+      toolUseId: 'ws-2',
+      query: 'second query',
+      hits: [{ title: 'Second Link', url: 'https://example.com/second' }],
+    },
+  ])
+})
+
 test('web search response parsing falls back to the requested query when action details are missing', () => {
   const result = collectCodexWebSearchResponse(
     [

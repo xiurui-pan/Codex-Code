@@ -150,6 +150,7 @@ export function collectCodexWebSearchResponse(
   const progressEvents: WebSearchProgressEvent[] = []
   const seenQueryByToolUseId = new Map<string, string>()
   const pendingCompletedToolUseIds = new Set<string>()
+  const pendingCompletedToolUseQueue: string[] = []
   let lastSearchToolUseId: string | null = null
   let sawMessageText = false
 
@@ -184,8 +185,9 @@ export function collectCodexWebSearchResponse(
         })
       }
 
-      if (payload.status === 'completed') {
+      if (payload.status === 'completed' && !pendingCompletedToolUseIds.has(toolUseId)) {
         pendingCompletedToolUseIds.add(toolUseId)
+        pendingCompletedToolUseQueue.push(toolUseId)
       }
       continue
     }
@@ -194,8 +196,8 @@ export function collectCodexWebSearchResponse(
       continue
     }
 
-    const toolUseId = lastSearchToolUseId || `web-search-${seenQueryByToolUseId.size + 1}`
-    const query = seenQueryByToolUseId.get(toolUseId) || fallbackQuery
+    const fallbackToolUseId =
+      lastSearchToolUseId || `web-search-${seenQueryByToolUseId.size + 1}`
 
     for (const part of payload.content ?? []) {
       if (part?.type !== 'output_text') {
@@ -213,6 +215,9 @@ export function collectCodexWebSearchResponse(
 
       const hits = normalizeCitationHits(part.annotations)
       if (hits.length > 0) {
+        const queuedToolUseId = pendingCompletedToolUseQueue.shift()
+        const toolUseId = queuedToolUseId || fallbackToolUseId
+        const query = seenQueryByToolUseId.get(toolUseId) || fallbackQuery
         pendingCompletedToolUseIds.delete(toolUseId)
         blocks.push({
           type: 'search_result',

@@ -14,7 +14,7 @@ import {
   queryCodexResponsesStream,
 } from './codexResponses.js'
 import {
-  buildAssistantMessageFromTurnItems,
+  buildPreferredAssistantMessageFromTurnItems,
   getRenderableModelTurnItems,
 } from './modelTurnItems.js'
 
@@ -96,7 +96,7 @@ function codexResultToAssistantMessage(
     return createAssistantMessage({ content: '' })
   }
 
-  return buildAssistantMessageFromTurnItems(renderableItems)
+  return buildPreferredAssistantMessageFromTurnItems(renderableItems)
 }
 
 function codexChunkToAssistantMessage(
@@ -118,7 +118,7 @@ function codexChunkToAssistantMessage(
     return null
   }
 
-  return buildAssistantMessageFromTurnItems(renderableItems)
+  return buildPreferredAssistantMessageFromTurnItems(renderableItems)
 }
 
 export const callModelWithStreaming: StreamingModelCaller = async function* (

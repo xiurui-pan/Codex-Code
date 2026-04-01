@@ -6,7 +6,6 @@ import type {
 import { createRequire } from 'module'
 import type { CanUseToolFn } from './hooks/useCanUseTool.js'
 import { FallbackTriggeredError } from './services/api/withRetry.js'
-import { getPlainAssistantTextFromTurnItems } from './query/turnItemText.js'
 import {
   calculateTokenWarningState,
   isAutoCompactEnabled,
@@ -99,7 +98,7 @@ import type { QuerySource } from './constants/querySource.js'
 import { createDumpPromptsFetch } from './services/api/dumpPrompts.js'
 import type { CodexResponseChunk } from './services/api/codexResponses.js'
 import {
-  buildAssistantMessageFromTurnItems,
+  buildPreferredAssistantMessageFromTurnItems,
   createSystemMessageFromModelTurnItem,
 } from './services/api/modelTurnItems.js'
 import { StreamingToolExecutor } from './services/tools/StreamingToolExecutor.js'
@@ -752,15 +751,8 @@ async function* queryLoop(
                 yield systemMessage
               }
 
-              const plainAssistantText = getPlainAssistantTextFromTurnItems(
-                turnChunk.turnItems,
-              )
-              const assistantCandidate = plainAssistantText
-                ? createAssistantMessage({
-                    content: plainAssistantText,
-                    modelTurnItems: turnChunk.turnItems,
-                  })
-                : buildAssistantMessageFromTurnItems(turnChunk.turnItems)
+              const assistantCandidate =
+                buildPreferredAssistantMessageFromTurnItems(turnChunk.turnItems)
               if (assistantCandidate.message.content.length > 0) {
                 internalAssistantMessage = assistantCandidate
                 if (assistantMessageContainsRenderableText(assistantCandidate)) {

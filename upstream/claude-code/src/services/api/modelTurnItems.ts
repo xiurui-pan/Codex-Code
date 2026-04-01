@@ -220,6 +220,26 @@ export function extractFinalAnswerTextFromTurnItems(
     .join(separator)
 }
 
+export function buildPreferredAssistantMessageFromTurnItems(
+  items: ModelTurnItem[],
+): AssistantMessage {
+  const renderableItems = getRenderableModelTurnItems(items)
+  if (renderableItems.length === 0) {
+    return createSyntheticAssistantMessage([])
+  }
+
+  const hasToolCall = renderableItems.some(item => item.kind === 'tool_call')
+  const finalAnswerText = extractFinalAnswerTextFromTurnItems(renderableItems)
+
+  if (!hasToolCall && finalAnswerText) {
+    const message = createSyntheticAssistantMessage(finalAnswerText)
+    message.modelTurnItems = renderableItems
+    return message
+  }
+
+  return buildAssistantMessageFromTurnItems(renderableItems)
+}
+
 export function buildAssistantMessageFromTurnItems(
   items: ModelTurnItem[],
 ): AssistantMessage {
@@ -275,7 +295,7 @@ export function mergeStreamedAssistantMessages(
     return lastMessage
   }
 
-  return buildAssistantMessageFromTurnItems(aggregatedTurnItems)
+  return buildPreferredAssistantMessageFromTurnItems(aggregatedTurnItems)
 }
 
 function createSyntheticAssistantMessage(
