@@ -99,7 +99,7 @@ import { createDumpPromptsFetch } from './services/api/dumpPrompts.js'
 import type { CodexResponseChunk } from './services/api/codexResponses.js'
 import {
   createAssistantMessageFromSyntheticPayload,
-  createSyntheticAssistantPayloadFromPreferredContent,
+  createSyntheticPayloadFromTurnItems,
   createSystemMessageFromModelTurnItem,
   resolvePreferredAssistantTurnContent,
 } from './services/api/modelTurnItems.js'
@@ -760,11 +760,14 @@ async function* queryLoop(
                 continue
               }
 
-              const assistantCandidate = createAssistantMessageFromSyntheticPayload(
-                createSyntheticAssistantPayloadFromPreferredContent(
-                  preferredAssistant,
-                ),
-              )
+              const assistantPayload =
+                createSyntheticPayloadFromTurnItems(turnChunk.turnItems)
+              if (!assistantPayload) {
+                continue
+              }
+
+              const assistantCandidate =
+                createAssistantMessageFromSyntheticPayload(assistantPayload)
               if (assistantCandidate.message.content.length > 0) {
                 internalAssistantMessage = assistantCandidate
                 if (assistantMessageContainsRenderableText(assistantCandidate)) {

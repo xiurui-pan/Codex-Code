@@ -289,6 +289,16 @@ export function buildAssistantMessageFromPreferredContent(
   )
 }
 
+export function createSyntheticPayloadFromTurnItems(
+  items: ModelTurnItem[],
+): SyntheticAssistantPayload | null {
+  const preferred = resolvePreferredAssistantTurnContent(items)
+  if (preferred.kind === 'empty') {
+    return null
+  }
+  return createSyntheticAssistantPayloadFromPreferredContent(preferred)
+}
+
 export function createSyntheticAssistantPayloadFromPreferredContent(
   preferred: PreferredAssistantTurnContent,
 ): SyntheticAssistantPayload {
@@ -301,8 +311,12 @@ export function createSyntheticAssistantPayloadFromPreferredContent(
 export function buildPreferredAssistantMessageFromTurnItems(
   items: ModelTurnItem[],
 ): AssistantMessage {
-  return buildAssistantMessageFromPreferredContent(
-    resolvePreferredAssistantTurnContent(items),
+  const payload = createSyntheticPayloadFromTurnItems(items)
+  return createAssistantMessageFromSyntheticPayload(
+    payload ?? {
+      content: [],
+      modelTurnItems: [],
+    },
   )
 }
 

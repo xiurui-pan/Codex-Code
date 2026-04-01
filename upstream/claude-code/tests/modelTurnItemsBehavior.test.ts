@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  createSyntheticPayloadFromTurnItems,
   createAssistantMessageFromSyntheticPayload,
   createSyntheticAssistantPayloadFromPreferredContent,
   resolvePreferredAssistantTurnContent,
@@ -60,4 +61,32 @@ test('preferred assistant content keeps tool_use blocks when turn items contain 
 
   const message = createAssistantMessageFromSyntheticPayload(payload)
   assert.equal(message.message.content.some(block => block.type === 'tool_use'), true)
+})
+
+test('turn items can now produce a synthetic payload before the assistant shell wrapper', () => {
+  const payload = createSyntheticPayloadFromTurnItems([
+    {
+      kind: 'final_answer',
+      provider: 'custom',
+      text: 'payload first',
+      source: 'message_output',
+    },
+  ])
+
+  assert.deepEqual(payload, {
+    content: [
+      {
+        type: 'text',
+        text: 'payload first',
+      },
+    ],
+    modelTurnItems: [
+      {
+        kind: 'final_answer',
+        provider: 'custom',
+        text: 'payload first',
+        source: 'message_output',
+      },
+    ],
+  })
 })

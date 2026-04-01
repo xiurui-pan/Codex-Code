@@ -15,7 +15,7 @@ import {
 } from './codexResponses.js'
 import {
   createAssistantMessageFromSyntheticPayload,
-  createSyntheticAssistantPayloadFromPreferredContent,
+  createSyntheticPayloadFromTurnItems,
   getRenderableModelTurnItems,
   type PreferredAssistantTurnContent,
   resolvePreferredAssistantTurnContent,
@@ -171,8 +171,15 @@ function preferredTurnResultToAssistantMessage(
     return null
   }
 
+  const payload = createSyntheticPayloadFromTurnItems(
+    result.preferred.renderableItems,
+  )
+  if (!payload) {
+    return null
+  }
+
   return createAssistantMessageFromSyntheticPayload(
-    createSyntheticAssistantPayloadFromPreferredContent(result.preferred),
+    payload,
   )
 }
 

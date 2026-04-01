@@ -101,12 +101,9 @@ import {
   getModelMaxOutputTokens,
 } from '../api/model.js'
 import {
-  createAssistantMessageFromSyntheticPayload,
-  createSyntheticAssistantPayloadFromPreferredContent,
-  type ModelTurnItem,
-  resolvePreferredAssistantTurnContent,
-} from '../api/modelTurnItems.js'
-import { createAssistantAPIErrorMessage } from '../../utils/messages.js'
+  accumulatePreferredStreamingEvent,
+  finalizePreferredStreamingAggregation,
+} from './preferredStreaming.js'
 import { getCompactSummaryText } from './summaryText.js'
 import {
   getPromptTooLongTokenGap,
@@ -1342,38 +1339,30 @@ async function streamCompactSummary({
       })
       const streamIter = streamingGen[Symbol.asyncIterator]()
       let next = await streamIter.next()
-      const aggregatedPreferredItems: ModelTurnItem[] = []
+      let aggregatedPreferredItems = []
 
       while (!next.done) {
         const event = next.value
 
-        if (!hasStartedStreaming && event.kind === 'preferred_content') {
+        const aggregated = accumulatePreferredStreamingEvent(
+          aggregatedPreferredItems,
+          event,
+        )
+        aggregatedPreferredItems = aggregated.aggregatedItems
+
+        if (!hasStartedStreaming && aggregated.hasStartedStreaming) {
           hasStartedStreaming = true
           context.setStreamMode?.('responding')
         }
 
-        if (event.kind === 'preferred_content') {
-          aggregatedPreferredItems.push(...event.preferred.renderableItems)
-          const payload =
-            createSyntheticAssistantPayloadFromPreferredContent(event.preferred)
-          const charactersStreamed = payload.content.reduce((count, block) => {
-            if (block.type === 'text') {
-              return count + block.text.length
-            }
-            return count
-          }, 0)
-          context.setResponseLength?.(length => length + charactersStreamed)
+        if (aggregated.responseLengthDelta > 0) {
+          context.setResponseLength?.(
+            length => length + aggregated.responseLengthDelta,
+          )
         }
 
-        if (event.kind === 'api_error') {
-          response = createAssistantAPIErrorMessage({
-            content: event.errorMessage,
-            apiError: 'api_error',
-            error: {
-              type: 'api_error',
-              message: event.errorMessage,
-            },
-          })
+        if (aggregated.immediateResponse) {
+          response = aggregated.immediateResponse
           break
         }
 
@@ -1381,16 +1370,7 @@ async function streamCompactSummary({
       }
 
       if (!response) {
-        const finalPreferred = resolvePreferredAssistantTurnContent(
-          aggregatedPreferredItems,
-        )
-        if (finalPreferred.kind !== 'empty') {
-          response = createAssistantMessageFromSyntheticPayload(
-            createSyntheticAssistantPayloadFromPreferredContent(
-              finalPreferred,
-            ),
-          )
-        }
+        response = finalizePreferredStreamingAggregation(aggregatedPreferredItems)
       }
 
       if (response) {

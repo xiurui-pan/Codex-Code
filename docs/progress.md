@@ -121,6 +121,8 @@
 - 同时把 WebSearch 的多 citation 分配从“轮转平均分配”改成“前面的搜索优先吃掉前面的连续 citation，后面的搜索至少保留自己的尾部 citation”，补上了“前一次 3 段 citation、后一次 1 段 citation”的不均匀分布用例。
 - 这轮把 `services/compact/compact.ts` 也从旧 assistant 流式入口往主路上挪了：compact 现在优先消费 preferred streaming 结果，再在最后一步按需要包装回 assistant 壳。
 - 远端权限入口这轮也收了一层：`useRemoteSession.ts`、`useSSHSession.ts`、`useDirectConnect.ts` 不再各自手搓整条 synthetic assistant message，而是统一先走 `remotePermissionBridge` 里的薄 payload，再在共享包装点生成 UI 还需要的 `AssistantMessage`。
+- 这轮把上面两条补成了真实行为测试：compact 不再只做源码检查，而是直接验证 preferred streaming 的聚合结果；远端权限桥也不再只查源码字符串，而是直接验证 payload 和最终 assistant message 的形状一致。
+- `modelTurnItems` 这轮又往壳中心外推了一点：现在可以直接从 turn items 产出 synthetic payload，`query.ts` / `model.ts` / compact 聚合都开始优先走这层 payload，再决定是否包装成 `AssistantMessage`。
 - 这轮继续把核心兼容边界往里收：`query.ts` 和 `services/api/model.ts` 不再各自手搓“纯文本时直接出 assistant、否则退回 synthetic 壳”的分支，而是统一改成走 `modelTurnItems` 里的首选回答构造逻辑。
 - 同时补稳了 `WebSearchTool` 的多次搜索归属：当同一轮里有多次 `web_search_call` 时，带 citation 的结果会按完成顺序归到对应的 `toolUseId`，不再全挂到最后一次搜索上。
 - 这轮把 `WebSearchTool` 的 Codex 数据源假设修正成当前主路真实能看到的形状：不再按 `content_block_start/content_block_delta` 读 Anthropic 风格块事件，而是直接从 `response.output_item.done -> web_search_call` 和 assistant `message.output_text.annotations` 提取搜索进度、链接和来源文本，不再把结果降成 `No links found.` 空壳。
