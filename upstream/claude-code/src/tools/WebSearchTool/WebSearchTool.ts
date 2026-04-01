@@ -8,7 +8,6 @@ import { buildTool, type ToolDef } from '../../Tool.js'
 import { lazySchema } from '../../utils/lazySchema.js'
 import { createUserMessage } from '../../utils/messages.js'
 import { getMainLoopModel, getSmallFastModel } from '../../utils/model/model.js'
-import { jsonStringify } from '../../utils/slowOperations.js'
 import { asSystemPrompt } from '../../utils/systemPromptType.js'
 import { getWebSearchPrompt, WEB_SEARCH_TOOL_NAME } from './prompt.js'
 import {
@@ -18,6 +17,7 @@ import {
   renderToolUseProgressMessage,
 } from './UI.js'
 import { collectCodexWebSearchResponse, type SearchResponseBlock } from './codexWebSearchResponse.js'
+import { formatWebSearchToolResultContent } from './codexWebSearchFormatting.js'
 
 const inputSchema = lazySchema(() =>
   z.strictObject({
@@ -104,7 +104,7 @@ function makeOutputFromSearchResponse(
     if (block.type === 'search_result') {
       results.push({
         tool_use_id: block.toolUseId,
-        content: [],
+        content: block.hits,
       })
     }
 
@@ -299,37 +299,10 @@ export const WebSearchTool = buildTool({
     return { data }
   },
   mapToolResultToToolResultBlockParam(output, toolUseID) {
-    const { query, results } = output
-
-    let formattedOutput = `Web search results for query: "${query}"\n\n`
-
-    // Process the results array - it can contain both string summaries and search result objects.
-    // Guard against null/undefined entries that can appear after JSON round-tripping
-    // (e.g., from compaction or transcript deserialization).
-    ;(results ?? []).forEach(result => {
-      if (result == null) {
-        return
-      }
-      if (typeof result === 'string') {
-        // Text summary
-        formattedOutput += result + '\n\n'
-      } else {
-        // Search result with links
-        if (result.content?.length > 0) {
-          formattedOutput += `Links: ${jsonStringify(result.content)}\n\n`
-        } else {
-          formattedOutput += 'No links found.\n\n'
-        }
-      }
-    })
-
-    formattedOutput +=
-      '\nREMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks.'
-
     return {
       tool_use_id: toolUseID,
       type: 'tool_result',
-      content: formattedOutput.trim(),
+      content: formatWebSearchToolResultContent(output),
     }
   },
 } satisfies ToolDef<InputSchema, Output, WebSearchProgress>)

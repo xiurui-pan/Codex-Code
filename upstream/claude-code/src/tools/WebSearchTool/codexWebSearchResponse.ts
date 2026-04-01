@@ -1,5 +1,10 @@
 import type { ModelTurnItem } from '../../services/api/modelTurnItems.js'
 
+export type SearchResponseHit = {
+  title: string
+  url: string
+}
+
 export type SearchResponseBlock =
   | {
       type: 'search_call'
@@ -10,7 +15,7 @@ export type SearchResponseBlock =
       type: 'search_result'
       toolUseId: string
       query: string
-      resultCount: number
+      hits: SearchResponseHit[]
     }
   | {
       type: 'text'
@@ -52,6 +57,48 @@ type ResponsesWebSearchCallItem = {
   id?: string
   status?: string
   action?: ResponsesWebSearchAction
+}
+
+type ResponsesUrlCitation = {
+  type?: string
+  url?: string
+  title?: string
+}
+
+type ResponsesOutputTextPart = {
+  type?: 'output_text'
+  text?: string
+  annotations?: ResponsesUrlCitation[]
+}
+
+type ResponsesMessageItem = {
+  type?: 'message'
+  role?: string
+  content?: ResponsesOutputTextPart[]
+}
+
+function normalizeCitationHits(annotations: ResponsesUrlCitation[] | undefined): SearchResponseHit[] {
+  const hits: SearchResponseHit[] = []
+
+  for (const annotation of annotations ?? []) {
+    if (annotation?.type !== 'url_citation') {
+      continue
+    }
+
+    const url = typeof annotation.url === 'string' ? annotation.url.trim() : ''
+    if (!url) {
+      continue
+    }
+
+    const title =
+      typeof annotation.title === 'string' && annotation.title.trim()
+        ? annotation.title.trim()
+        : url
+
+    hits.push({ title, url })
+  }
+
+  return hits
 }
 
 function getWebSearchQuery(action: ResponsesWebSearchAction | undefined): string | null {
@@ -102,17 +149,24 @@ export function collectCodexWebSearchResponse(
   const blocks: SearchResponseBlock[] = []
   const progressEvents: WebSearchProgressEvent[] = []
   const seenQueryByToolUseId = new Map<string, string>()
-  const emittedResultByToolUseId = new Set<string>()
+  const pendingCompletedToolUseIds = new Set<string>()
+  let lastSearchToolUseId: string | null = null
+  let sawMessageText = false
 
   for (const item of turnItems) {
-    if (item.kind === 'raw_model_output') {
-      const payload = item.payload as ResponsesWebSearchCallItem | undefined
-      if (payload?.type !== 'web_search_call') {
-        continue
-      }
+    if (item.kind !== 'raw_model_output') {
+      continue
+    }
 
+    const payload = item.payload as
+      | ResponsesWebSearchCallItem
+      | ResponsesMessageItem
+      | undefined
+
+    if (payload?.type === 'web_search_call') {
       const toolUseId = payload.id?.trim() || `web-search-${seenQueryByToolUseId.size + 1}`
       const query = getWebSearchQuery(payload.action) || fallbackQuery
+      lastSearchToolUseId = toolUseId
 
       if (seenQueryByToolUseId.get(toolUseId) !== query) {
         seenQueryByToolUseId.set(toolUseId, query)
@@ -130,31 +184,80 @@ export function collectCodexWebSearchResponse(
         })
       }
 
-      if (payload.status === 'completed' && !emittedResultByToolUseId.has(toolUseId)) {
-        emittedResultByToolUseId.add(toolUseId)
+      if (payload.status === 'completed') {
+        pendingCompletedToolUseIds.add(toolUseId)
+      }
+      continue
+    }
+
+    if (payload?.type !== 'message' || payload.role !== 'assistant') {
+      continue
+    }
+
+    const toolUseId = lastSearchToolUseId || `web-search-${seenQueryByToolUseId.size + 1}`
+    const query = seenQueryByToolUseId.get(toolUseId) || fallbackQuery
+
+    for (const part of payload.content ?? []) {
+      if (part?.type !== 'output_text') {
+        continue
+      }
+
+      const textValue = typeof part.text === 'string' ? part.text : ''
+      if (textValue.trim()) {
+        sawMessageText = true
+        blocks.push({
+          type: 'text',
+          text: textValue,
+        })
+      }
+
+      const hits = normalizeCitationHits(part.annotations)
+      if (hits.length > 0) {
+        pendingCompletedToolUseIds.delete(toolUseId)
         blocks.push({
           type: 'search_result',
           toolUseId,
           query,
-          resultCount: 0,
+          hits,
         })
         progressEvents.push({
           toolUseID: toolUseId,
           data: {
             type: 'search_results_received',
-            resultCount: 0,
+            resultCount: hits.length,
             query,
           },
         })
       }
-      continue
     }
+  }
 
-    if (item.kind === 'final_answer' && item.text.trim()) {
-      blocks.push({
-        type: 'text',
-        text: item.text,
-      })
+  for (const toolUseId of pendingCompletedToolUseIds) {
+    const query = seenQueryByToolUseId.get(toolUseId) || fallbackQuery
+    blocks.push({
+      type: 'search_result',
+      toolUseId,
+      query,
+      hits: [],
+    })
+    progressEvents.push({
+      toolUseID: toolUseId,
+      data: {
+        type: 'search_results_received',
+        resultCount: 0,
+        query,
+      },
+    })
+  }
+
+  if (!sawMessageText) {
+    for (const item of turnItems) {
+      if (item.kind === 'final_answer' && item.text.trim()) {
+        blocks.push({
+          type: 'text',
+          text: item.text,
+        })
+      }
     }
   }
 

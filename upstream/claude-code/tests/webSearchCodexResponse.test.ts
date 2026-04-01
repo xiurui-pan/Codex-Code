@@ -2,7 +2,9 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { collectCodexWebSearchResponse } from '../src/tools/WebSearchTool/codexWebSearchResponse.js'
 
-test('web search response parsing reads completed web_search_call items from raw model output', () => {
+import { formatWebSearchToolResultContent } from '../src/tools/WebSearchTool/codexWebSearchFormatting.js'
+
+test('web search response parsing keeps citation links from assistant message content', () => {
   const result = collectCodexWebSearchResponse(
     [
       {
@@ -20,10 +22,26 @@ test('web search response parsing reads completed web_search_call items from raw
         },
       },
       {
-        kind: 'final_answer',
+        kind: 'raw_model_output',
         provider: 'custom',
-        text: 'search summary',
-        source: 'message_output',
+        itemType: 'message',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          content: [
+            {
+              type: 'output_text',
+              text: 'Found a relevant result.',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  title: 'OpenAI Codex',
+                  url: 'https://openai.com/codex',
+                },
+              ],
+            },
+          ],
+        },
       },
     ],
     'fallback query',
@@ -41,7 +59,7 @@ test('web search response parsing reads completed web_search_call items from raw
       toolUseID: 'ws-1',
       data: {
         type: 'search_results_received',
-        resultCount: 0,
+        resultCount: 1,
         query: 'codex cli web search',
       },
     },
@@ -53,16 +71,41 @@ test('web search response parsing reads completed web_search_call items from raw
       query: 'codex cli web search',
     },
     {
+      type: 'text',
+      text: 'Found a relevant result.',
+    },
+    {
       type: 'search_result',
       toolUseId: 'ws-1',
       query: 'codex cli web search',
-      resultCount: 0,
-    },
-    {
-      type: 'text',
-      text: 'search summary',
+      hits: [
+        {
+          title: 'OpenAI Codex',
+          url: 'https://openai.com/codex',
+        },
+      ],
     },
   ])
+
+  const toolResultContent = formatWebSearchToolResultContent({
+    query: 'codex cli web search',
+    results: [
+      {
+        tool_use_id: 'ws-1',
+        content: [
+          {
+            title: 'OpenAI Codex',
+            url: 'https://openai.com/codex',
+          },
+        ],
+      },
+    ],
+    durationSeconds: 1,
+  })
+
+  assert.equal(toolResultContent.includes('https://openai.com/codex'), true)
+  assert.equal(toolResultContent.includes('OpenAI Codex'), true)
+  assert.equal(toolResultContent.includes('No links found.'), false)
 })
 
 test('web search response parsing falls back to the requested query when action details are missing', () => {
