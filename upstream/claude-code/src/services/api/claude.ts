@@ -154,7 +154,6 @@ import {
   EMPTY_USAGE,
   type GlobalCacheStrategy,
   logAPIError,
-  logAPIQuery,
   logAPISuccessAndDuration,
   type NonNullableUsage,
 } from './logging.js'
@@ -176,6 +175,7 @@ import { getRequestCacheControl } from './requestCacheControl.js'
 import { prepareRequestInput } from './requestInputPreparation.js'
 import { buildRequestParamsFromContext } from './requestParamsBuilder.js'
 import { buildRequestPreflightState } from './requestPreflightState.js'
+import { dispatchStreamingRequest } from './streamingRequestDispatch.js'
 import {
   addCacheBreakpoints as addRequestCacheBreakpoints,
   assistantMessageToMessageParam as assistantMessageToRequestParam,
@@ -905,36 +905,6 @@ async function* queryModel(
     return result.params
   }
 
-  // Compute log scalars synchronously so the fire-and-forget .then() closure
-  // captures only primitives instead of paramsFromContext's full closure scope
-  // (messagesForAPI, system, allTools, betas — the entire request-building
-  // context), which would otherwise be pinned until the promise resolves.
-  {
-    const queryParams = paramsFromContext({
-      model: options.model,
-      thinkingConfig,
-    })
-    const logMessagesLength = queryParams.messages.length
-    const logBetas = useBetas ? (queryParams.betas ?? []) : []
-    const logThinkingType = queryParams.thinking?.type ?? 'disabled'
-    const logEffortValue = queryParams.output_config?.effort
-    void options.getToolPermissionContext().then(permissionContext => {
-      logAPIQuery({
-        model: options.model,
-        messagesLength: logMessagesLength,
-        temperature: options.temperatureOverride ?? 1,
-        betas: logBetas,
-        permissionMode: permissionContext.mode,
-        querySource: options.querySource,
-        queryTracking: options.queryTracking,
-        thinkingType: logThinkingType,
-        effortValue: logEffortValue,
-        fastMode: isFastMode,
-        previousRequestId,
-      })
-    })
-  }
-
   const newMessages: AssistantMessage[] = []
   let ttftMs = 0
   let partialMessage: BetaMessage | undefined = undefined
@@ -951,96 +921,41 @@ async function* queryModel(
   let isAdvisorInProgress = false
 
   try {
-    queryCheckpoint('query_client_creation_start')
-    const generator = withRetry(
-      () =>
-        getAnthropicClient({
-          maxRetries: 0, // Disabled auto-retry in favor of manual implementation
-          model: options.model,
-          fetchOverride: options.fetchOverride,
-          source: options.querySource,
-        }),
-      async (anthropic, attempt, context) => {
-        attemptNumber = attempt
-        isFastModeRequest = context.fastMode ?? false
-        start = Date.now()
-        attemptStartTimes.push(start)
-        // Client has been created by withRetry's getClient() call. This fires
-        // once per attempt; on retries the client is usually cached (withRetry
-        // only calls getClient() again after auth errors), so the delta from
-        // client_creation_start is meaningful on attempt 1.
-        queryCheckpoint('query_client_creation_end')
-
-        const params = paramsFromContext(context)
-        captureAPIRequest(params, options.querySource) // Capture for bug reports
-
-        maxOutputTokens = params.max_tokens
-
-        // Fire immediately before the fetch is dispatched. .withResponse() below
-        // awaits until response headers arrive, so this MUST be before the await
-        // or the "Network TTFB" phase measurement is wrong.
-        queryCheckpoint('query_api_request_sent')
-        if (!options.agentId) {
-          headlessProfilerCheckpoint('api_request_sent')
-        }
-
-        // Generate and track client request ID so timeouts (which return no
-        // server request ID) can still be correlated with server logs.
-        // First-party only — 3P providers don't log it (inc-4029 class).
-        clientRequestId =
-          getAPIProvider() === 'firstParty' && isFirstPartyAnthropicBaseUrl()
-            ? randomUUID()
-            : undefined
-
-        // Use raw stream instead of BetaMessageStream to avoid O(n²) partial JSON parsing
-        // BetaMessageStream calls partialParse() on every input_json_delta, which we don't need
-        // since we handle tool input accumulation ourselves
-        // biome-ignore lint/plugin: main conversation loop handles attribution separately
-        const result = await anthropic.beta.messages
-          .create(
-            { ...params, stream: true },
-            {
-              signal,
-              ...(clientRequestId && {
-                headers: { [CLIENT_REQUEST_ID_HEADER]: clientRequestId },
-              }),
-            },
-          )
-          .withResponse()
-        queryCheckpoint('query_response_headers_received')
-        streamRequestId = result.request_id
-        streamResponse = result.response
-        return result.data
-      },
-      {
-        model: options.model,
-        fallbackModel: options.fallbackModel,
-        thinkingConfig,
-        ...(isFastModeEnabled() ? { fastMode: isFastMode } : false),
-        signal,
-        querySource: options.querySource,
-      },
-    )
-
-    let e
+    const dispatchGenerator = dispatchStreamingRequest({
+      options,
+      signal,
+      thinkingConfig,
+      previousRequestId,
+      useBetas,
+      isFastMode,
+      paramsFromContext,
+    })
+    let dispatchStep
     do {
-      e = await generator.next()
-
-      // yield API error messages (the stream has a 'controller' property, error messages don't)
-      if (!('controller' in e.value)) {
-        yield e.value
+      dispatchStep = await dispatchGenerator.next()
+      if (!dispatchStep.done) {
+        yield dispatchStep.value
       }
-    } while (!e.done)
-    stream = e.value as Stream<BetaRawMessageStreamEvent>
+    } while (!dispatchStep.done)
+    const dispatchResult = dispatchStep.value
 
-    // reset state
-    newMessages.length = 0
-    ttftMs = 0
-    partialMessage = undefined
-    contentBlocks.length = 0
-    usage = EMPTY_USAGE
-    stopReason = null
-    isAdvisorInProgress = false
+    start = dispatchResult.start
+    attemptNumber = dispatchResult.attemptNumber
+    attemptStartTimes.push(...dispatchResult.attemptStartTimes)
+    maxOutputTokens = dispatchResult.maxOutputTokens
+    clientRequestId = dispatchResult.clientRequestId
+    streamRequestId = dispatchResult.streamRequestId
+    streamResponse = dispatchResult.streamResponse
+    isFastModeRequest = dispatchResult.isFastModeRequest
+    stream = dispatchResult.stream
+
+    newMessages.length = dispatchResult.accumulatorState.newMessages.length
+    ttftMs = dispatchResult.accumulatorState.ttftMs
+    partialMessage = dispatchResult.accumulatorState.partialMessage
+    contentBlocks.length = dispatchResult.accumulatorState.contentBlocks.length
+    usage = dispatchResult.accumulatorState.usage
+    stopReason = dispatchResult.accumulatorState.stopReason
+    isAdvisorInProgress = dispatchResult.accumulatorState.isAdvisorInProgress
 
     // Streaming idle timeout watchdog: abort the stream if no chunks arrive
     // for STREAM_IDLE_TIMEOUT_MS. Unlike the stall detection below (which only

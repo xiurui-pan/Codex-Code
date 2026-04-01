@@ -67,18 +67,23 @@
 - `3bf8c47` `refactor: move request preflight state out of claude api`
   把请求前置状态准备这一层搬到 `requestPreflightState.ts`，并让 `claude.ts` 改成调用这层；同时保持 system prompt 骨架、`paramsFromContext` 本体和流式解析主干不变。
 
+- `2f82d3a` `refactor: move request input preparation out of claude api`
+  把请求输入准备主段搬到 `requestInputPreparation.ts`，覆盖 `messagesForAPI` 归一化、tool-search 后处理、tool result 成对修复、advisor/media 清理、指纹、deferred tools prepend、Chrome 指令注入，以及 `systemPrompt/system/allTools` 组装；同时保持 Claude Code 现有的 system prompt 骨架和流式解析主干不变。
+
 ## 当前进行中
 
 - `providerClient`、`model`、`requestConfig` 三条入口已经初步成形，外围外部直连点也已经基本清零，当前已经进入 `services/api/claude.ts` 内部能力拆分阶段。
-- `requestPreflightState` 已经提交，当前大块是 `request input preparation extraction`，正在把 `messagesForAPI` 归一化、tool-search 后处理、tool result 成对修复、advisor/media 清理、指纹、deferred tools prepend、Chrome 指令注入、`systemPrompt/system/allTools` 组装从 `claude.ts` 内部搬到独立入口。
-- 当前工作树里的未提交改动集中在 `upstream/claude-code/src/services/api/requestInputPreparation.ts` 和 `upstream/claude-code/src/services/api/claude.ts`，目标是继续缩小 `claude.ts` 的请求输入准备主段，但不改 system prompt 骨架、流式解析主干和 QueryEngine 收口。
+- `requestInputPreparation` 已经提交，当前大块是请求派发层抽离，范围包括 query logging、`withRetry` 建流、stream 建立，以及预流式错误透传这几段从 `claude.ts` 主体继续拆出。
+- 当前目标是继续缩小 `claude.ts` 的请求派发主段，但不改 system prompt 骨架、输入归一化顺序、流式事件解析主干和 QueryEngine 收口。
+- `upstream/claude-code` 当前仍然只是源码快照加 README，目录下没有 `package.json`、锁文件、`tsconfig.json` 和可直接执行的运行入口，所以当前仓库还不能直接做真实 TUI 试跑。
 - 明确不再保留 Anthropic 专用的 `anti_distillation` 逻辑，后续拆分以通用调用能力为主。
 - 控制改动范围，避免又回到 prototype 扩功能的路线。
 
 ## 下一步
 
-- 先完成并验证 `request input preparation extraction` 这一块，确保提示词骨架、输入归一化顺序、deferred tools 和 `allTools` 组装行为不漂。
-- 这一块稳定后，再继续从 `services/api/claude.ts` 内部挑选最小的高频能力接缝，优先考虑请求包络与请求发送前后的衔接层，而不是直接碰主循环收口。
+- 先完成并验证请求派发层抽离这一块，确保 query logging、`withRetry` 建流、stream 建立和预流式错误透传的行为不漂。
+- 这一块稳定后，再继续从 `services/api/claude.ts` 内部挑选最小的高频能力接缝，优先考虑请求发送后的流式收包辅助层，而不是直接碰主循环收口。
+- 下一大块需要明确补齐 `upstream/claude-code` 的可运行壳层条件：补项目清单与依赖入口，明确可执行命令和运行方式，让仓库具备真实 TUI 试跑前提，而不是继续停留在只读源码快照状态。
 - 优先选择高频复用、但写入范围还能控制住的主链入口，避免一次跨太大。
 - 在 facade 足够稳定后，再进入下一层：抽更中立的调用类型和回合边界。
 - 每轮都同步更新这份文件，记录已完成提交、当前进行中和下一步。
