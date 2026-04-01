@@ -1,11 +1,22 @@
 // biome-ignore-all assist/source/organizeImports: ANT-ONLY import markers must not be reordered
 import type { Theme } from './theme.js'
 import { feature } from 'bun:bundle'
-import { getFeatureValue_CACHED_MAY_BE_STALE } from '../services/analytics/growthbook.js'
-import { getCanonicalName } from './model/model.js'
+import { createRequire } from 'node:module'
 import { get3PModelCapabilityOverride } from './model/modelSupportOverrides.js'
 import { getAPIProvider } from './model/providers.js'
 import { getSettingsWithErrors } from './settings/settings.js'
+
+const require = createRequire(import.meta.url)
+
+function getCanonicalName(model: string): string {
+  return (require('./model/model.js') as typeof import('./model/model.js')).getCanonicalName(model)
+}
+
+function getFeatureValue_CACHED_MAY_BE_STALE(feature: string, fallback: boolean): boolean {
+  return (
+    require('../services/analytics/growthbook.js') as typeof import('../services/analytics/growthbook.js')
+  ).getFeatureValue_CACHED_MAY_BE_STALE(feature, fallback)
+}
 
 export type ThinkingConfig =
   | { type: 'adaptive' }

@@ -1,5 +1,13 @@
-import { getFeatureValue_CACHED_MAY_BE_STALE } from '../services/analytics/growthbook.js'
+import { createRequire } from 'node:module'
 import { isEnvTruthy } from './envUtils.js'
+
+const require = createRequire(import.meta.url)
+const currentPhaseDisableLegacyAgentSwarms = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+
+function getFeatureValue_CACHED_MAY_BE_STALE<T>(feature: string, fallback: T): T {
+  if (currentPhaseDisableLegacyAgentSwarms) return fallback
+  return (require('../services/analytics/growthbook.js') as typeof import('../services/analytics/growthbook.js')).getFeatureValue_CACHED_MAY_BE_STALE(feature, fallback)
+}
 
 /**
  * Check if --agent-teams flag is provided via CLI.

@@ -21,7 +21,6 @@ import { getClaudeConfigHomeDir, isEnvTruthy } from './envUtils.js'
 import { ConfigParseError, getErrnoCode } from './errors.js'
 import { writeFileSyncAndFlush_DEPRECATED } from './file.js'
 import { getFsImplementation } from './fsOperations.js'
-import { findCanonicalGitRoot } from './git.js'
 import { safeParseJSON } from './json.js'
 import { stripBOM } from './jsonRead.js'
 import * as lockfile from './lockfile.js'
@@ -49,6 +48,8 @@ import { jsonParse, jsonStringify } from './slowOperations.js'
 // infinite recursion when the config file is corrupted. logEvent's sampling check
 // reads GrowthBook features from the global config, which calls getConfig again.
 let insideGetConfig = false
+const currentStageDisableGitAwareConfig =
+  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
 
 // Image dimension info for coordinate mapping (only set when image was resized)
 export type PastedContent = {
@@ -784,7 +785,7 @@ function wouldLoseAuthState(fresh: {
   oauthAccount?: unknown
   hasCompletedOnboarding?: boolean
 }): boolean {
-  const cached = globalConfigCache.config
+  const cached = configRuntimeState.globalConfigCache.config
   if (!cached) return false
   const lostOauth =
     cached.oauthAccount !== undefined && fresh.oauthAccount === undefined
@@ -865,38 +866,56 @@ export function saveGlobalConfig(
   }
 }
 
-// Cache for global config
-let globalConfigCache: { config: GlobalConfig | null; mtime: number } = {
-  config: null,
-  mtime: 0,
+type ConfigRuntimeState = {
+  globalConfigCache: { config: GlobalConfig | null; mtime: number }
+  lastReadFileStats: { mtime: number; size: number } | null
+  configCacheHits: number
+  configCacheMisses: number
+  globalConfigWriteCount: number
+  freshnessWatcherStarted: boolean
+  configReadingAllowed: boolean
 }
 
-// Tracking for config file operations (telemetry)
-let lastReadFileStats: { mtime: number; size: number } | null = null
-let configCacheHits = 0
-let configCacheMisses = 0
-// Session-total count of actual disk writes to the global config file.
-// Exposed for ant-only dev diagnostics (see inc-4552) so anomalous write
-// rates surface in the UI before they corrupt ~/.claude.json.
-let globalConfigWriteCount = 0
+const CONFIG_RUNTIME_STATE_KEY = '__CLAUDE_CODE_CONFIG_RUNTIME_STATE__'
+
+function getConfigRuntimeState(): ConfigRuntimeState {
+  const globalState = globalThis as typeof globalThis & {
+    [CONFIG_RUNTIME_STATE_KEY]?: ConfigRuntimeState
+  }
+  if (!globalState[CONFIG_RUNTIME_STATE_KEY]) {
+    globalState[CONFIG_RUNTIME_STATE_KEY] = {
+      globalConfigCache: { config: null, mtime: 0 },
+      lastReadFileStats: null,
+      configCacheHits: 0,
+      configCacheMisses: 0,
+      globalConfigWriteCount: 0,
+      freshnessWatcherStarted: false,
+      configReadingAllowed: false,
+    }
+  }
+  return globalState[CONFIG_RUNTIME_STATE_KEY]!
+}
+
+const configRuntimeState = getConfigRuntimeState()
 
 export function getGlobalConfigWriteCount(): number {
-  return globalConfigWriteCount
+  return configRuntimeState.globalConfigWriteCount
 }
 
 export const CONFIG_WRITE_DISPLAY_THRESHOLD = 20
 
 function reportConfigCacheStats(): void {
-  const total = configCacheHits + configCacheMisses
+  const total =
+    configRuntimeState.configCacheHits + configRuntimeState.configCacheMisses
   if (total > 0) {
     logEvent('tengu_config_cache_stats', {
-      cache_hits: configCacheHits,
-      cache_misses: configCacheMisses,
-      hit_rate: configCacheHits / total,
+      cache_hits: configRuntimeState.configCacheHits,
+      cache_misses: configRuntimeState.configCacheMisses,
+      hit_rate: configRuntimeState.configCacheHits / total,
     })
   }
-  configCacheHits = 0
-  configCacheMisses = 0
+  configRuntimeState.configCacheHits = 0
+  configRuntimeState.configCacheMisses = 0
 }
 
 // Register cleanup to report cache stats at session end
@@ -990,13 +1009,12 @@ function removeProjectHistory(
 
 // fs.watchFile poll interval for detecting writes from other instances (ms)
 const CONFIG_FRESHNESS_POLL_MS = 1000
-let freshnessWatcherStarted = false
 
 // fs.watchFile polls stat on the libuv threadpool and only calls us when mtime
 // changed — a stalled stat never blocks the main thread.
 function startGlobalConfigFreshnessWatcher(): void {
-  if (freshnessWatcherStarted || process.env.NODE_ENV === 'test') return
-  freshnessWatcherStarted = true
+  if (configRuntimeState.freshnessWatcherStarted || process.env.NODE_ENV === 'test') return
+  configRuntimeState.freshnessWatcherStarted = true
   const file = getGlobalClaudeFile()
   watchFile(
     file,
@@ -1006,30 +1024,33 @@ function startGlobalConfigFreshnessWatcher(): void {
       // overshoot makes cache.mtime > file mtime, so we skip the re-read.
       // Bun/Node also fire with curr.mtimeMs=0 when the file doesn't exist
       // (initial callback or deletion) — the <= handles that too.
-      if (curr.mtimeMs <= globalConfigCache.mtime) return
+      if (curr.mtimeMs <= configRuntimeState.globalConfigCache.mtime) return
       void getFsImplementation()
         .readFile(file, { encoding: 'utf-8' })
         .then(content => {
           // A write-through may have advanced the cache while we were reading;
           // don't regress to the stale snapshot watchFile stat'd.
-          if (curr.mtimeMs <= globalConfigCache.mtime) return
+          if (curr.mtimeMs <= configRuntimeState.globalConfigCache.mtime) return
           const parsed = safeParseJSON(stripBOM(content))
           if (parsed === null || typeof parsed !== 'object') return
-          globalConfigCache = {
+          configRuntimeState.globalConfigCache = {
             config: migrateConfigFields({
               ...createDefaultGlobalConfig(),
               ...(parsed as Partial<GlobalConfig>),
             }),
             mtime: curr.mtimeMs,
           }
-          lastReadFileStats = { mtime: curr.mtimeMs, size: curr.size }
+          configRuntimeState.lastReadFileStats = {
+            mtime: curr.mtimeMs,
+            size: curr.size,
+          }
         })
         .catch(() => {})
     },
   )
   registerCleanup(async () => {
     unwatchFile(file)
-    freshnessWatcherStarted = false
+    configRuntimeState.freshnessWatcherStarted = false
   })
 }
 
@@ -1037,48 +1058,60 @@ function startGlobalConfigFreshnessWatcher(): void {
 // the file's real mtime (Date.now() is recorded after the write) so the
 // freshness watcher skips re-reading our own write on its next tick.
 function writeThroughGlobalConfigCache(config: GlobalConfig): void {
-  globalConfigCache = { config, mtime: Date.now() }
-  lastReadFileStats = null
+  configRuntimeState.globalConfigCache = { config, mtime: Date.now() }
+  configRuntimeState.lastReadFileStats = null
 }
 
 export function getGlobalConfig(): GlobalConfig {
+  logForDebugging('[config] getGlobalConfig start')
   if (process.env.NODE_ENV === 'test') {
+    logForDebugging('[config] getGlobalConfig test config hit')
     return TEST_GLOBAL_CONFIG_FOR_TESTING
   }
 
   // Fast path: pure memory read. After startup, this always hits — our own
   // writes go write-through and other instances' writes are picked up by the
   // background freshness watcher (never blocks this path).
-  if (globalConfigCache.config) {
-    configCacheHits++
-    return globalConfigCache.config
+  if (configRuntimeState.globalConfigCache.config) {
+    configRuntimeState.configCacheHits++
+    logForDebugging('[config] getGlobalConfig cache hit')
+    return configRuntimeState.globalConfigCache.config
   }
 
   // Slow path: startup load. Sync I/O here is acceptable because it runs
   // exactly once, before any UI is rendered. Stat before read so any race
   // self-corrects (old mtime + new content → watcher re-reads next tick).
-  configCacheMisses++
+  configRuntimeState.configCacheMisses++
   try {
+    logForDebugging('[config] getGlobalConfig cache miss slow path start')
     let stats: { mtimeMs: number; size: number } | null = null
     try {
       stats = getFsImplementation().statSync(getGlobalClaudeFile())
+      logForDebugging('[config] getGlobalConfig statSync done')
     } catch {
       // File doesn't exist
+      logForDebugging('[config] getGlobalConfig statSync miss')
     }
     const config = migrateConfigFields(
       getConfig(getGlobalClaudeFile(), createDefaultGlobalConfig),
     )
-    globalConfigCache = {
+    logForDebugging('[config] getGlobalConfig getConfig done')
+    configRuntimeState.globalConfigCache = {
       config,
       mtime: stats?.mtimeMs ?? Date.now(),
     }
-    lastReadFileStats = stats
+    configRuntimeState.lastReadFileStats = stats
       ? { mtime: stats.mtimeMs, size: stats.size }
       : null
     startGlobalConfigFreshnessWatcher()
+    logForDebugging('[config] getGlobalConfig slow path done')
     return config
-  } catch {
+  } catch (error) {
     // If anything goes wrong, fall back to uncached behavior
+    logForDebugging(
+      `[config] getGlobalConfig slow path threw, using uncached fallback: ${error instanceof Error ? error.message : String(error)}`,
+      { level: 'warn' },
+    )
     return migrateConfigFields(
       getConfig(getGlobalClaudeFile(), createDefaultGlobalConfig),
     )
@@ -1140,7 +1173,7 @@ function saveConfig<A extends object>(
     },
   )
   if (file === getGlobalClaudeFile()) {
-    globalConfigWriteCount++
+    configRuntimeState.globalConfigWriteCount++
   }
 }
 
@@ -1187,17 +1220,20 @@ function saveConfigWithLock<A extends object>(
 
     // Check for stale write - file changed since we last read it
     // Only check for global config file since lastReadFileStats tracks that specific file
-    if (lastReadFileStats && file === getGlobalClaudeFile()) {
+    if (
+      configRuntimeState.lastReadFileStats &&
+      file === getGlobalClaudeFile()
+    ) {
       try {
         const currentStats = fs.statSync(file)
         if (
-          currentStats.mtimeMs !== lastReadFileStats.mtime ||
-          currentStats.size !== lastReadFileStats.size
+          currentStats.mtimeMs !== configRuntimeState.lastReadFileStats.mtime ||
+          currentStats.size !== configRuntimeState.lastReadFileStats.size
         ) {
           logEvent('tengu_config_stale_write', {
-            read_mtime: lastReadFileStats.mtime,
+            read_mtime: configRuntimeState.lastReadFileStats.mtime,
             write_mtime: currentStats.mtimeMs,
-            read_size: lastReadFileStats.size,
+            read_size: configRuntimeState.lastReadFileStats.size,
             write_size: currentStats.size,
           })
         }
@@ -1318,7 +1354,7 @@ function saveConfigWithLock<A extends object>(
       },
     )
     if (file === getGlobalClaudeFile()) {
-      globalConfigWriteCount++
+      configRuntimeState.globalConfigWriteCount++
     }
     return true
   } finally {
@@ -1328,11 +1364,8 @@ function saveConfigWithLock<A extends object>(
   }
 }
 
-// Flag to track if config reading is allowed
-let configReadingAllowed = false
-
 export function enableConfigs(): void {
-  if (configReadingAllowed) {
+  if (configRuntimeState.configReadingAllowed) {
     // Ensure this is idempotent
     return
   }
@@ -1342,7 +1375,7 @@ export function enableConfigs(): void {
 
   // Any reads to configuration before this flag is set show an console warning
   // to prevent us from adding config reading during module initialization
-  configReadingAllowed = true
+  configRuntimeState.configReadingAllowed = true
   // We only check the global config because currently all the configs share a file
   getConfig(
     getGlobalClaudeFile(),
@@ -1424,7 +1457,10 @@ function getConfig<A>(
   throwOnInvalid?: boolean,
 ): A {
   // Log a warning if config is accessed before it's allowed
-  if (!configReadingAllowed && process.env.NODE_ENV !== 'test') {
+  if (
+    !configRuntimeState.configReadingAllowed &&
+    process.env.NODE_ENV !== 'test'
+  ) {
     throw new Error('Config accessed before allowed.')
   }
 
@@ -1587,6 +1623,10 @@ function getConfig<A>(
 // Memoized function to get the project path for config lookup
 export const getProjectPathForConfig = memoize((): string => {
   const originalCwd = getOriginalCwd()
+  if (currentStageDisableGitAwareConfig) {
+    return normalizePathForConfigKey(resolve(originalCwd))
+  }
+  const { findCanonicalGitRoot } = require('./git.js') as typeof import('./git.js')
   const gitRoot = findCanonicalGitRoot(originalCwd)
 
   if (gitRoot) {
@@ -1812,6 +1852,6 @@ export const _wouldLoseAuthStateForTesting = wouldLoseAuthState
 export function _setGlobalConfigCacheForTesting(
   config: GlobalConfig | null,
 ): void {
-  globalConfigCache.config = config
-  globalConfigCache.mtime = config ? Date.now() : 0
+  configRuntimeState.globalConfigCache.config = config
+  configRuntimeState.globalConfigCache.mtime = config ? Date.now() : 0
 }

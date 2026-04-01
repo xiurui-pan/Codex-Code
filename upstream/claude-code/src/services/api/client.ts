@@ -1,15 +1,6 @@
 import Anthropic, { type ClientOptions } from '@anthropic-ai/sdk'
 import { randomUUID } from 'crypto'
 import type { GoogleAuth } from 'google-auth-library'
-import {
-  checkAndRefreshOAuthTokenIfNeeded,
-  getAnthropicApiKey,
-  getApiKeyFromApiKeyHelper,
-  getClaudeAIOAuthTokens,
-  isClaudeAISubscriber,
-  refreshAndGetAwsCredentials,
-  refreshGcpCredentialsIfNeeded,
-} from 'src/utils/auth.js'
 import { getUserAgent } from 'src/utils/http.js'
 import { getSmallFastModel } from 'src/utils/model/model.js'
 import {
@@ -28,6 +19,75 @@ import {
   getVertexRegionForModel,
   isEnvTruthy,
 } from '../../utils/envUtils.js'
+
+type AuthModule = typeof import('../../utils/auth.js')
+
+let authModulePromise: Promise<AuthModule> | null = null
+
+async function getAuthModule(): Promise<AuthModule> {
+  authModulePromise ??= import('../../utils/auth.js')
+  return authModulePromise
+}
+
+function isCustomProviderStage(): boolean {
+  return getAPIProvider() === 'custom'
+}
+
+async function checkAndRefreshOAuthTokenIfNeededForProvider(): Promise<void> {
+  if (isCustomProviderStage()) {
+    return
+  }
+  const auth = await getAuthModule()
+  await auth.checkAndRefreshOAuthTokenIfNeeded()
+}
+
+async function isClaudeAISubscriberForProvider(): Promise<boolean> {
+  if (isCustomProviderStage()) {
+    return false
+  }
+  const auth = await getAuthModule()
+  return auth.isClaudeAISubscriber()
+}
+
+async function getApiKeyFromApiKeyHelperForProvider(
+  isNonInteractiveSession: boolean,
+): Promise<string | undefined> {
+  if (isCustomProviderStage()) {
+    return undefined
+  }
+  const auth = await getAuthModule()
+  return auth.getApiKeyFromApiKeyHelper(isNonInteractiveSession)
+}
+
+async function getAwsCredentialsForProvider() {
+  const auth = await getAuthModule()
+  return auth.refreshAndGetAwsCredentials()
+}
+
+async function refreshGcpCredentialsForProvider(): Promise<void> {
+  const auth = await getAuthModule()
+  await auth.refreshGcpCredentialsIfNeeded()
+}
+
+async function getDirectApiAuthForProvider(
+  apiKey?: string,
+): Promise<{ apiKey: string | null; authToken?: string }> {
+  if (isCustomProviderStage()) {
+    return {
+      apiKey: apiKey ?? process.env.ANTHROPIC_API_KEY ?? null,
+    }
+  }
+  const auth = await getAuthModule()
+  if (auth.isClaudeAISubscriber()) {
+    return {
+      apiKey: null,
+      authToken: auth.getClaudeAIOAuthTokens()?.accessToken,
+    }
+  }
+  return {
+    apiKey: apiKey || auth.getAnthropicApiKey(),
+  }
+}
 
 /**
  * Environment variables for different client types:
@@ -129,10 +189,10 @@ export async function getAnthropicClient({
   }
 
   logForDebugging('[API:auth] OAuth token check starting')
-  await checkAndRefreshOAuthTokenIfNeeded()
+  await checkAndRefreshOAuthTokenIfNeededForProvider()
   logForDebugging('[API:auth] OAuth token check complete')
 
-  if (!isClaudeAISubscriber()) {
+  if (!(await isClaudeAISubscriberForProvider())) {
     await configureApiKeyHeaders(defaultHeaders, getIsNonInteractiveSession())
   }
 
@@ -178,7 +238,7 @@ export async function getAnthropicClient({
       }
     } else if (!isEnvTruthy(process.env.CLAUDE_CODE_SKIP_BEDROCK_AUTH)) {
       // Refresh auth and get credentials with cache clearing
-      const cachedCredentials = await refreshAndGetAwsCredentials()
+      const cachedCredentials = await getAwsCredentialsForProvider()
       if (cachedCredentials) {
         bedrockArgs.awsAccessKey = cachedCredentials.accessKeyId
         bedrockArgs.awsSecretKey = cachedCredentials.secretAccessKey
@@ -222,7 +282,7 @@ export async function getAnthropicClient({
     // Refresh GCP credentials if gcpAuthRefresh is configured and credentials are expired
     // This is similar to how we handle AWS credential refresh for Bedrock
     if (!isEnvTruthy(process.env.CLAUDE_CODE_SKIP_VERTEX_AUTH)) {
-      await refreshGcpCredentialsIfNeeded()
+      await refreshGcpCredentialsForProvider()
     }
 
     const [{ AnthropicVertex }, { GoogleAuth }] = await Promise.all([
@@ -298,11 +358,10 @@ export async function getAnthropicClient({
   }
 
   // Determine authentication method based on available tokens
+  const directApiAuth = await getDirectApiAuthForProvider(apiKey)
   const clientConfig: ConstructorParameters<typeof Anthropic>[0] = {
-    apiKey: isClaudeAISubscriber() ? null : apiKey || getAnthropicApiKey(),
-    authToken: isClaudeAISubscriber()
-      ? getClaudeAIOAuthTokens()?.accessToken
-      : undefined,
+    apiKey: directApiAuth.apiKey,
+    authToken: directApiAuth.authToken,
     // Set baseURL from OAuth config when using staging OAuth
     ...(process.env.USER_TYPE === 'ant' &&
     isEnvTruthy(process.env.USE_STAGING_OAUTH)
@@ -321,7 +380,7 @@ async function configureApiKeyHeaders(
 ): Promise<void> {
   const token =
     process.env.ANTHROPIC_AUTH_TOKEN ||
-    (await getApiKeyFromApiKeyHelper(isNonInteractiveSession))
+    (await getApiKeyFromApiKeyHelperForProvider(isNonInteractiveSession))
   if (token) {
     headers['Authorization'] = `Bearer ${token}`
   }

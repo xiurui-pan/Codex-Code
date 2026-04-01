@@ -3,7 +3,15 @@
  * Implementation is lazy-loaded from cost.ts to reduce startup time.
  */
 import type { Command } from '../../commands.js'
-import { isClaudeAISubscriber } from '../../utils/auth.js'
+import { createRequire } from 'node:module'
+import { isCurrentPhaseCustomCodexProvider } from '../../utils/currentPhase.js'
+
+const require = createRequire(import.meta.url)
+const shouldHideCostForSubscriber = isCurrentPhaseCustomCodexProvider()
+  ? () => false
+  : () =>
+      (require('../../utils/auth.js') as typeof import('../../utils/auth.js'))
+        .isClaudeAISubscriber()
 
 const cost = {
   type: 'local',
@@ -14,7 +22,7 @@ const cost = {
     if (process.env.USER_TYPE === 'ant') {
       return false
     }
-    return isClaudeAISubscriber()
+    return shouldHideCostForSubscriber()
   },
   supportsNonInteractive: true,
   load: () => import('./cost.js'),

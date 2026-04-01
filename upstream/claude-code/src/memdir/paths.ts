@@ -1,4 +1,5 @@
 import memoize from 'lodash-es/memoize.js'
+import { createRequire } from 'node:module'
 import { homedir } from 'os'
 import { isAbsolute, join, normalize, sep } from 'path'
 import {
@@ -11,12 +12,15 @@ import {
   isEnvDefinedFalsy,
   isEnvTruthy,
 } from '../utils/envUtils.js'
-import { findCanonicalGitRoot } from '../utils/git.js'
 import { sanitizePath } from '../utils/path.js'
 import {
   getInitialSettings,
   getSettingsForSource,
 } from '../utils/settings/settings.js'
+
+const require = createRequire(import.meta.url)
+const currentStageDisableAutoMemory =
+  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
 
 /**
  * Whether auto-memory features are enabled (memdir, agent memory, past session search).
@@ -28,6 +32,9 @@ import {
  *   5. Default: enabled
  */
 export function isAutoMemoryEnabled(): boolean {
+  if (currentStageDisableAutoMemory) {
+    return false
+  }
   const envVal = process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY
   if (isEnvTruthy(envVal)) {
     return false
@@ -201,6 +208,10 @@ export function hasAutoMemPathOverride(): boolean {
  * same repo share one auto-memory directory (anthropics/claude-code#24382).
  */
 function getAutoMemBase(): string {
+  if (currentStageDisableAutoMemory) {
+    return getProjectRoot()
+  }
+  const { findCanonicalGitRoot } = require('../utils/git.js') as typeof import('../utils/git.js')
   return findCanonicalGitRoot(getProjectRoot()) ?? getProjectRoot()
 }
 

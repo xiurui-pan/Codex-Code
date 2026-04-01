@@ -3,6 +3,7 @@ import {
   APIConnectionTimeoutError,
   APIError,
 } from '@anthropic-ai/sdk'
+import { createRequire } from 'module'
 import type {
   BetaMessage,
   BetaStopReason,
@@ -14,12 +15,6 @@ import type {
   Message,
   UserMessage,
 } from 'src/types/message.js'
-import {
-  getAnthropicApiKeyWithSource,
-  getClaudeAIOAuthTokens,
-  getOauthAccountInfo,
-  isClaudeAISubscriber,
-} from 'src/utils/auth.js'
 import {
   createAssistantAPIErrorMessage,
   NO_RESPONSE_REQUESTED,
@@ -52,6 +47,38 @@ import { shouldProcessRateLimits } from '../rateLimitMocking.js' // Used for /mo
 import { extractConnectionErrorDetails, formatAPIError } from './errorUtils.js'
 
 export const API_ERROR_MESSAGE_PREFIX = 'API Error'
+
+type AuthModule = typeof import('../../utils/auth.js')
+
+const require = createRequire(import.meta.url)
+let authModule: AuthModule | null | undefined
+
+function getAuthModule(): AuthModule | null {
+  if (getAPIProvider() === 'custom') {
+    return null
+  }
+  if (authModule !== undefined) {
+    return authModule
+  }
+  authModule = require('../../utils/auth.js') as AuthModule
+  return authModule
+}
+
+function isClaudeAISubscriberForProvider(): boolean {
+  return getAuthModule()?.isClaudeAISubscriber() ?? false
+}
+
+function getOauthAccountInfoForProvider() {
+  return getAuthModule()?.getOauthAccountInfo()
+}
+
+function getAnthropicApiKeySourceForProvider(): { source?: string } {
+  return getAuthModule()?.getAnthropicApiKeyWithSource() ?? {}
+}
+
+function getClaudeOAuthAccessTokenForProvider(): string | undefined {
+  return getAuthModule()?.getClaudeAIOAuthTokens()?.accessToken
+}
 
 export function startsWithApiErrorPrefix(text: string): boolean {
   return (
@@ -465,7 +492,7 @@ export function getAssistantMessageFromError(
   if (
     error instanceof APIError &&
     error.status === 429 &&
-    shouldProcessRateLimits(isClaudeAISubscriber())
+    shouldProcessRateLimits(isClaudeAISubscriberForProvider())
   ) {
     // Check if this is the new API with multiple rate limit headers
     const rateLimitType = error.headers?.get?.(
@@ -734,7 +761,7 @@ export function getAssistantMessageFromError(
 
   // Check for invalid model name error for subscription users trying to use Opus
   if (
-    isClaudeAISubscriber() &&
+    isClaudeAISubscriberForProvider() &&
     error instanceof APIError &&
     error.status === 400 &&
     error.message.toLowerCase().includes('invalid model name') &&
@@ -757,7 +784,7 @@ export function getAssistantMessageFromError(
     error.message.toLowerCase().includes('invalid model name')
   ) {
     // Get organization ID from config - only use OAuth account data when actively using OAuth
-    const orgId = getOauthAccountInfo()?.organizationUuid
+    const orgId = getOauthAccountInfoForProvider()?.organizationUuid
     const baseMsg = `[ANT-ONLY] Your org isn't gated into the \`${model}\` model. Either run \`claude\` with \`ANTHROPIC_MODEL=${getDefaultMainLoopModelSetting()}\``
     const msg = orgId
       ? `${baseMsg} or share your orgId (${orgId}) in ${MACRO.FEEDBACK_CHANNEL} for help getting access.`
@@ -787,7 +814,7 @@ export function getAssistantMessageFromError(
     error.status === 400 &&
     error.message.toLowerCase().includes('organization has been disabled')
   ) {
-    const { source } = getAnthropicApiKeyWithSource()
+    const { source } = getAnthropicApiKeySourceForProvider()
     // getAnthropicApiKeyWithSource conflates the env var with FD-passed keys
     // under the same source value, and in CCR mode OAuth stays active despite
     // the env var. The three guards ensure we only blame the env var when it's
@@ -795,9 +822,10 @@ export function getAssistantMessageFromError(
     if (
       source === 'ANTHROPIC_API_KEY' &&
       process.env.ANTHROPIC_API_KEY &&
-      !isClaudeAISubscriber()
+      !isClaudeAISubscriberForProvider()
     ) {
-      const hasStoredOAuth = getClaudeAIOAuthTokens()?.accessToken != null
+      const hasStoredOAuth =
+        getClaudeOAuthAccessTokenForProvider() != null
       // Not 'authentication_failed' — that triggers VS Code's showLogin(), but
       // login can't fix this (approved env var keeps overriding OAuth). The fix
       // is configuration-based (unset the var), so invalid_request is correct.
@@ -823,7 +851,7 @@ export function getAssistantMessageFromError(
     }
 
     // Check if the API key is from an external source
-    const { source } = getAnthropicApiKeyWithSource()
+    const { source } = getAnthropicApiKeySourceForProvider()
     const isExternalSource =
       source === 'ANTHROPIC_API_KEY' || source === 'apiKeyHelper'
 

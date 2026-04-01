@@ -1,3 +1,5 @@
+import { createRequire } from 'node:module'
+
 /**
  * Semver comparison utilities that use Bun.semver when available
  * and fall back to the npm `semver` package in Node.js environments.
@@ -7,6 +9,7 @@
  */
 
 let _npmSemver: typeof import('semver') | undefined
+const require = createRequire(import.meta.url)
 
 function getNpmSemver(): typeof import('semver') {
   if (!_npmSemver) {

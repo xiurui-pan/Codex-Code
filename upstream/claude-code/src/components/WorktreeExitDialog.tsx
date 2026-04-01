@@ -10,6 +10,8 @@ import { cleanupWorktree, getCurrentWorktreeSession, keepWorktree, killTmuxSessi
 import { Select } from './CustomSelect/select.js';
 import { Dialog } from './design-system/Dialog.js';
 import { Spinner } from './Spinner.js';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 
 // Inline require breaks the cycle this file would otherwise close:
 // sessionStorage → commands → exit → ExitFlow → here. All call sites

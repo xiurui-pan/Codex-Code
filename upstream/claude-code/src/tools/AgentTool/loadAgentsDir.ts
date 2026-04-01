@@ -1,5 +1,6 @@
 import { feature } from 'bun:bundle'
 import memoize from 'lodash-es/memoize.js'
+import { createRequire } from 'node:module'
 import { basename } from 'path'
 import type { SettingSource } from 'src/utils/settings/constants.js'
 import { z } from 'zod/v4'
@@ -32,10 +33,7 @@ import {
   PERMISSION_MODES,
   type PermissionMode,
 } from '../../utils/permissions/PermissionMode.js'
-import {
-  clearPluginAgentCache,
-  loadPluginAgents,
-} from '../../utils/plugins/loadPluginAgents.js'
+import { isCurrentPhaseCustomCodexProvider } from '../../utils/currentPhase.js'
 import { HooksSchema, type HooksSettings } from '../../utils/settings/types.js'
 import { jsonStringify } from '../../utils/slowOperations.js'
 import { FILE_EDIT_TOOL_NAME } from '../FileEditTool/constants.js'
@@ -47,11 +45,9 @@ import {
   setAgentColor,
 } from './agentColorManager.js'
 import { type AgentMemoryScope, loadAgentMemoryPrompt } from './agentMemory.js'
-import {
-  checkAgentMemorySnapshot,
-  initializeFromSnapshot,
-} from './agentMemorySnapshot.js'
 import { getBuiltInAgents } from './builtInAgents.js'
+
+const require = createRequire(import.meta.url)
 
 // Type for MCP server specification in agent definitions
 // Can be either a reference to an existing server by name, or an inline definition as { [name]: config }
@@ -262,6 +258,10 @@ export function filterAgentsByMcpRequirements(
 async function initializeAgentMemorySnapshots(
   agents: CustomAgentDefinition[],
 ): Promise<void> {
+  const {
+    checkAgentMemorySnapshot,
+    initializeFromSnapshot,
+  } = require('./agentMemorySnapshot.js') as typeof import('./agentMemorySnapshot.js')
   await Promise.all(
     agents.map(async agent => {
       if (agent.memory !== 'user') return
@@ -295,6 +295,10 @@ async function initializeAgentMemorySnapshots(
 
 export const getAgentDefinitionsWithOverrides = memoize(
   async (cwd: string): Promise<AgentDefinitionsResult> => {
+    const currentPhaseCustomCodexProvider = isCurrentPhaseCustomCodexProvider()
+    if (process.argv.includes('--debug-to-stderr')) {
+      process.stderr.write(`[AGENT_PROBE] start cwd=${cwd} custom=${currentPhaseCustomCodexProvider}\n`)
+    }
     // Simple mode: skip custom agents, only return built-ins
     if (isEnvTruthy(process.env.CLAUDE_CODE_SIMPLE)) {
       const builtInAgents = getBuiltInAgents()
@@ -305,7 +309,23 @@ export const getAgentDefinitionsWithOverrides = memoize(
     }
 
     try {
+      if (currentPhaseCustomCodexProvider) {
+        const builtInAgents = getBuiltInAgents()
+        if (process.argv.includes('--debug-to-stderr')) {
+          process.stderr.write(
+            `[AGENT_PROBE] custom-phase-builtins=${builtInAgents.length}\n`,
+          )
+        }
+        return {
+          activeAgents: builtInAgents,
+          allAgents: builtInAgents,
+        }
+      }
+
       const markdownFiles = await loadMarkdownFilesForSubdir('agents', cwd)
+      if (process.argv.includes('--debug-to-stderr')) {
+        process.stderr.write(`[AGENT_PROBE] markdown=${markdownFiles.length}\n`)
+      }
 
       const failedFiles: Array<{ path: string; error: string }> = []
       const customAgents = markdownFiles
@@ -341,20 +361,33 @@ export const getAgentDefinitionsWithOverrides = memoize(
         })
         .filter(agent => agent !== null)
 
-      // Kick off plugin agent loading concurrently with memory snapshot init —
-      // loadPluginAgents is memoized and takes no args, so it's independent.
-      // Join both so neither becomes a floating promise if the other throws.
-      let pluginAgentsPromise = loadPluginAgents()
-      if (feature('AGENT_MEMORY_SNAPSHOT') && isAutoMemoryEnabled()) {
-        const [pluginAgents_] = await Promise.all([
-          pluginAgentsPromise,
-          initializeAgentMemorySnapshots(customAgents),
-        ])
-        pluginAgentsPromise = Promise.resolve(pluginAgents_)
+      // Current Codex phase keeps the local agent graph but skips plugin and
+      // Anthropic memory side paths during first-screen startup.
+      let pluginAgents: PluginAgentDefinition[] = []
+      if (!currentPhaseCustomCodexProvider) {
+        const { loadPluginAgents } =
+          require('../../utils/plugins/loadPluginAgents.js') as typeof import('../../utils/plugins/loadPluginAgents.js')
+        // Kick off plugin agent loading concurrently with memory snapshot init —
+        // loadPluginAgents is memoized and takes no args, so it's independent.
+        // Join both so neither becomes a floating promise if the other throws.
+        let pluginAgentsPromise = loadPluginAgents()
+        if (feature('AGENT_MEMORY_SNAPSHOT') && isAutoMemoryEnabled()) {
+          const [pluginAgents_] = await Promise.all([
+            pluginAgentsPromise,
+            initializeAgentMemorySnapshots(customAgents),
+          ])
+          pluginAgentsPromise = Promise.resolve(pluginAgents_)
+        }
+        pluginAgents = await pluginAgentsPromise
       }
-      const pluginAgents = await pluginAgentsPromise
+      if (process.argv.includes('--debug-to-stderr')) {
+        process.stderr.write(`[AGENT_PROBE] plugins=${pluginAgents.length}\n`)
+      }
 
       const builtInAgents = getBuiltInAgents()
+      if (process.argv.includes('--debug-to-stderr')) {
+        process.stderr.write(`[AGENT_PROBE] builtins=${builtInAgents.length}\n`)
+      }
 
       const allAgentsList: AgentDefinition[] = [
         ...builtInAgents,
@@ -394,6 +427,8 @@ export const getAgentDefinitionsWithOverrides = memoize(
 
 export function clearAgentDefinitionsCache(): void {
   getAgentDefinitionsWithOverrides.cache.clear?.()
+  const { clearPluginAgentCache } =
+    require('../../utils/plugins/loadPluginAgents.js') as typeof import('../../utils/plugins/loadPluginAgents.js')
   clearPluginAgentCache()
 }
 

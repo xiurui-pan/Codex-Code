@@ -5,8 +5,8 @@
 import axios, { type AxiosInstance } from 'axios'
 import type { LookupOptions } from 'dns'
 import type { Agent } from 'http'
-import { HttpsProxyAgent, type HttpsProxyAgentOptions } from 'https-proxy-agent'
 import memoize from 'lodash-es/memoize.js'
+import { createRequire } from 'module'
 import type * as undici from 'undici'
 import { getCACertificates } from './caCerts.js'
 import { logForDebugging } from './debug.js'
@@ -17,6 +17,21 @@ import {
   getTLSFetchOptions,
   type TLSConfig,
 } from './mtls.js'
+
+const require = createRequire(import.meta.url)
+type HttpsProxyAgentOptions<T> = import('https-proxy-agent').HttpsProxyAgentOptions<T>
+type HttpsProxyAgentInstance<T> = import('https-proxy-agent').HttpsProxyAgent<T>
+
+function getHttpsProxyAgentCtor(): typeof import('https-proxy-agent').HttpsProxyAgent {
+  try {
+    return (require('https-proxy-agent') as typeof import('https-proxy-agent'))
+      .HttpsProxyAgent
+  } catch (error) {
+    throw new Error(
+      `proxy support requires https-proxy-agent at runtime: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
+}
 
 // Disable fetch keep-alive after a stale-pool ECONNRESET so retries open a
 // fresh TCP connection instead of reusing the dead pooled socket. Sticky for
@@ -71,7 +86,14 @@ export function getProxyUrl(env: EnvLike = process.env): string | undefined {
  * @param env Environment variables to check (defaults to process.env for production use)
  */
 export function getNoProxy(env: EnvLike = process.env): string | undefined {
-  return env.no_proxy || env.NO_PROXY
+  const explicit = env.no_proxy || env.NO_PROXY
+  const implicitLoopback = 'localhost,127.0.0.1,::1'
+
+  if (!explicit) {
+    return implicitLoopback
+  }
+
+  return `${explicit},${implicitLoopback}`
 }
 
 /**
@@ -135,7 +157,7 @@ export function shouldBypassProxy(
 function createHttpsProxyAgent(
   proxyUrl: string,
   extra: HttpsProxyAgentOptions<string> = {},
-): HttpsProxyAgent<string> {
+): HttpsProxyAgentInstance<string> {
   const mtlsConfig = getMTLSConfig()
   const caCerts = getCACertificates()
 
@@ -157,6 +179,7 @@ function createHttpsProxyAgent(
     }
   }
 
+  const HttpsProxyAgent = getHttpsProxyAgentCtor()
   return new HttpsProxyAgent(proxyUrl, { ...agentOptions, ...extra })
 }
 
@@ -214,7 +237,7 @@ export const getProxyAgent = memoize((uri: string): undici.Dispatcher => {
     // Override both HTTP and HTTPS proxy with the provided URI
     httpProxy: uri,
     httpsProxy: uri,
-    noProxy: process.env.NO_PROXY || process.env.no_proxy,
+    noProxy: getNoProxy(),
   }
 
   // Set both connect and requestTls so TLS options apply to both paths:
@@ -342,9 +365,7 @@ export function configureGlobalAgents(): void {
   if (proxyUrl) {
     // workaround for https://github.com/axios/axios/issues/4531
     axios.defaults.proxy = false
-
-    // Create proxy agent with mTLS options if available
-    const proxyAgent = createHttpsProxyAgent(proxyUrl)
+    let proxyAgent: HttpsProxyAgentInstance<string> | undefined
 
     // Add axios request interceptor to handle NO_PROXY
     proxyInterceptorId = axios.interceptors.request.use(config => {
@@ -361,6 +382,7 @@ export function configureGlobalAgents(): void {
         }
       } else {
         // Use proxy agent
+        proxyAgent ??= createHttpsProxyAgent(proxyUrl)
         config.httpsAgent = proxyAgent
         config.httpAgent = proxyAgent
       }

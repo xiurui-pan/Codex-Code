@@ -6,13 +6,7 @@
  * during dead code elimination
  */
 import { getMainLoopModelOverride } from '../../bootstrap/state.js'
-import {
-  getSubscriptionType,
-  isClaudeAISubscriber,
-  isMaxSubscriber,
-  isProSubscriber,
-  isTeamPremiumSubscriber,
-} from '../auth.js'
+import { createRequire } from 'node:module'
 import {
   has1mContext,
   is1mContextDisabled,
@@ -28,6 +22,32 @@ import { LIGHTNING_BOLT } from '../../constants/figures.js'
 import { isModelAllowed } from './modelAllowlist.js'
 import { type ModelAlias, isModelAlias } from './aliases.js'
 import { capitalize } from '../stringUtils.js'
+
+const require = createRequire(import.meta.url)
+
+function getAuthModule() {
+  return require('../auth.js') as typeof import('../auth.js')
+}
+
+function getSubscriptionType() {
+  return getAuthModule().getSubscriptionType()
+}
+
+function isClaudeAISubscriber() {
+  return getAuthModule().isClaudeAISubscriber()
+}
+
+function isMaxSubscriber() {
+  return getAuthModule().isMaxSubscriber()
+}
+
+function isProSubscriber() {
+  return getAuthModule().isProSubscriber()
+}
+
+function isTeamPremiumSubscriber() {
+  return getAuthModule().isTeamPremiumSubscriber()
+}
 
 export type ModelShortName = string
 export type ModelName = string

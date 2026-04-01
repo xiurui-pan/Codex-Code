@@ -1,10 +1,6 @@
 import axios from 'axios'
 import { getOauthConfig } from '../../constants/oauth.js'
-import {
-  getOauthAccountInfo,
-  getSubscriptionType,
-  isClaudeAISubscriber,
-} from '../../utils/auth.js'
+import { createRequire } from 'node:module'
 import { getGlobalConfig, saveGlobalConfig } from '../../utils/config.js'
 import { logForDebugging } from '../../utils/debug.js'
 import { logError } from '../../utils/log.js'
@@ -16,6 +12,25 @@ import type {
   ReferralRedemptionsResponse,
   ReferrerRewardInfo,
 } from '../oauth/types.js'
+
+const require = createRequire(import.meta.url)
+const currentPhaseDisableLegacyReferral = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+
+function getAuthModule() {
+  return require('../../utils/auth.js') as typeof import('../../utils/auth.js')
+}
+
+function getOauthAccountInfo() {
+  return currentPhaseDisableLegacyReferral ? null : getAuthModule().getOauthAccountInfo()
+}
+
+function getSubscriptionType() {
+  return currentPhaseDisableLegacyReferral ? null : getAuthModule().getSubscriptionType()
+}
+
+function isClaudeAISubscriber() {
+  return currentPhaseDisableLegacyReferral ? false : getAuthModule().isClaudeAISubscriber()
+}
 
 // Cache expiration time: 24 hours (eligibility changes only on subscription/experiment changes)
 const CACHE_EXPIRATION_MS = 24 * 60 * 60 * 1000

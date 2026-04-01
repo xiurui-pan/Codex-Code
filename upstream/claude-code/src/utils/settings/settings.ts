@@ -17,7 +17,6 @@ import { getErrnoCode, isENOENT } from '../errors.js'
 import { writeFileSyncAndFlush_DEPRECATED } from '../file.js'
 import { readFileSync } from '../fileRead.js'
 import { getFsImplementation, safeResolvePath } from '../fsOperations.js'
-import { addFileGlobRuleToGitignore } from '../git/gitignore.js'
 import { safeParseJSON } from '../json.js'
 import { logError } from '../log.js'
 import { getPlatform } from '../platform.js'
@@ -51,6 +50,9 @@ import {
   type SettingsWithErrors,
   type ValidationError,
 } from './validation.js'
+
+const currentStageDisableGitignoreWrite =
+  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
 
 /**
  * Get the path to the managed settings file based on the current platform
@@ -506,11 +508,14 @@ export function updateSettingsForSource(
     resetSettingsCache()
 
     if (source === 'localSettings') {
-      // Okay to add to gitignore async without awaiting
-      void addFileGlobRuleToGitignore(
-        getRelativeSettingsFilePathForSource('localSettings'),
-        getOriginalCwd(),
-      )
+      if (!currentStageDisableGitignoreWrite) {
+        void import('../git/gitignore.js').then(({ addFileGlobRuleToGitignore }) =>
+          addFileGlobRuleToGitignore(
+            getRelativeSettingsFilePathForSource('localSettings'),
+            getOriginalCwd(),
+          ),
+        )
+      }
     }
   } catch (e) {
     const error = new Error(

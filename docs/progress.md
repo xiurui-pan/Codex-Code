@@ -2,6 +2,10 @@
 
 项目目标：以 `claude-code` 为直接基线，逐步把模型接入层改造成更适配 Codex 的形式，同时尽量保留原有工具、权限和主循环体验。
 
+当前项目里，“请求和消息”与“本地执行链”不是两套互不相关的东西。很多能力最终会体现在请求和消息里，但启动链、REPL、`QueryEngine`、`query`、工具执行、权限、结果回灌、TUI 渲染这些能力必须由本地执行链实现，不能简化成“把规则写进消息发给模型”。
+
+当前阶段边界：只支持自定义 Codex provider API，不做 Anthropic 专属链路，包括 `claude.ai` 登录、OAuth、Bridge、assistant mode、proactive 等；这是当前阶段的收口范围，不代表永久删除这些能力。
+
 ## 已完成
 
 - `44637ed` `docs: add codex code baseline and upstream snapshot`
@@ -70,20 +74,53 @@
 - `2f82d3a` `refactor: move request input preparation out of claude api`
   把请求输入准备主段搬到 `requestInputPreparation.ts`，覆盖 `messagesForAPI` 归一化、tool-search 后处理、tool result 成对修复、advisor/media 清理、指纹、deferred tools prepend、Chrome 指令注入，以及 `systemPrompt/system/allTools` 组装；同时保持 Claude Code 现有的 system prompt 骨架和流式解析主干不变。
 
+- 当前阶段里，自定义 Codex provider 的本地 CLI 启动链与非交互主链已经打通。
+  已确认通过的验证包括：
+  - `pnpm -C upstream/claude-code build`
+  - `node dist/cli.js --version`
+  - `node dist/cli.js --help`
+  - 按 `~/.codex/config.toml` 和 `gpt-5.4 medium` 跑真实非交互 smoke，并返回 `CODEX_CODE_SMOKE_OK`
+  这说明当前阶段至少已经跑通了真实源码入口下的本地构建、CLI 启动和非交互主链，而不是停留在假入口或协议样机。
+
+- 当前阶段里，`main import -> 可见 TUI -> 可输入 -> 真实问答` 这一整块已经完成。
+  这一轮验收通过的范围包括：
+  - `pnpm -C upstream/claude-code build`
+  - `node dist/cli.js --version`
+  - `node dist/cli.js --help`
+  - 非交互 smoke
+  - 真实 TTY 问答
+  这说明当前项目已经不只是“能起 CLI”，而是已经打通了真实交互式 TUI 主链里的基础问答回路。
+
 ## 当前进行中
 
-- `providerClient`、`model`、`requestConfig` 三条入口已经初步成形，外围外部直连点也已经基本清零，当前已经进入 `services/api/claude.ts` 内部能力拆分阶段。
-- `requestInputPreparation` 已经提交，当前大块是请求派发层抽离，范围包括 query logging、`withRetry` 建流、stream 建立，以及预流式错误透传这几段从 `claude.ts` 主体继续拆出。
-- 当前目标是继续缩小 `claude.ts` 的请求派发主段，但不改 system prompt 骨架、输入归一化顺序、流式事件解析主干和 QueryEngine 收口。
-- `upstream/claude-code` 当前仍然只是源码快照加 README，目录下没有 `package.json`、锁文件、`tsconfig.json` 和可直接执行的运行入口，所以当前仓库还不能直接做真实 TUI 试跑。
+- 当前阶段已经明确收口：只继续推进自定义 Codex provider API 这一条主线，不再为 `claude.ai` 登录、OAuth、Bridge、assistant mode、proactive 这些 Anthropic 专属能力补齐可运行链路。
+- 当前改造对象已经明确分成三类：只需提示词适配的、需要改消息生产规则的、必须本地实现的。当前重点在第三类，也就是把真实启动链、REPL、`QueryEngine`、`query`、工具执行、权限、结果回灌和 TUI 渲染继续保住并改到 Codex 路线。
+- 五阶段主线不变，但已经确认后续要补强三项长期工作：记忆系统、系统提示词结构、消息类型层。这三项都已进入总计划，只是当前还不抢主链优先级。
+- 另外两条新增计划也已经明确：工具提示词适配线会在后续系统梳理工具提示词、工具描述、权限文案并做 Codex 适配；隐藏功能研究线会在后续专门做研究和筛选。这两条都属于后续工作，不进入当前阶段验收。
+- 真实启动链已经接入 `~/.codex/config.toml` 的最小字段，当前读取并注入的范围包括 `model_provider`、`model`、`model_reasoning_effort`、`model_providers.<id>.base_url`、`model_providers.<id>.env_key`，入口在 `cli.tsx`，主链消费在 `main.tsx`。
+- `providerClient`、`model`、`requestConfig` 三条入口已经初步成形，外围外部直连点也已经基本清零，`services/api/claude.ts` 的内部拆分已经推进到真实可跑的本地 CLI、非交互主链和交互式 TUI 基础问答回路。
+- 当前已经完成“先把构建跑起来”和“把交互式基础问答跑起来”这两步，后续重点不再是首屏可见性，而是把这条真实问答链继续往稳定可用推进。
+- `upstream/claude-code` 的可运行面仍按这个边界收口：只服务 Codex 主链，不再以跑通 Anthropic 专属入口为目标。
+- 构建校验和 CLI 可达图已经收窄到当前阶段真实主链；`sdkUrl / RemoteIO` 这一类远端传输路径当前阶段显式禁用，不再作为可运行面的一部分继续补齐。
 - 明确不再保留 Anthropic 专用的 `anti_distillation` 逻辑，后续拆分以通用调用能力为主。
 - 控制改动范围，避免又回到 prototype 扩功能的路线。
+- 当前新的重点已经不是登录、OAuth 或远端传输链路，也不是“能不能显示首个 REPL 画面”，而是让已经打通的真实交互问答链继续稳定下来，并逐步接上后续能力。
 
 ## 下一步
 
-- 先完成并验证请求派发层抽离这一块，确保 query logging、`withRetry` 建流、stream 建立和预流式错误透传的行为不漂。
-- 这一块稳定后，再继续从 `services/api/claude.ts` 内部挑选最小的高频能力接缝，优先考虑请求发送后的流式收包辅助层，而不是直接碰主循环收口。
-- 下一大块需要明确补齐 `upstream/claude-code` 的可运行壳层条件：补项目清单与依赖入口，明确可执行命令和运行方式，让仓库具备真实 TUI 试跑前提，而不是继续停留在只读源码快照状态。
+- 下一整块建议转到“交互式 TUI 真实问答回路的稳定化与扩展”。
+- 继续围绕 Codex provider 主链拆 `services/api/claude.ts`，优先处理与交互式问答稳定性、回合边界、模型调用中间层直接相关的能力。
+- 停止为 Anthropic 专属链路补缺模块；claude.ai 登录、OAuth、Bridge、assistant mode、proactive 这些能力后续是否恢复，放到后续阶段单独评估。
+- 优先围绕 `main.tsx -> replLauncher.tsx -> screens/REPL.tsx -> QueryEngine.ts -> query.ts` 这条主链，继续把真实问答、结果回灌和交互状态传递做稳。
+- 接下来的文档和实现都要继续按三类对象来拆：提示词适配、消息生产规则、本地执行链，避免再把“消息层”和“执行链”说成两回事，或者误写成“只要调提示词就够了”。
+- 在不改坏当前 CLI 和非交互主链的前提下，继续处理请求发送后的流式收包、主循环收口和交互层状态传递。
+- 下一大块不再是“补工程壳”或“补 Anthropic 缺模块”，也不再是“让首帧出来”，而是把已经打通的真实 TUI 问答回路做稳、做深。
 - 优先选择高频复用、但写入范围还能控制住的主链入口，避免一次跨太大。
 - 在 facade 足够稳定后，再进入下一层：抽更中立的调用类型和回合边界。
+- 当前阶段之外，后续要单列推进五个补强方向：
+  - 记忆系统
+  - 系统提示词结构
+  - 消息类型层
+  - 工具提示词适配线
+  - 隐藏功能研究线
 - 每轮都同步更新这份文件，记录已完成提交、当前进行中和下一步。

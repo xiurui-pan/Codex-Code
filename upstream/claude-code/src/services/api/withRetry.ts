@@ -11,16 +11,10 @@ import { isAwsCredentialsProviderError } from 'src/utils/aws.js'
 import { logForDebugging } from 'src/utils/debug.js'
 import { logError } from 'src/utils/log.js'
 import { createSystemAPIErrorMessage } from 'src/utils/messages.js'
-import { getAPIProviderForStatsig } from 'src/utils/model/providers.js'
 import {
-  clearApiKeyHelperCache,
-  clearAwsCredentialsCache,
-  clearGcpCredentialsCache,
-  getClaudeAIOAuthTokens,
-  handleOAuth401Error,
-  isClaudeAISubscriber,
-  isEnterpriseSubscriber,
-} from '../../utils/auth.js'
+  getAPIProvider,
+  getAPIProviderForStatsig,
+} from 'src/utils/model/providers.js'
 import { isEnvTruthy } from '../../utils/envUtils.js'
 import { errorMessage } from '../../utils/errors.js'
 import {
@@ -46,6 +40,77 @@ import {
 } from '../rateLimitMocking.js'
 import { REPEATED_529_ERROR_MESSAGE } from './errors.js'
 import { extractConnectionErrorDetails } from './errorUtils.js'
+
+type AuthModule = typeof import('../../utils/auth.js')
+
+let authModulePromise: Promise<AuthModule> | null = null
+
+async function getAuthModule(): Promise<AuthModule> {
+  authModulePromise ??= import('../../utils/auth.js')
+  return authModulePromise
+}
+
+function isCustomProviderStage(): boolean {
+  return getAPIProvider() === 'custom'
+}
+
+async function getClaudeOAuthAccessToken(): Promise<string | undefined> {
+  if (isCustomProviderStage()) {
+    return undefined
+  }
+  const auth = await getAuthModule()
+  return auth.getClaudeAIOAuthTokens()?.accessToken
+}
+
+async function handleOAuth401ErrorForProvider(
+  failedAccessToken: string,
+): Promise<void> {
+  if (isCustomProviderStage()) {
+    return
+  }
+  const auth = await getAuthModule()
+  await auth.handleOAuth401Error(failedAccessToken)
+}
+
+async function isClaudeAISubscriberForProvider(): Promise<boolean> {
+  if (isCustomProviderStage()) {
+    return false
+  }
+  const auth = await getAuthModule()
+  return auth.isClaudeAISubscriber()
+}
+
+async function isEnterpriseSubscriberForProvider(): Promise<boolean> {
+  if (isCustomProviderStage()) {
+    return false
+  }
+  const auth = await getAuthModule()
+  return auth.isEnterpriseSubscriber()
+}
+
+async function clearApiKeyHelperCacheForProvider(): Promise<void> {
+  if (isCustomProviderStage()) {
+    return
+  }
+  const auth = await getAuthModule()
+  auth.clearApiKeyHelperCache()
+}
+
+async function clearAwsCredentialsCacheForProvider(): Promise<void> {
+  if (isCustomProviderStage()) {
+    return
+  }
+  const auth = await getAuthModule()
+  auth.clearAwsCredentialsCache()
+}
+
+async function clearGcpCredentialsCacheForProvider(): Promise<void> {
+  if (isCustomProviderStage()) {
+    return
+  }
+  const auth = await getAuthModule()
+  auth.clearGcpCredentialsCache()
+}
 
 const abortError = () => new APIUserAbortError()
 
@@ -242,9 +307,9 @@ export async function* withRetry<T>(
           (lastError instanceof APIError && lastError.status === 401) ||
           isOAuthTokenRevokedError(lastError)
         ) {
-          const failedAccessToken = getClaudeAIOAuthTokens()?.accessToken
+          const failedAccessToken = await getClaudeOAuthAccessToken()
           if (failedAccessToken) {
-            await handleOAuth401Error(failedAccessToken)
+            await handleOAuth401ErrorForProvider(failedAccessToken)
           }
         }
         client = await getClient()
@@ -329,7 +394,8 @@ export async function* withRetry<T>(
         // If FALLBACK_FOR_ALL_PRIMARY_MODELS is not set, fall through only if the primary model is a non-custom Opus model.
         // TODO: Revisit if the isNonCustomOpusModel check should still exist, or if isNonCustomOpusModel is a stale artifact of when Claude Code was hardcoded on Opus.
         (process.env.FALLBACK_FOR_ALL_PRIMARY_MODELS ||
-          (!isClaudeAISubscriber() && isNonCustomOpusModel(options.model)))
+          (!(await isClaudeAISubscriberForProvider()) &&
+            isNonCustomOpusModel(options.model)))
       ) {
         consecutive529Errors++
         if (consecutive529Errors >= MAX_529_RETRIES) {
@@ -373,10 +439,11 @@ export async function* withRetry<T>(
 
       // AWS/GCP errors aren't always APIError, but can be retried
       const handledCloudAuthError =
-        handleAwsCredentialError(error) || handleGcpCredentialError(error)
+        (await handleAwsCredentialError(error)) ||
+        (await handleGcpCredentialError(error))
       if (
         !handledCloudAuthError &&
-        (!(error instanceof APIError) || !shouldRetry(error))
+        (!(error instanceof APIError) || !(await shouldRetry(error)))
       ) {
         throw new CannotRetryError(error, retryContext)
       }
@@ -647,9 +714,9 @@ function isBedrockAuthError(error: unknown): boolean {
  * Clear AWS auth caches if appropriate.
  * @returns true if action was taken.
  */
-function handleAwsCredentialError(error: unknown): boolean {
+async function handleAwsCredentialError(error: unknown): Promise<boolean> {
   if (isBedrockAuthError(error)) {
-    clearAwsCredentialsCache()
+    await clearAwsCredentialsCacheForProvider()
     return true
   }
   return false
@@ -685,15 +752,15 @@ function isVertexAuthError(error: unknown): boolean {
  * Clear GCP auth caches if appropriate.
  * @returns true if action was taken.
  */
-function handleGcpCredentialError(error: unknown): boolean {
+async function handleGcpCredentialError(error: unknown): Promise<boolean> {
   if (isVertexAuthError(error)) {
-    clearGcpCredentialsCache()
+    await clearGcpCredentialsCacheForProvider()
     return true
   }
   return false
 }
 
-function shouldRetry(error: APIError): boolean {
+async function shouldRetry(error: APIError): Promise<boolean> {
   // Never retry mock errors - they're from /mock-limits command for testing
   if (isMockRateLimitError(error)) {
     return false
@@ -736,7 +803,8 @@ function shouldRetry(error: APIError): boolean {
   // Enterprise users can retry because they typically use PAYG instead of rate limits.
   if (
     shouldRetryHeader === 'true' &&
-    (!isClaudeAISubscriber() || isEnterpriseSubscriber())
+    (!(await isClaudeAISubscriberForProvider()) ||
+      (await isEnterpriseSubscriberForProvider()))
   ) {
     return true
   }
@@ -765,13 +833,16 @@ function shouldRetry(error: APIError): boolean {
   // Retry on rate limits, but not for ClaudeAI Subscription users
   // Enterprise users can retry because they typically use PAYG instead of rate limits
   if (error.status === 429) {
-    return !isClaudeAISubscriber() || isEnterpriseSubscriber()
+    return (
+      !(await isClaudeAISubscriberForProvider()) ||
+      (await isEnterpriseSubscriberForProvider())
+    )
   }
 
   // Clear API key cache on 401 and allow retry.
   // OAuth token handling is done in the main retry loop via handleOAuth401Error.
   if (error.status === 401) {
-    clearApiKeyHelperCache()
+    await clearApiKeyHelperCacheForProvider()
     return true
   }
 

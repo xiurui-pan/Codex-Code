@@ -889,6 +889,7 @@ export async function initializeToolPermissionContext({
   dangerousPermissions: DangerousPermissionInfo[]
   overlyBroadBashPermissions: DangerousPermissionInfo[]
 }> {
+  logForDebugging('[permissions:init] parse CLI tool rules start')
   // Parse comma-separated allowed and disallowed tools if provided
   // Normalize legacy tool names (e.g., 'Task' → 'Agent') so that in-memory
   // rule removal in stripDangerousPermissionsForAutoMode matches correctly.
@@ -896,10 +897,12 @@ export async function initializeToolPermissionContext({
     rule => permissionRuleValueToString(permissionRuleValueFromString(rule)),
   )
   let parsedDisallowedToolsCli = parseToolListFromCLI(disallowedToolsCli)
+  logForDebugging('[permissions:init] parse CLI tool rules done')
 
   // If base tools are specified, automatically deny all tools NOT in the base set
   // We need to check if base tools were explicitly provided (not just empty default)
   if (baseToolsCli && baseToolsCli.length > 0) {
+    logForDebugging('[permissions:init] base tools expansion start')
     const baseToolsResult = parseBaseToolsFromCLI(baseToolsCli)
     // Normalize legacy tool names (e.g., 'Task' → 'Agent') so user-provided
     // base tool lists using old names still match canonical names.
@@ -907,6 +910,7 @@ export async function initializeToolPermissionContext({
     const allToolNames = getToolsForDefaultPreset()
     const toolsToDisallow = allToolNames.filter(tool => !baseToolsSet.has(tool))
     parsedDisallowedToolsCli = [...parsedDisallowedToolsCli, ...toolsToDisallow]
+    logForDebugging('[permissions:init] base tools expansion done')
   }
 
   const warnings: string[] = []
@@ -929,11 +933,15 @@ export async function initializeToolPermissionContext({
 
   // Check if bypassPermissions mode is available (not disabled by Statsig gate or settings)
   // Use cached values to avoid blocking on startup
+  logForDebugging('[permissions:init] bypass permission gate cache read start')
   const growthBookDisableBypassPermissionsMode =
     checkStatsigFeatureGate_CACHED_MAY_BE_STALE(
       'tengu_disable_bypass_permissions_mode',
     )
+  logForDebugging('[permissions:init] bypass permission gate cache read done')
+  logForDebugging('[permissions:init] settings read start')
   const settings = getSettings_DEPRECATED() || {}
+  logForDebugging('[permissions:init] settings read done')
   const settingsDisableBypassPermissionsMode =
     settings.permissions?.disableBypassPermissionsMode === 'disable'
   const isBypassPermissionsModeAvailable =
@@ -943,7 +951,9 @@ export async function initializeToolPermissionContext({
     !settingsDisableBypassPermissionsMode
 
   // Load all permission rules from disk
+  logForDebugging('[permissions:init] loadAllPermissionRulesFromDisk start')
   const rulesFromDisk = loadAllPermissionRulesFromDisk()
+  logForDebugging('[permissions:init] loadAllPermissionRulesFromDisk done')
 
   // Ant-only: Detect overly broad shell allow rules for all modes.
   // Bash(*) or PowerShell(*) are equivalent to YOLO mode for that shell.
@@ -955,6 +965,7 @@ export async function initializeToolPermissionContext({
     !isEnvTruthy(process.env.CLAUDE_CODE_REMOTE) &&
     process.env.CLAUDE_CODE_ENTRYPOINT !== 'local-agent'
   ) {
+    logForDebugging('[permissions:init] overly broad shell scan start')
     overlyBroadBashPermissions = [
       ...findOverlyBroadBashPermissions(rulesFromDisk, parsedAllowedToolsCli),
       ...findOverlyBroadPowerShellPermissions(
@@ -962,6 +973,7 @@ export async function initializeToolPermissionContext({
         parsedAllowedToolsCli,
       ),
     ]
+    logForDebugging('[permissions:init] overly broad shell scan done')
   }
 
   // Ant-only: Detect dangerous shell permissions for auto mode
@@ -969,12 +981,15 @@ export async function initializeToolPermissionContext({
   // before the classifier can evaluate them, defeating the purpose of safer YOLO mode
   let dangerousPermissions: DangerousPermissionInfo[] = []
   if (feature('TRANSCRIPT_CLASSIFIER') && permissionMode === 'auto') {
+    logForDebugging('[permissions:init] dangerous classifier scan start')
     dangerousPermissions = findDangerousClassifierPermissions(
       rulesFromDisk,
       parsedAllowedToolsCli,
     )
+    logForDebugging('[permissions:init] dangerous classifier scan done')
   }
 
+  logForDebugging('[permissions:init] applyPermissionRulesToPermissionContext start')
   let toolPermissionContext = applyPermissionRulesToPermissionContext(
     {
       mode: permissionMode,
@@ -989,12 +1004,14 @@ export async function initializeToolPermissionContext({
     },
     rulesFromDisk,
   )
+  logForDebugging('[permissions:init] applyPermissionRulesToPermissionContext done')
 
   // Add directories from settings and --add-dir
   const allAdditionalDirectories = [
     ...(settings.permissions?.additionalDirectories || []),
     ...addDirs,
   ]
+  logForDebugging('[permissions:init] validate additional directories start')
   // Parallelize fs validation; apply updates serially (cumulative context).
   // validateDirectoryForWorkspace only reads permissionContext to check if the
   // dir is already covered — behavioral difference from parallelizing is benign
@@ -1005,6 +1022,7 @@ export async function initializeToolPermissionContext({
       validateDirectoryForWorkspace(dir, toolPermissionContext),
     ),
   )
+  logForDebugging('[permissions:init] validate additional directories done')
   for (const result of validationResults) {
     if (result.resultType === 'success') {
       toolPermissionContext = applyPermissionUpdate(toolPermissionContext, {

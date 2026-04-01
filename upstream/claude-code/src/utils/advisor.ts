@@ -1,8 +1,16 @@
 import type { BetaUsage } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
-import { getFeatureValue_CACHED_MAY_BE_STALE } from '../services/analytics/growthbook.js'
+import { createRequire } from 'node:module'
 import { shouldIncludeFirstPartyOnlyBetas } from './betas.js'
 import { isEnvTruthy } from './envUtils.js'
 import { getInitialSettings } from './settings/settings.js'
+
+const require = createRequire(import.meta.url)
+const currentPhaseDisableLegacyAdvisor = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+
+function getFeatureValue_CACHED_MAY_BE_STALE<T>(feature: string, fallback: T): T {
+  if (currentPhaseDisableLegacyAdvisor) return fallback
+  return (require('../services/analytics/growthbook.js') as typeof import('../services/analytics/growthbook.js')).getFeatureValue_CACHED_MAY_BE_STALE(feature, fallback)
+}
 
 // The SDK does not yet have types for advisor blocks.
 // TODO(hackyon): Migrate to the real anthropic SDK types when this feature ships publicly

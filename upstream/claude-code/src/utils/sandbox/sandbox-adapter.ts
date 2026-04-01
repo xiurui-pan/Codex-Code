@@ -15,14 +15,10 @@ import type {
   SandboxRuntimeConfig,
   SandboxViolationEvent,
 } from '@anthropic-ai/sandbox-runtime'
-import {
-  SandboxManager as BaseSandboxManager,
-  SandboxRuntimeConfigSchema,
-  SandboxViolationStore,
-} from '@anthropic-ai/sandbox-runtime'
 import { rmSync, statSync } from 'fs'
 import { readFile } from 'fs/promises'
 import { memoize } from 'lodash-es'
+import { createRequire } from 'module'
 import { join, resolve, sep } from 'path'
 import {
   getAdditionalDirectoriesForClaudeMd,
@@ -44,6 +40,145 @@ import {
   updateSettingsForSource,
 } from '../settings/settings.js'
 import type { SettingsJson } from '../settings/types.js'
+
+const require = createRequire(import.meta.url)
+const SANDBOX_RUNTIME_UNAVAILABLE_REASON =
+  '当前阶段未包含 @anthropic-ai/sandbox-runtime；自定义 Codex provider 本地启动链不会启用该 Anthropic 沙箱运行时。'
+
+class LocalSandboxViolationStore {
+  subscribe(_listener: (events: SandboxViolationEvent[]) => void): () => void {
+    return () => {}
+  }
+
+  getTotalCount(): number {
+    return 0
+  }
+}
+
+type RuntimeSandboxManager = {
+  checkDependencies(config?: SandboxRuntimeConfig): Promise<SandboxDependencyCheck>
+  isSupportedPlatform(): boolean
+  wrapWithSandbox(
+    command: string,
+    binShell?: string,
+    customConfig?: Partial<SandboxRuntimeConfig>,
+    abortSignal?: AbortSignal,
+  ): Promise<string>
+  initialize(
+    runtimeConfig: SandboxRuntimeConfig,
+    askCallback?: SandboxAskCallback,
+  ): Promise<void>
+  updateConfig(runtimeConfig: SandboxRuntimeConfig): void
+  reset(): Promise<void>
+  getFsReadConfig(): FsReadRestrictionConfig | undefined
+  getFsWriteConfig(): FsWriteRestrictionConfig | undefined
+  getNetworkRestrictionConfig(): NetworkRestrictionConfig | undefined
+  getIgnoreViolations(): IgnoreViolationsConfig | undefined
+  getAllowUnixSockets(): string[] | undefined
+  getAllowLocalBinding(): boolean | undefined
+  getEnableWeakerNestedSandbox(): boolean | undefined
+  getProxyPort(): number | undefined
+  getSocksProxyPort(): number | undefined
+  getLinuxHttpSocketPath(): string | undefined
+  getLinuxSocksSocketPath(): string | undefined
+  waitForNetworkInitialization(): Promise<boolean>
+  getSandboxViolationStore(): LocalSandboxViolationStore
+  annotateStderrWithSandboxFailures(command: string, stderr: string): string
+  cleanupAfterCommand(): void
+}
+
+type RuntimeSandboxModule = {
+  SandboxManager: RuntimeSandboxManager
+  SandboxRuntimeConfigSchema: unknown
+  SandboxViolationStore: typeof LocalSandboxViolationStore
+}
+
+const loadedSandboxRuntime: RuntimeSandboxModule | null = (() => {
+  try {
+    return require('@anthropic-ai/sandbox-runtime') as RuntimeSandboxModule
+  } catch {
+    return null
+  }
+})()
+
+const unavailableDependencyCheck: SandboxDependencyCheck = {
+  available: false,
+  missingDependencies: [SANDBOX_RUNTIME_UNAVAILABLE_REASON],
+}
+
+const localSandboxViolationStore = new LocalSandboxViolationStore()
+
+const BaseSandboxManager: RuntimeSandboxManager = loadedSandboxRuntime
+  ? loadedSandboxRuntime.SandboxManager
+  : {
+      async checkDependencies() {
+        return unavailableDependencyCheck
+      },
+      isSupportedPlatform() {
+        return false
+      },
+      async wrapWithSandbox() {
+        throw new Error(SANDBOX_RUNTIME_UNAVAILABLE_REASON)
+      },
+      async initialize() {
+        throw new Error(SANDBOX_RUNTIME_UNAVAILABLE_REASON)
+      },
+      updateConfig() {},
+      async reset() {},
+      getFsReadConfig() {
+        return undefined
+      },
+      getFsWriteConfig() {
+        return undefined
+      },
+      getNetworkRestrictionConfig() {
+        return undefined
+      },
+      getIgnoreViolations() {
+        return undefined
+      },
+      getAllowUnixSockets() {
+        return undefined
+      },
+      getAllowLocalBinding() {
+        return undefined
+      },
+      getEnableWeakerNestedSandbox() {
+        return undefined
+      },
+      getProxyPort() {
+        return undefined
+      },
+      getSocksProxyPort() {
+        return undefined
+      },
+      getLinuxHttpSocketPath() {
+        return undefined
+      },
+      getLinuxSocksSocketPath() {
+        return undefined
+      },
+      async waitForNetworkInitialization() {
+        return false
+      },
+      getSandboxViolationStore() {
+        return localSandboxViolationStore
+      },
+      annotateStderrWithSandboxFailures(_command, stderr) {
+        return stderr
+      },
+      cleanupAfterCommand() {},
+    }
+
+const SandboxRuntimeConfigSchema =
+  loadedSandboxRuntime?.SandboxRuntimeConfigSchema ?? {
+    parse(value: SandboxRuntimeConfig) {
+      return value
+    },
+  }
+
+const SandboxViolationStore =
+  loadedSandboxRuntime?.SandboxViolationStore ?? LocalSandboxViolationStore
 
 // ============================================================================
 // Settings Converter

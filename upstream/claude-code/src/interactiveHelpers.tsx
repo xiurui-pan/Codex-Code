@@ -1,18 +1,17 @@
 import { feature } from 'bun:bundle';
 import { appendFileSync } from 'fs';
+import { createRequire } from 'node:module';
 import React from 'react';
 import { logEvent } from 'src/services/analytics/index.js';
 import { gracefulShutdown, gracefulShutdownSync } from 'src/utils/gracefulShutdown.js';
 import { type ChannelEntry, getAllowedChannels, setAllowedChannels, setHasDevChannels, setSessionTrustAccepted, setStatsStore } from './bootstrap/state.js';
 import type { Command } from './commands.js';
 import { createStatsStore, type StatsStore } from './context/stats.js';
-import { getSystemContext } from './context.js';
 import { initializeTelemetryAfterTrust } from './entrypoints/init.js';
 import { isSynchronizedOutputSupported } from './ink/terminal.js';
 import type { RenderOptions, Root, TextProps } from './ink.js';
 import { KeybindingSetup } from './keybindings/KeybindingProviderSetup.js';
 import { startDeferredPrefetches } from './main.js';
-import { checkGate_CACHED_OR_BLOCKING, initializeGrowthBook, resetGrowthBook } from './services/analytics/growthbook.js';
 import { isQualifiedForGrove } from './services/api/grove.js';
 import { handleMcpjsonServerApprovals } from './services/mcpServerApproval.js';
 import { AppStateProvider } from './state/AppState.js';
@@ -20,6 +19,7 @@ import { onChangeAppState } from './state/onChangeAppState.js';
 import { normalizeApiKeyForConfig } from './utils/authPortable.js';
 import { getExternalClaudeMdIncludes, getMemoryFiles, shouldShowClaudeMdExternalIncludesWarning } from './utils/claudemd.js';
 import { checkHasTrustDialogAccepted, getCustomApiKeyStatus, getGlobalConfig, saveGlobalConfig } from './utils/config.js';
+import { isCurrentPhaseCustomCodexProvider } from './utils/currentPhase.js';
 import { updateDeepLinkTerminalPreference } from './utils/deepLink/terminalPreference.js';
 import { isEnvTruthy, isRunningOnHomespace } from './utils/envUtils.js';
 import { type FpsMetrics, FpsTracker } from './utils/fpsTracker.js';
@@ -29,6 +29,25 @@ import type { PermissionMode } from './utils/permissions/PermissionMode.js';
 import { getBaseRenderOptions } from './utils/renderOptions.js';
 import { getSettingsWithAllErrors } from './utils/settings/allErrors.js';
 import { hasAutoModeOptIn, hasSkipDangerousModePermissionPrompt } from './utils/settings/settings.js';
+
+const require = createRequire(import.meta.url)
+const currentStageDisableGrowthbookDialogs = isCurrentPhaseCustomCodexProvider()
+const getContextModule = () =>
+  require('./context.js') as typeof import('./context.js')
+const getSystemContext = (
+  ...args: Parameters<typeof import('./context.js')['getSystemContext']>
+) => getContextModule().getSystemContext(...args)
+const getGrowthbookModule = () =>
+  require('./services/analytics/growthbook.js') as typeof import('./services/analytics/growthbook.js')
+const resetGrowthBook = currentStageDisableGrowthbookDialogs
+  ? (() => {})
+  : (() => getGrowthbookModule().resetGrowthBook())
+const initializeGrowthBook = currentStageDisableGrowthbookDialogs
+  ? (async () => {})
+  : (() => getGrowthbookModule().initializeGrowthBook())
+const checkGate_CACHED_OR_BLOCKING = currentStageDisableGrowthbookDialogs
+  ? (async (_gate: string) => false)
+  : ((gate: string) => getGrowthbookModule().checkGate_CACHED_OR_BLOCKING(gate))
 export function completeOnboarding(): void {
   saveGlobalConfig(current => ({
     ...current,
@@ -104,6 +123,18 @@ export async function renderAndRun(root: Root, element: React.ReactNode): Promis
 export async function showSetupScreens(root: Root, permissionMode: PermissionMode, allowDangerouslySkipPermissions: boolean, commands?: Command[], claudeInChrome?: boolean, devChannels?: ChannelEntry[]): Promise<boolean> {
   if ("production" === 'test' || isEnvTruthy(false) || process.env.IS_DEMO // Skip onboarding in demo mode
   ) {
+    return false;
+  }
+  if (isCurrentPhaseCustomCodexProvider()) {
+    // Current Codex phase keeps the local CLI/TUI startup chain focused on the
+    // actual REPL. Claude/Anthropic product dialogs must not block first
+    // render in a real TTY.
+    setSessionTrustAccepted(true);
+    applyConfigEnvironmentVariables();
+    void updateGithubRepoPathMapping();
+    if (feature('LODESTONE')) {
+      updateDeepLinkTerminalPreference();
+    }
     return false;
   }
   const config = getGlobalConfig();
@@ -182,7 +213,6 @@ export async function showSetupScreens(root: Root, permissionMode: PermissionMod
   // In normal mode, this happens after the trust dialog is accepted
   // This includes potentially dangerous environment variables from untrusted sources
   applyConfigEnvironmentVariables();
-
   // Initialize telemetry after env vars are applied so OTEL endpoint env vars and
   // otelHeadersHelper (which requires trust to execute) are available.
   // Defer to next tick so the OTel dynamic import resolves after first render

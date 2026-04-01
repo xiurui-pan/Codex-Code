@@ -1,15 +1,32 @@
-import { execa } from 'execa'
 import memoize from 'lodash-es/memoize.js'
 import { getSessionId } from '../bootstrap/state.js'
-import {
-  getOauthAccountInfo,
-  getRateLimitTier,
-  getSubscriptionType,
-} from './auth.js'
+import { createRequire } from 'node:module'
 import { getGlobalConfig, getOrCreateUserID } from './config.js'
 import { getCwd } from './cwd.js'
 import { type env, getHostPlatformForAnalytics } from './env.js'
 import { isEnvTruthy } from './envUtils.js'
+
+const require = createRequire(import.meta.url)
+
+function getAuthModule() {
+  return require('./auth.js') as typeof import('./auth.js')
+}
+
+async function getExecaModule() {
+  return import('execa')
+}
+
+function getOauthAccountInfo() {
+  return getAuthModule().getOauthAccountInfo()
+}
+
+function getRateLimitTier() {
+  return getAuthModule().getRateLimitTier()
+}
+
+function getSubscriptionType() {
+  return getAuthModule().getSubscriptionType()
+}
 
 // Cache for email fetched asynchronously at startup
 let cachedEmail: string | undefined | null = null // null means not fetched yet
@@ -183,6 +200,7 @@ async function getEmailAsync(): Promise<string | undefined> {
  * Memoized so the subprocess only spawns once per process.
  */
 export const getGitEmail = memoize(async (): Promise<string | undefined> => {
+  const { execa } = await getExecaModule()
   const result = await execa('git config --get user.email', {
     shell: true,
     reject: false,

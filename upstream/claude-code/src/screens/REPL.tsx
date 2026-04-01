@@ -2,6 +2,7 @@ import { c as _c } from "react/compiler-runtime";
 // biome-ignore-all assist/source/organizeImports: ANT-ONLY import markers must not be reordered
 import { feature } from 'bun:bundle';
 import { spawnSync } from 'child_process';
+import { createRequire } from 'node:module';
 import { snapshotOutputTokensForTurn, getCurrentTurnTokenBudget, getTurnOutputTokens, getBudgetContinuationCount, getTotalInputTokens } from '../bootstrap/state.js';
 import { parseTokenBudget } from '../utils/tokenBudget.js';
 import { count } from '../utils/array.js';
@@ -15,7 +16,6 @@ import { useTerminalSize } from '../hooks/useTerminalSize.js';
 import { useSearchHighlight } from '../ink/hooks/use-search-highlight.js';
 import type { JumpHandle } from '../components/VirtualMessageList.js';
 import { renderMessagesToPlainText } from '../utils/exportRenderer.js';
-import { openFileInExternalEditor } from '../utils/editor.js';
 import { writeFile } from 'fs/promises';
 import { Box, Text, useStdin, useTheme, useTerminalFocus, useTerminalTitle, useTabStatus } from '../ink.js';
 import type { TabStatusKind } from '../ink/hooks/use-tab-status.js';
@@ -50,7 +50,6 @@ import { useReplBridge } from '../hooks/useReplBridge.js';
 import { type Command, type CommandResultDisplay, type ResumeEntrypoint, getCommandName, isCommandEnabled } from '../commands.js';
 import type { PromptInputMode, QueuedCommand, VimMode } from '../types/textInputTypes.js';
 import { MessageSelector, selectableUserMessagesFilter, messagesAfterAreOnlySynthetic } from '../components/MessageSelector.js';
-import { useIdeLogging } from '../hooks/useIdeLogging.js';
 import { PermissionRequest, type ToolUseConfirm } from '../components/permissions/PermissionRequest.js';
 import { ElicitationDialog } from '../components/mcp/ElicitationDialog.js';
 import { PromptDialog } from '../components/hooks/PromptDialog.js';
@@ -95,6 +94,7 @@ import { isHumanTurn } from '../utils/messagePredicates.js';
 import { logError } from '../utils/log.js';
 // Dead code elimination: conditional imports
 /* eslint-disable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
+const require = createRequire(import.meta.url);
 const useVoiceIntegration: typeof import('../hooks/useVoiceIntegration.js').useVoiceIntegration = feature('VOICE_MODE') ? require('../hooks/useVoiceIntegration.js').useVoiceIntegration : () => ({
   stripTrailing: () => 0,
   handleKeyEvent: () => {},
@@ -130,8 +130,7 @@ import { clearSpeculativeChecks } from '../tools/BashTool/bashPermissions.js';
 import type { AutoUpdaterResult } from '../utils/autoUpdater.js';
 import { getGlobalConfig, saveGlobalConfig, getGlobalConfigWriteCount } from '../utils/config.js';
 import { hasConsoleBillingAccess } from '../utils/billing.js';
-import { logEvent, type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from 'src/services/analytics/index.js';
-import { getFeatureValue_CACHED_MAY_BE_STALE } from 'src/services/analytics/growthbook.js';
+import type { AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from '../services/analytics/index.js';
 import { textForResubmit, handleMessageFromStream, type StreamingToolUse, type StreamingThinking, isCompactBoundaryMessage, getMessagesAfterCompactBoundary, getContentText, createUserMessage, createAssistantMessage, createTurnDurationMessage, createAgentsKilledMessage, createApiMetricsMessage, createSystemMessage, createCommandInputMessage, formatCommandInputTags } from '../utils/messages.js';
 import { generateSessionTitle } from '../utils/sessionTitle.js';
 import { BASH_INPUT_TAG, COMMAND_MESSAGE_TAG, COMMAND_NAME_TAG, LOCAL_COMMAND_STDOUT_TAG } from '../constants/xml.js';
@@ -150,7 +149,6 @@ import { useMergedTools } from '../hooks/useMergedTools.js';
 import { mergeAndFilterTools } from '../utils/toolPool.js';
 import { useMergedCommands } from '../hooks/useMergedCommands.js';
 import { useSkillsChange } from '../hooks/useSkillsChange.js';
-import { useManagePlugins } from '../hooks/useManagePlugins.js';
 import { Messages } from '../components/Messages.js';
 import { TaskListV2 } from '../components/TaskListV2.js';
 import { TeammateViewHeader } from '../components/TeammateViewHeader.js';
@@ -161,7 +159,7 @@ import type { ScopedMcpServerConfig } from '../services/mcp/types.js';
 import { randomUUID, type UUID } from 'crypto';
 import { processSessionStartHooks } from '../utils/sessionStart.js';
 import { executeSessionEndHooks, getSessionEndHookTimeoutMs } from '../utils/hooks.js';
-import { type IDESelection, useIdeSelection } from '../hooks/useIdeSelection.js';
+import type { IDESelection } from '../hooks/useIdeSelection.js';
 import { getTools, assembleToolPool } from '../tools.js';
 import type { AgentDefinition } from '../tools/AgentTool/loadAgentsDir.js';
 import { resolveAgentTools } from '../tools/AgentTool/agentToolUtils.js';
@@ -201,8 +199,7 @@ const useScheduledTasks = feature('AGENT_TRIGGERS') ? require('../hooks/useSched
 import { isAgentSwarmsEnabled } from '../utils/agentSwarmsEnabled.js';
 import { useTaskListWatcher } from '../hooks/useTaskListWatcher.js';
 import type { SandboxAskCallback, NetworkHostPattern } from '../utils/sandbox/sandbox-adapter.js';
-import { type IDEExtensionInstallationStatus, closeOpenDiffs, getConnectedIdeClient, type IdeType } from '../utils/ide.js';
-import { useIDEIntegration } from '../hooks/useIDEIntegration.js';
+import type { IDEExtensionInstallationStatus, IdeType } from '../utils/ide.js';
 import exit from '../commands/exit/index.js';
 import { ExitFlow } from '../components/ExitFlow.js';
 import { getCurrentWorktreeSession } from '../utils/worktree.js';
@@ -213,10 +210,7 @@ import { startBackgroundSession } from '../tasks/LocalMainSessionTask.js';
 import { useSessionBackgrounding } from '../hooks/useSessionBackgrounding.js';
 import { diagnosticTracker } from '../services/diagnosticTracking.js';
 import { handleSpeculationAccept, type ActiveSpeculationState } from '../services/PromptSuggestion/speculation.js';
-import { IdeOnboardingDialog } from '../components/IdeOnboardingDialog.js';
-import { EffortCallout, shouldShowEffortCallout } from '../components/EffortCallout.js';
 import type { EffortValue } from '../utils/effort.js';
-import { RemoteCallout } from '../components/RemoteCallout.js';
 /* eslint-disable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
 const AntModelSwitchCallout = "external" === 'ant' ? require('../components/AntModelSwitchCallout.js').AntModelSwitchCallout : null;
 const shouldShowAntModelSwitch = "external" === 'ant' ? require('../components/AntModelSwitchCallout.js').shouldShowModelSwitchCallout : (): boolean => false;
@@ -224,57 +218,107 @@ const UndercoverAutoCallout = "external" === 'ant' ? require('../components/Unde
 /* eslint-enable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
 import { activityManager } from '../utils/activityManager.js';
 import { createAbortController } from '../utils/abortController.js';
-import { MCPConnectionManager } from 'src/services/mcp/MCPConnectionManager.js';
-import { useFeedbackSurvey } from 'src/components/FeedbackSurvey/useFeedbackSurvey.js';
-import { useMemorySurvey } from 'src/components/FeedbackSurvey/useMemorySurvey.js';
-import { usePostCompactSurvey } from 'src/components/FeedbackSurvey/usePostCompactSurvey.js';
-import { FeedbackSurvey } from 'src/components/FeedbackSurvey/FeedbackSurvey.js';
-import { useInstallMessages } from 'src/hooks/notifs/useInstallMessages.js';
-import { useAwaySummary } from 'src/hooks/useAwaySummary.js';
-import { useChromeExtensionNotification } from 'src/hooks/useChromeExtensionNotification.js';
-import { useOfficialMarketplaceNotification } from 'src/hooks/useOfficialMarketplaceNotification.js';
-import { usePromptsFromClaudeInChrome } from 'src/hooks/usePromptsFromClaudeInChrome.js';
-import { getTipToShowOnSpinner, recordShownTip } from 'src/services/tips/tipScheduler.js';
-import type { Theme } from 'src/utils/theme.js';
-import { checkAndDisableBypassPermissionsIfNeeded, checkAndDisableAutoModeIfNeeded, useKickOffCheckAndDisableBypassPermissionsIfNeeded, useKickOffCheckAndDisableAutoModeIfNeeded } from 'src/utils/permissions/bypassPermissionsKillswitch.js';
-import { SandboxManager } from 'src/utils/sandbox/sandbox-adapter.js';
-import { SANDBOX_NETWORK_ACCESS_TOOL_NAME } from 'src/cli/structuredIO.js';
-import { useFileHistorySnapshotInit } from 'src/hooks/useFileHistorySnapshotInit.js';
-import { SandboxPermissionRequest } from 'src/components/permissions/SandboxPermissionRequest.js';
-import { SandboxViolationExpandedView } from 'src/components/SandboxViolationExpandedView.js';
-import { useSettingsErrors } from 'src/hooks/notifs/useSettingsErrors.js';
-import { useMcpConnectivityStatus } from 'src/hooks/notifs/useMcpConnectivityStatus.js';
-import { useAutoModeUnavailableNotification } from 'src/hooks/notifs/useAutoModeUnavailableNotification.js';
-import { AUTO_MODE_DESCRIPTION } from 'src/components/AutoModeOptInDialog.js';
-import { useLspInitializationNotification } from 'src/hooks/notifs/useLspInitializationNotification.js';
-import { useLspPluginRecommendation } from 'src/hooks/useLspPluginRecommendation.js';
-import { LspRecommendationMenu } from 'src/components/LspRecommendation/LspRecommendationMenu.js';
-import { useClaudeCodeHintRecommendation } from 'src/hooks/useClaudeCodeHintRecommendation.js';
-import { PluginHintMenu } from 'src/components/ClaudeCodeHint/PluginHintMenu.js';
-import { DesktopUpsellStartup, shouldShowDesktopUpsellStartup } from 'src/components/DesktopUpsell/DesktopUpsellStartup.js';
-import { usePluginInstallationStatus } from 'src/hooks/notifs/usePluginInstallationStatus.js';
-import { usePluginAutoupdateNotification } from 'src/hooks/notifs/usePluginAutoupdateNotification.js';
-import { performStartupChecks } from 'src/utils/plugins/performStartupChecks.js';
-import { UserTextMessage } from 'src/components/messages/UserTextMessage.js';
-import { AwsAuthStatusBox } from '../components/AwsAuthStatusBox.js';
-import { useRateLimitWarningNotification } from 'src/hooks/notifs/useRateLimitWarningNotification.js';
-import { useDeprecationWarningNotification } from 'src/hooks/notifs/useDeprecationWarningNotification.js';
-import { useNpmDeprecationNotification } from 'src/hooks/notifs/useNpmDeprecationNotification.js';
-import { useIDEStatusIndicator } from 'src/hooks/notifs/useIDEStatusIndicator.js';
-import { useModelMigrationNotifications } from 'src/hooks/notifs/useModelMigrationNotifications.js';
-import { useCanSwitchToExistingSubscription } from 'src/hooks/notifs/useCanSwitchToExistingSubscription.js';
-import { useTeammateLifecycleNotification } from 'src/hooks/notifs/useTeammateShutdownNotification.js';
-import { useFastModeNotification } from 'src/hooks/notifs/useFastModeNotification.js';
+import { MCPConnectionManager } from '../services/mcp/MCPConnectionManager.js';
+import { useFeedbackSurvey } from '../components/FeedbackSurvey/useFeedbackSurvey.js';
+import { useMemorySurvey } from '../components/FeedbackSurvey/useMemorySurvey.js';
+import { usePostCompactSurvey } from '../components/FeedbackSurvey/usePostCompactSurvey.js';
+import { FeedbackSurvey } from '../components/FeedbackSurvey/FeedbackSurvey.js';
+import { useAwaySummary } from '../hooks/useAwaySummary.js';
+import { getTipToShowOnSpinner, recordShownTip } from '../services/tips/tipScheduler.js';
+import type { Theme } from '../utils/theme.js';
+import { checkAndDisableBypassPermissionsIfNeeded, checkAndDisableAutoModeIfNeeded, useKickOffCheckAndDisableBypassPermissionsIfNeeded, useKickOffCheckAndDisableAutoModeIfNeeded } from '../utils/permissions/bypassPermissionsKillswitch.js';
+import { SandboxManager } from '../utils/sandbox/sandbox-adapter.js';
+import { SANDBOX_NETWORK_ACCESS_TOOL_NAME } from '../cli/structuredIO.js';
+import { useFileHistorySnapshotInit } from '../hooks/useFileHistorySnapshotInit.js';
+import { SandboxPermissionRequest } from '../components/permissions/SandboxPermissionRequest.js';
+import { SandboxViolationExpandedView } from '../components/SandboxViolationExpandedView.js';
+import { useAutoModeUnavailableNotification } from '../hooks/notifs/useAutoModeUnavailableNotification.js';
+import { AUTO_MODE_DESCRIPTION } from '../components/AutoModeOptInDialog.js';
+import { UserTextMessage } from '../components/messages/UserTextMessage.js';
 import { AutoRunIssueNotification, shouldAutoRunIssue, getAutoRunIssueReasonText, getAutoRunCommand, type AutoRunIssueReason } from '../utils/autoRunIssue.js';
 import type { HookProgress } from '../types/hooks.js';
-import { TungstenLiveMonitor } from '../tools/TungstenTool/TungstenLiveMonitor.js';
 /* eslint-disable @typescript-eslint/no-require-imports */
 const WebBrowserPanelModule = feature('WEB_BROWSER_TOOL') ? require('../tools/WebBrowserTool/WebBrowserPanel.js') as typeof import('../tools/WebBrowserTool/WebBrowserPanel.js') : null;
+const currentStageDisableUltraplan = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1';
+const currentStageDisableStartupNotifications = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1';
+const currentStageDisableIdeFeatures = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1';
+const currentStageDisablePlugins = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1';
+const ultraplanModule = feature('ULTRAPLAN') && !currentStageDisableUltraplan ? require('../commands/ultraplan.js') as typeof import('../commands/ultraplan.js') : null;
+const launchUltraplan = ultraplanModule?.launchUltraplan ?? null;
+const UltraplanChoiceDialog = (): null => null;
+const UltraplanLaunchDialog = (): null => null;
 /* eslint-enable @typescript-eslint/no-require-imports */
 import { IssueFlagBanner } from '../components/PromptInput/IssueFlagBanner.js';
 import { useIssueFlagBanner } from '../hooks/useIssueFlagBanner.js';
 import { CompanionSprite, CompanionFloatingBubble, MIN_COLS_FOR_FULL_SPRITE } from '../buddy/CompanionSprite.js';
 import { DevBar } from '../components/DevBar.js';
+// Current-stage local Codex mode does not ship the Tungsten live monitor path.
+const TungstenLiveMonitor = (): null => null;
+const useInstallMessages = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useInstallMessages.js').useInstallMessages;
+const useChromeExtensionNotification = currentStageDisableStartupNotifications ? () => {} : require('../hooks/useChromeExtensionNotification.js').useChromeExtensionNotification;
+const useOfficialMarketplaceNotification = currentStageDisableStartupNotifications ? () => {} : require('../hooks/useOfficialMarketplaceNotification.js').useOfficialMarketplaceNotification;
+const usePromptsFromClaudeInChrome = currentStageDisableStartupNotifications ? (_mcpClients?: unknown, _mode?: unknown) => {} : require('../hooks/usePromptsFromClaudeInChrome.js').usePromptsFromClaudeInChrome;
+const useSettingsErrors = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useSettingsErrors.js').useSettingsErrors;
+const useMcpConnectivityStatus = currentStageDisableStartupNotifications ? (_args?: unknown) => {} : require('../hooks/notifs/useMcpConnectivityStatus.js').useMcpConnectivityStatus;
+const useLspInitializationNotification = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useLspInitializationNotification.js').useLspInitializationNotification;
+const useLspPluginRecommendation = currentStageDisableStartupNotifications ? () => ({ recommendation: null, handleResponse: () => {} }) : require('../hooks/useLspPluginRecommendation.js').useLspPluginRecommendation;
+const LspRecommendationMenu = currentStageDisableStartupNotifications ? (() => null) : require('../components/LspRecommendation/LspRecommendationMenu.js').LspRecommendationMenu;
+const useClaudeCodeHintRecommendation = currentStageDisableStartupNotifications ? () => ({ recommendation: null, handleResponse: () => {} }) : require('../hooks/useClaudeCodeHintRecommendation.js').useClaudeCodeHintRecommendation;
+const PluginHintMenu = currentStageDisableStartupNotifications ? (() => null) : require('../components/ClaudeCodeHint/PluginHintMenu.js').PluginHintMenu;
+const DesktopUpsellStartup = currentStageDisableStartupNotifications ? (() => null) : require('../components/DesktopUpsell/DesktopUpsellStartup.js').DesktopUpsellStartup;
+const shouldShowDesktopUpsellStartup = currentStageDisableStartupNotifications ? (() => false) : require('../components/DesktopUpsell/DesktopUpsellStartup.js').shouldShowDesktopUpsellStartup;
+const usePluginInstallationStatus = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/usePluginInstallationStatus.js').usePluginInstallationStatus;
+const usePluginAutoupdateNotification = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/usePluginAutoupdateNotification.js').usePluginAutoupdateNotification;
+const performStartupChecks = currentStageDisableStartupNotifications ? (() => {}) : require('../utils/plugins/performStartupChecks.js').performStartupChecks;
+const AwsAuthStatusBox = currentStageDisableStartupNotifications ? (() => null) : require('../components/AwsAuthStatusBox.js').AwsAuthStatusBox;
+const useRateLimitWarningNotification = currentStageDisableStartupNotifications ? (_model?: unknown) => {} : require('../hooks/notifs/useRateLimitWarningNotification.js').useRateLimitWarningNotification;
+const useDeprecationWarningNotification = currentStageDisableStartupNotifications ? (_model?: unknown) => {} : require('../hooks/notifs/useDeprecationWarningNotification.js').useDeprecationWarningNotification;
+const useNpmDeprecationNotification = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useNpmDeprecationNotification.js').useNpmDeprecationNotification;
+const useIDEStatusIndicator = currentStageDisableStartupNotifications ? (_args?: unknown) => {} : require('../hooks/notifs/useIDEStatusIndicator.js').useIDEStatusIndicator;
+const useModelMigrationNotifications = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useModelMigrationNotifications.js').useModelMigrationNotifications;
+const useCanSwitchToExistingSubscription = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useCanSwitchToExistingSubscription.js').useCanSwitchToExistingSubscription;
+const useTeammateLifecycleNotification = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useTeammateShutdownNotification.js').useTeammateLifecycleNotification;
+const useFastModeNotification = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useFastModeNotification.js').useFastModeNotification;
+const useModelMigrationNotificationsForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useModelMigrationNotifications;
+const useCanSwitchToExistingSubscriptionForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useCanSwitchToExistingSubscription;
+const useIDEStatusIndicatorForCurrentStage = currentStageDisableStartupNotifications ? (_args?: unknown) => {} : useIDEStatusIndicator;
+const useMcpConnectivityStatusForCurrentStage = currentStageDisableStartupNotifications ? (_args?: unknown) => {} : useMcpConnectivityStatus;
+const useAutoModeUnavailableNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useAutoModeUnavailableNotification;
+const usePluginInstallationStatusForCurrentStage = currentStageDisableStartupNotifications ? () => {} : usePluginInstallationStatus;
+const usePluginAutoupdateNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : usePluginAutoupdateNotification;
+const useSettingsErrorsForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useSettingsErrors;
+const useRateLimitWarningNotificationForCurrentStage = currentStageDisableStartupNotifications ? (_model?: unknown) => {} : useRateLimitWarningNotification;
+const useFastModeNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useFastModeNotification;
+const useDeprecationWarningNotificationForCurrentStage = currentStageDisableStartupNotifications ? (_model?: unknown) => {} : useDeprecationWarningNotification;
+const useNpmDeprecationNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useNpmDeprecationNotification;
+const useAntOrgWarningNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useAntOrgWarningNotification;
+const useInstallMessagesForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useInstallMessages;
+const useChromeExtensionNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useChromeExtensionNotification;
+const useOfficialMarketplaceNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useOfficialMarketplaceNotification;
+const useLspInitializationNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useLspInitializationNotification;
+const useTeammateLifecycleNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useTeammateLifecycleNotification;
+const usePromptsFromClaudeInChromeForCurrentStage = currentStageDisableStartupNotifications ? (_mcpClients?: unknown, _mode?: unknown) => {} : usePromptsFromClaudeInChrome;
+const useLspPluginRecommendationForCurrentStage = currentStageDisableStartupNotifications ? () => ({
+  recommendation: null,
+  handleResponse: () => {}
+}) : useLspPluginRecommendation;
+const useClaudeCodeHintRecommendationForCurrentStage = currentStageDisableStartupNotifications ? () => ({
+  recommendation: null,
+  handleResponse: () => {}
+}) : useClaudeCodeHintRecommendation;
+const EffortCallout = currentStageDisableStartupNotifications ? (() => null) : require('../components/EffortCallout.js').EffortCallout;
+const shouldShowEffortCallout = currentStageDisableStartupNotifications ? (() => false) : require('../components/EffortCallout.js').shouldShowEffortCallout;
+const RemoteCallout = currentStageDisableStartupNotifications ? (() => null) : require('../components/RemoteCallout.js').RemoteCallout;
+const useManagePlugins = currentStageDisablePlugins ? ((_args?: unknown) => {}) : require('../hooks/useManagePlugins.js').useManagePlugins;
+const logEvent = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1' ? (() => {}) : require('../services/analytics/index.js').logEvent;
+const getFeatureValue_CACHED_MAY_BE_STALE = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1' ? ((_key: string, fallbackValue: unknown) => fallbackValue) : require('../services/analytics/growthbook.js').getFeatureValue_CACHED_MAY_BE_STALE;
+const openFileInExternalEditor = currentStageDisableIdeFeatures ? (() => false) : require('../utils/editor.js').openFileInExternalEditor;
+const useIdeLogging = currentStageDisableIdeFeatures ? (() => {}) : require('../hooks/useIdeLogging.js').useIdeLogging;
+const useIdeSelection = currentStageDisableIdeFeatures ? ((_clients: unknown, _setSelection: unknown) => {}) : require('../hooks/useIdeSelection.js').useIdeSelection;
+const getConnectedIdeClient = currentStageDisableIdeFeatures ? (() => null) : require('../utils/ide.js').getConnectedIdeClient;
+const closeOpenDiffs = currentStageDisableIdeFeatures ? (async () => {}) : require('../utils/ide.js').closeOpenDiffs;
+const useIDEIntegration = currentStageDisableIdeFeatures ? ((_args: unknown) => {}) : require('../hooks/useIDEIntegration.js').useIDEIntegration;
+const IdeOnboardingDialog = currentStageDisableIdeFeatures ? (() => null) : require('../components/IdeOnboardingDialog.js').IdeOnboardingDialog;
 // Session manager removed - using AppState now
 import type { RemoteSessionConfig } from '../remote/RemoteSessionManager.js';
 import { REMOTE_SAFE_COMMANDS } from '../commands.js';
@@ -742,38 +786,38 @@ export function REPL({
   const showRemoteCallout = useAppState(s => s.showRemoteCallout);
   const [showDesktopUpsellStartup, setShowDesktopUpsellStartup] = useState(() => shouldShowDesktopUpsellStartup());
   // notifications
-  useModelMigrationNotifications();
-  useCanSwitchToExistingSubscription();
-  useIDEStatusIndicator({
+  useModelMigrationNotificationsForCurrentStage();
+  useCanSwitchToExistingSubscriptionForCurrentStage();
+  useIDEStatusIndicatorForCurrentStage({
     ideSelection,
     mcpClients,
     ideInstallationStatus
   });
-  useMcpConnectivityStatus({
+  useMcpConnectivityStatusForCurrentStage({
     mcpClients
   });
-  useAutoModeUnavailableNotification();
-  usePluginInstallationStatus();
-  usePluginAutoupdateNotification();
-  useSettingsErrors();
-  useRateLimitWarningNotification(mainLoopModel);
-  useFastModeNotification();
-  useDeprecationWarningNotification(mainLoopModel);
-  useNpmDeprecationNotification();
-  useAntOrgWarningNotification();
-  useInstallMessages();
-  useChromeExtensionNotification();
-  useOfficialMarketplaceNotification();
-  useLspInitializationNotification();
-  useTeammateLifecycleNotification();
+  useAutoModeUnavailableNotificationForCurrentStage();
+  usePluginInstallationStatusForCurrentStage();
+  usePluginAutoupdateNotificationForCurrentStage();
+  useSettingsErrorsForCurrentStage();
+  useRateLimitWarningNotificationForCurrentStage(mainLoopModel);
+  useFastModeNotificationForCurrentStage();
+  useDeprecationWarningNotificationForCurrentStage(mainLoopModel);
+  useNpmDeprecationNotificationForCurrentStage();
+  useAntOrgWarningNotificationForCurrentStage();
+  useInstallMessagesForCurrentStage();
+  useChromeExtensionNotificationForCurrentStage();
+  useOfficialMarketplaceNotificationForCurrentStage();
+  useLspInitializationNotificationForCurrentStage();
+  useTeammateLifecycleNotificationForCurrentStage();
   const {
     recommendation: lspRecommendation,
     handleResponse: handleLspResponse
-  } = useLspPluginRecommendation();
+  } = useLspPluginRecommendationForCurrentStage();
   const {
     recommendation: hintRecommendation,
     handleResponse: handleHintResponse
-  } = useClaudeCodeHintRecommendation();
+  } = useClaudeCodeHintRecommendationForCurrentStage();
 
   // Memoize the combined initial tools array to prevent reference changes
   const combinedInitialTools = useMemo(() => {
@@ -801,7 +845,7 @@ export function REPL({
 
   // Allow Claude in Chrome MCP to send prompts through MCP notifications
   // and sync permission mode changes to the Chrome extension
-  usePromptsFromClaudeInChrome(isRemoteSession ? EMPTY_MCP_CLIENTS : mcpClients, toolPermissionContext.mode);
+  usePromptsFromClaudeInChromeForCurrentStage(isRemoteSession ? EMPTY_MCP_CLIENTS : mcpClients, toolPermissionContext.mode);
 
   // Initialize swarm features: teammate hooks and context
   // Handles both fresh spawns and resumed teammate sessions
@@ -2034,8 +2078,8 @@ export function REPL({
     if (allowDialogsWithAnimation && elicitation.queue[0]) return 'elicitation';
     if (allowDialogsWithAnimation && showingCostDialog) return 'cost';
     if (allowDialogsWithAnimation && idleReturnPending) return 'idle-return';
-    if (feature('ULTRAPLAN') && allowDialogsWithAnimation && !isLoading && ultraplanPendingChoice) return 'ultraplan-choice';
-    if (feature('ULTRAPLAN') && allowDialogsWithAnimation && !isLoading && ultraplanLaunchPending) return 'ultraplan-launch';
+    if (feature('ULTRAPLAN') && !currentStageDisableUltraplan && allowDialogsWithAnimation && !isLoading && ultraplanPendingChoice) return 'ultraplan-choice';
+    if (feature('ULTRAPLAN') && !currentStageDisableUltraplan && allowDialogsWithAnimation && !isLoading && ultraplanLaunchPending) return 'ultraplan-launch';
 
     // Onboarding dialogs (special conditions)
     if (allowDialogsWithAnimation && showIdeOnboarding) return 'ide-onboarding';
@@ -3032,6 +3076,7 @@ export function REPL({
 
     // Mark as processing to prevent re-entry
     initialMessageRef.current = true;
+    logForDebugging('[REPL] initialMessage effect start');
     async function processInitialMessage(initialMsg: NonNullable<typeof pending>) {
       // Clear context if requested (plan mode exit)
       if (initialMsg.clearContext) {
@@ -3103,6 +3148,7 @@ export function REPL({
       // call. onSubmit calls this internally but the onQuery path below
       // bypasses onSubmit — hoist here so both paths see hook messages.
       await awaitPendingHooks();
+      logForDebugging('[REPL] initialMessage after awaitPendingHooks');
 
       // Route all initial prompts through onSubmit to ensure UserPromptSubmit hooks fire
       // TODO: Simplify by always routing through onSubmit once it supports
@@ -3113,6 +3159,7 @@ export function REPL({
       // For complex content (images, etc.), fall back to direct onQuery
       // Plan messages bypass onSubmit to preserve planContent metadata for rendering
       if (typeof content === 'string' && !initialMsg.message.planContent) {
+        logForDebugging('[REPL] initialMessage routing through onSubmit');
         // Route through onSubmit for proper processing including UserPromptSubmit hooks
         void onSubmit(content, {
           setCursorOffset: () => {},
@@ -3120,6 +3167,7 @@ export function REPL({
           resetHistory: () => {}
         });
       } else {
+        logForDebugging('[REPL] initialMessage routing through onQuery');
         // Plan messages or complex content (images, etc.) - send directly to model
         // Plan messages use onQuery to preserve planContent metadata for rendering
         // TODO: Once onSubmit supports ContentBlockParam arrays, remove this branch
@@ -4847,9 +4895,9 @@ export function REPL({
 
                 {focusedInputDialog === 'desktop-upsell' && <DesktopUpsellStartup onDone={() => setShowDesktopUpsellStartup(false)} />}
 
-                {feature('ULTRAPLAN') ? focusedInputDialog === 'ultraplan-choice' && ultraplanPendingChoice && <UltraplanChoiceDialog plan={ultraplanPendingChoice.plan} sessionId={ultraplanPendingChoice.sessionId} taskId={ultraplanPendingChoice.taskId} setMessages={setMessages} readFileState={readFileState.current} getAppState={() => store.getState()} setConversationId={setConversationId} /> : null}
+                {feature('ULTRAPLAN') && !currentStageDisableUltraplan ? focusedInputDialog === 'ultraplan-choice' && ultraplanPendingChoice && <UltraplanChoiceDialog plan={ultraplanPendingChoice.plan} sessionId={ultraplanPendingChoice.sessionId} taskId={ultraplanPendingChoice.taskId} setMessages={setMessages} readFileState={readFileState.current} getAppState={() => store.getState()} setConversationId={setConversationId} /> : null}
 
-                {feature('ULTRAPLAN') ? focusedInputDialog === 'ultraplan-launch' && ultraplanLaunchPending && <UltraplanLaunchDialog onChoice={(choice, opts) => {
+                {feature('ULTRAPLAN') && !currentStageDisableUltraplan ? focusedInputDialog === 'ultraplan-launch' && ultraplanLaunchPending && <UltraplanLaunchDialog onChoice={(choice, opts) => {
             const blurb = ultraplanLaunchPending.blurb;
             setAppState(prev => prev.ultraplanLaunchPending ? {
               ...prev,
@@ -4879,6 +4927,7 @@ export function REPL({
                 appendStdout(msg);
               });
             };
+            if (!launchUltraplan) return;
             void launchUltraplan({
               blurb,
               getAppState: () => store.getState(),

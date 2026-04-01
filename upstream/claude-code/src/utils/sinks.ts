@@ -1,5 +1,5 @@
-import { initializeAnalyticsSink } from '../services/analytics/sink.js'
 import { initializeErrorLogSink } from './errorLogSink.js'
+import { isCurrentPhaseCustomCodexProvider } from './currentPhase.js'
 
 /**
  * Attach error log and analytics sinks, draining any events queued before
@@ -12,5 +12,12 @@ import { initializeErrorLogSink } from './errorLogSink.js'
  */
 export function initSinks(): void {
   initializeErrorLogSink()
-  initializeAnalyticsSink()
+
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return
+  }
+
+  void import('../services/analytics/sink.js').then(m =>
+    m.initializeAnalyticsSink(),
+  )
 }

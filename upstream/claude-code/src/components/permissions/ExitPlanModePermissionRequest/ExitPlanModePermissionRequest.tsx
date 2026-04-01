@@ -4,10 +4,9 @@ import figures from 'figures';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNotifications } from 'src/context/notifications.js';
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from 'src/services/analytics/index.js';
-import { useAppState, useAppStateStore, useSetAppState } from 'src/state/AppState.js';
+import { useAppState, useAppStateStore, useSetAppState } from '../../../state/AppState.js';
 import { getSdkBetas, getSessionId, isSessionPersistenceDisabled, setHasExitedPlanMode, setNeedsAutoModeExitAttachment, setNeedsPlanModeExitAttachment } from '../../../bootstrap/state.js';
 import { generateSessionName } from '../../../commands/rename/generateSessionName.js';
-import { launchUltraplan } from '../../../commands/ultraplan.js';
 import type { KeyboardEvent } from '../../../ink/events/keyboard-event.js';
 import { Box, Text } from '../../../ink.js';
 import type { AppState } from '../../../state/AppStateStore.js';
@@ -41,6 +40,8 @@ import { PermissionRuleExplanation } from '../PermissionRuleExplanation.js';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const autoModeStateModule = feature('TRANSCRIPT_CLASSIFIER') ? require('../../../utils/permissions/autoModeState.js') as typeof import('../../../utils/permissions/autoModeState.js') : null;
+const currentStageDisableUltraplan = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1';
+const launchUltraplan = feature('ULTRAPLAN') && !currentStageDisableUltraplan ? (require('../../../commands/ultraplan.js') as typeof import('../../../commands/ultraplan.js')).launchUltraplan : null;
 import type { Base64ImageSource, ImageBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs';
 /* eslint-enable @typescript-eslint/no-require-imports */
 import type { PastedContent } from '../../../utils/config.js';
@@ -141,7 +142,7 @@ export function ExitPlanModePermissionRequest({
   // selecting it would dismiss the dialog and reject locally before
   // launchUltraplan can notice the session exists and return "already polling".
   // feature() must sit directly in an if/ternary (bun:bundle DCE constraint).
-  const showUltraplan = feature('ULTRAPLAN') ? !ultraplanSessionUrl && !ultraplanLaunching : false;
+  const showUltraplan = feature('ULTRAPLAN') && !currentStageDisableUltraplan ? !ultraplanSessionUrl && !ultraplanLaunching : false;
   const usage = toolUseConfirm.assistantMessage.message.usage;
   const {
     mode,
@@ -279,6 +280,15 @@ export function ExitPlanModePermissionRequest({
     // Dialog dismisses immediately so the query loop unblocks; the teleport
     // runs detached and its launch message lands via the command queue.
     if (value === 'ultraplan') {
+      if (!launchUltraplan) {
+        addNotification({
+          key: 'ultraplan-disabled-codex-provider',
+          text: '当前阶段不支持 Ultraplan。',
+          color: 'warning',
+          priority: 'high'
+        });
+        return;
+      }
       logEvent('tengu_plan_exit', {
         planLengthChars: currentPlan.length,
         outcome: 'ultraplan' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,

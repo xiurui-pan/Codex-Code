@@ -1,12 +1,15 @@
 import memoize from 'lodash-es/memoize.js'
+import { createRequire } from 'node:module'
 import { homedir } from 'os'
 import { join } from 'path'
 import { fileSuffixForOauthConfig } from '../constants/oauth.js'
 import { isRunningWithBun } from './bundledMode.js'
 import { getClaudeConfigHomeDir, isEnvTruthy } from './envUtils.js'
-import { findExecutable } from './findExecutable.js'
 import { getFsImplementation } from './fsOperations.js'
-import { which } from './which.js'
+
+const require = createRequire(import.meta.url)
+const currentStageDisableLegacyCommandDiscovery =
+  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
 
 type Platform = 'win32' | 'darwin' | 'linux'
 
@@ -38,7 +41,11 @@ const hasInternetAccess = memoize(async (): Promise<boolean> => {
 })
 
 async function isCommandAvailable(command: string): Promise<boolean> {
+  if (currentStageDisableLegacyCommandDiscovery) {
+    return false
+  }
   try {
+    const { which } = await import('./which.js')
     // which does not execute the file.
     return !!(await which(command))
   } catch {
@@ -87,6 +94,9 @@ const isWslEnvironment = memoize((): boolean => {
  * @returns true if npm is from Windows (starts with /mnt/c/), false otherwise
  */
 const isNpmFromWindowsPath = memoize((): boolean => {
+  if (currentStageDisableLegacyCommandDiscovery) {
+    return false
+  }
   try {
     // Only relevant in WSL environment
     if (!isWslEnvironment()) {
@@ -94,6 +104,7 @@ const isNpmFromWindowsPath = memoize((): boolean => {
     }
 
     // Find the actual npm executable path
+    const { findExecutable } = require('./findExecutable.js') as typeof import('./findExecutable.js')
     const { cmd } = findExecutable('npm', [])
 
     // If npm is in Windows path, it will start with /mnt/c/

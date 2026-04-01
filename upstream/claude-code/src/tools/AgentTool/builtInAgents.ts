@@ -1,6 +1,7 @@
 import { feature } from 'bun:bundle'
 import { getIsNonInteractiveSession } from '../../bootstrap/state.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js'
+import { isCurrentPhaseCustomCodexProvider } from '../../utils/currentPhase.js'
 import { isEnvTruthy } from '../../utils/envUtils.js'
 import { CLAUDE_CODE_GUIDE_AGENT } from './built-in/claudeCodeGuideAgent.js'
 import { EXPLORE_AGENT } from './built-in/exploreAgent.js'
@@ -11,6 +12,9 @@ import { VERIFICATION_AGENT } from './built-in/verificationAgent.js'
 import type { AgentDefinition } from './loadAgentsDir.js'
 
 export function areExplorePlanAgentsEnabled(): boolean {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return true
+  }
   if (feature('BUILTIN_EXPLORE_PLAN_AGENTS')) {
     // 3P default: true — Bedrock/Vertex keep agents enabled (matches pre-experiment
     // external behavior). A/B test treatment sets false to measure impact of removal.
@@ -20,6 +24,7 @@ export function areExplorePlanAgentsEnabled(): boolean {
 }
 
 export function getBuiltInAgents(): AgentDefinition[] {
+  const currentPhaseCustomCodexProvider = isCurrentPhaseCustomCodexProvider()
   // Allow disabling all built-in agents via env var (useful for SDK users who want a blank slate)
   // Only applies in noninteractive mode (SDK/API usage)
   if (
@@ -62,6 +67,7 @@ export function getBuiltInAgents(): AgentDefinition[] {
   }
 
   if (
+    !currentPhaseCustomCodexProvider &&
     feature('VERIFICATION_AGENT') &&
     getFeatureValue_CACHED_MAY_BE_STALE('tengu_hive_evidence', false)
   ) {

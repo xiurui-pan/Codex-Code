@@ -15,7 +15,6 @@ import commitPushPr from './commands/commit-push-pr.js'
 import compact from './commands/compact/index.js'
 import config from './commands/config/index.js'
 import { context, contextNonInteractive } from './commands/context/index.js'
-import cost from './commands/cost/index.js'
 import diff from './commands/diff/index.js'
 import ctx_viz from './commands/ctx_viz/index.js'
 import doctor from './commands/doctor/index.js'
@@ -25,7 +24,6 @@ import ide from './commands/ide/index.js'
 import init from './commands/init.js'
 import initVerifiers from './commands/init-verifiers.js'
 import keybindings from './commands/keybindings/index.js'
-import login from './commands/login/index.js'
 import logout from './commands/logout/index.js'
 import installGitHubApp from './commands/install-github-app/index.js'
 import installSlackApp from './commands/install-slack-app/index.js'
@@ -45,10 +43,86 @@ import status from './commands/status/index.js'
 import tasks from './commands/tasks/index.js'
 import teleport from './commands/teleport/index.js'
 /* eslint-disable @typescript-eslint/no-require-imports */
+const require = createRequire(import.meta.url)
+const currentStageDisableClaudePluginCommands =
+  isCurrentPhaseCustomCodexProvider()
+const getPluginCommands = currentStageDisableClaudePluginCommands
+  ? (async (): Promise<Command[]> => [])
+  : (
+      require('./utils/plugins/loadPluginCommands.js') as typeof import('./utils/plugins/loadPluginCommands.js')
+    ).getPluginCommands
+const clearPluginCommandCache = currentStageDisableClaudePluginCommands
+  ? (() => {})
+  : (
+      require('./utils/plugins/loadPluginCommands.js') as typeof import('./utils/plugins/loadPluginCommands.js')
+    ).clearPluginCommandCache
+const getPluginSkills = currentStageDisableClaudePluginCommands
+  ? (async (): Promise<Command[]> => [])
+  : (
+      require('./utils/plugins/loadPluginCommands.js') as typeof import('./utils/plugins/loadPluginCommands.js')
+    ).getPluginSkills
+const clearPluginSkillsCache = currentStageDisableClaudePluginCommands
+  ? (() => {})
+  : (
+      require('./utils/plugins/loadPluginCommands.js') as typeof import('./utils/plugins/loadPluginCommands.js')
+    ).clearPluginSkillsCache
+const isUsing3PServices = currentStageDisableClaudePluginCommands
+  ? (() => true)
+  : (require('./utils/auth.js') as typeof import('./utils/auth.js'))
+      .isUsing3PServices
+const isClaudeAISubscriber = currentStageDisableClaudePluginCommands
+  ? (() => false)
+  : (require('./utils/auth.js') as typeof import('./utils/auth.js'))
+      .isClaudeAISubscriber
 const agentsPlatform =
   process.env.USER_TYPE === 'ant'
     ? require('./commands/agents-platform/index.js').default
     : null
+const currentStageDisableClaudeProductCommands =
+  isCurrentPhaseCustomCodexProvider()
+const getLoginCommand = currentStageDisableClaudeProductCommands
+  ? (() => null)
+  : (() =>
+      (
+        require('./commands/login/index.js') as typeof import('./commands/login/index.js')
+      ).default())
+const getPrivacySettingsCommand = currentStageDisableClaudeProductCommands
+  ? (() => null)
+  : (() =>
+      (
+        require('./commands/privacy-settings/index.js') as typeof import('./commands/privacy-settings/index.js')
+      ).default)
+const getRemoteEnvCommand = currentStageDisableClaudeProductCommands
+  ? (() => null)
+  : (() =>
+      (
+        require('./commands/remote-env/index.js') as typeof import('./commands/remote-env/index.js')
+      ).default)
+const getUpgradeCommand = currentStageDisableClaudeProductCommands
+  ? (() => null)
+  : (() =>
+      (
+        require('./commands/upgrade/index.js') as typeof import('./commands/upgrade/index.js')
+      ).default)
+const getExtraUsageCommands = currentStageDisableClaudeProductCommands
+  ? (() => [] as Command[])
+  : (() => {
+      const mod =
+        require('./commands/extra-usage/index.js') as typeof import('./commands/extra-usage/index.js')
+      return [mod.extraUsage, mod.extraUsageNonInteractive]
+    })
+const getRateLimitOptionsCommand = currentStageDisableClaudeProductCommands
+  ? (() => null)
+  : (() =>
+      (
+        require('./commands/rate-limit-options/index.js') as typeof import('./commands/rate-limit-options/index.js')
+      ).default)
+const getCostCommand = currentStageDisableClaudeProductCommands
+  ? (() => null)
+  : (() =>
+      (
+        require('./commands/cost/index.js') as typeof import('./commands/cost/index.js')
+      ).default)
 /* eslint-enable @typescript-eslint/no-require-imports */
 import securityReview from './commands/security-review.js'
 import bughunter from './commands/bughunter/index.js'
@@ -57,6 +131,7 @@ import usage from './commands/usage/index.js'
 import theme from './commands/theme/index.js'
 import vim from './commands/vim/index.js'
 import { feature } from 'bun:bundle'
+import { createRequire } from 'node:module'
 // Dead code elimination: conditional imports
 /* eslint-disable @typescript-eslint/no-require-imports */
 const proactive =
@@ -101,7 +176,7 @@ const clearSkillIndexCache = feature('EXPERIMENTAL_SKILL_SEARCH')
 const subscribePr = feature('KAIROS_GITHUB_WEBHOOKS')
   ? require('./commands/subscribe-pr.js').default
   : null
-const ultraplan = feature('ULTRAPLAN')
+const ultraplan = feature('ULTRAPLAN') && process.env.CLAUDE_CODE_USE_CODEX_PROVIDER !== '1'
   ? require('./commands/ultraplan.js').default
   : null
 const torch = feature('TORCH') ? require('./commands/torch.js').default : null
@@ -127,7 +202,6 @@ import permissions from './commands/permissions/index.js'
 import plan from './commands/plan/index.js'
 import fast from './commands/fast/index.js'
 import passes from './commands/passes/index.js'
-import privacySettings from './commands/privacy-settings/index.js'
 import hooks from './commands/hooks/index.js'
 import files from './commands/files/index.js'
 import branch from './commands/branch/index.js'
@@ -153,6 +227,7 @@ import advisor from './commands/advisor.js'
 import { logError } from './utils/log.js'
 import { toError } from './utils/errors.js'
 import { logForDebugging } from './utils/debug.js'
+import { isCurrentPhaseCustomCodexProvider } from './utils/currentPhase.js'
 import {
   getSkillDirCommands,
   clearSkillCaches,
@@ -160,14 +235,7 @@ import {
 } from './skills/loadSkillsDir.js'
 import { getBundledSkills } from './skills/bundledSkills.js'
 import { getBuiltinPluginSkillCommands } from './plugins/builtinPlugins.js'
-import {
-  getPluginCommands,
-  clearPluginCommandCache,
-  getPluginSkills,
-  clearPluginSkillsCache,
-} from './utils/plugins/loadPluginCommands.js'
 import memoize from 'lodash-es/memoize.js'
-import { isUsing3PServices, isClaudeAISubscriber } from './utils/auth.js'
 import { isFirstPartyAnthropicBaseUrl } from './utils/model/providers.js'
 import env from './commands/env/index.js'
 import exit from './commands/exit/index.js'
@@ -175,13 +243,6 @@ import exportCommand from './commands/export/index.js'
 import model from './commands/model/index.js'
 import tag from './commands/tag/index.js'
 import outputStyle from './commands/output-style/index.js'
-import remoteEnv from './commands/remote-env/index.js'
-import upgrade from './commands/upgrade/index.js'
-import {
-  extraUsage,
-  extraUsageNonInteractive,
-} from './commands/extra-usage/index.js'
-import rateLimitOptions from './commands/rate-limit-options/index.js'
 import statusline from './commands/statusline.js'
 import effort from './commands/effort/index.js'
 import stats from './commands/stats/index.js'
@@ -270,7 +331,6 @@ const COMMANDS = memoize((): Command[] => [
   desktop,
   context,
   contextNonInteractive,
-  cost,
   diff,
   doctor,
   effort,
@@ -289,7 +349,6 @@ const COMMANDS = memoize((): Command[] => [
   mobile,
   model,
   outputStyle,
-  remoteEnv,
   plugin,
   pr_comments,
   releaseNotes,
@@ -310,10 +369,6 @@ const COMMANDS = memoize((): Command[] => [
   rewind,
   securityReview,
   terminalSetup,
-  upgrade,
-  extraUsage,
-  extraUsageNonInteractive,
-  rateLimitOptions,
   usage,
   usageReport,
   vim,
@@ -330,11 +385,19 @@ const COMMANDS = memoize((): Command[] => [
   thinkbackPlay,
   permissions,
   plan,
-  privacySettings,
   hooks,
   exportCommand,
   sandboxToggle,
-  ...(!isUsing3PServices() ? [logout, login()] : []),
+  ...(getRemoteEnvCommand() ? [getRemoteEnvCommand()!] : []),
+  ...(getUpgradeCommand() ? [getUpgradeCommand()!] : []),
+  ...getExtraUsageCommands(),
+  ...(getRateLimitOptionsCommand() ? [getRateLimitOptionsCommand()!] : []),
+  ...(getPrivacySettingsCommand() ? [getPrivacySettingsCommand()!] : []),
+  ...(!currentStageDisableClaudePluginCommands &&
+  !currentStageDisableClaudeProductCommands &&
+  !isUsing3PServices()
+    ? [logout, getLoginCommand()!]
+    : []),
   passes,
   ...(peersCmd ? [peersCmd] : []),
   tasks,
@@ -415,6 +478,9 @@ const getWorkflowCommands = feature('WORKFLOW_SCRIPTS')
  * so this must be re-evaluated on every getCommands() call.
  */
 export function meetsAvailabilityRequirement(cmd: Command): boolean {
+  if (currentStageDisableClaudePluginCommands) {
+    return !cmd.availability?.some(a => a === 'claude-ai' || a === 'console')
+  }
   if (!cmd.availability) return true
   for (const a of cmd.availability) {
     switch (a) {
@@ -616,25 +682,27 @@ export const getSlashCommandToolSkills = memoize(
  * 1. Pre-filtering commands in main.tsx before REPL renders (prevents race with CCR init)
  * 2. Preserving local-only commands in REPL's handleRemoteInit after CCR filters
  */
-export const REMOTE_SAFE_COMMANDS: Set<Command> = new Set([
-  session, // Shows QR code / URL for remote session
-  exit, // Exit the TUI
-  clear, // Clear screen
-  help, // Show help
-  theme, // Change terminal theme
-  color, // Change agent color
-  vim, // Toggle vim mode
-  cost, // Show session cost (local cost tracking)
-  usage, // Show usage info
-  copy, // Copy last message
-  btw, // Quick note
-  feedback, // Send feedback
-  plan, // Plan mode toggle
-  keybindings, // Keybinding management
-  statusline, // Status line toggle
-  stickers, // Stickers
-  mobile, // Mobile QR code
-])
+export const REMOTE_SAFE_COMMANDS: Set<Command> = new Set(
+  [
+    session, // Shows QR code / URL for remote session
+    exit, // Exit the TUI
+    clear, // Clear screen
+    help, // Show help
+    theme, // Change terminal theme
+    color, // Change agent color
+    vim, // Toggle vim mode
+    ...(getCostCommand() ? [getCostCommand()!] : []), // Show session cost (local cost tracking)
+    usage, // Show usage info
+    copy, // Copy last message
+    btw, // Quick note
+    feedback, // Send feedback
+    plan, // Plan mode toggle
+    keybindings, // Keybinding management
+    statusline, // Status line toggle
+    stickers, // Stickers
+    mobile, // Mobile QR code
+  ].filter((c): c is Command => c !== null),
+)
 
 /**
  * Builtin commands of type 'local' that ARE safe to execute when received
@@ -652,7 +720,7 @@ export const BRIDGE_SAFE_COMMANDS: Set<Command> = new Set(
   [
     compact, // Shrink context — useful mid-session from a phone
     clear, // Wipe transcript
-    cost, // Show session cost
+    ...(getCostCommand() ? [getCostCommand()!] : []), // Show session cost
     summary, // Summarize conversation
     releaseNotes, // Show changelog
     files, // List tracked files

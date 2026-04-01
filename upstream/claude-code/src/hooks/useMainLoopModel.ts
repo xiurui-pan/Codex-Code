@@ -1,4 +1,6 @@
 import { useEffect, useReducer } from 'react'
+import { getCodexConfiguredModel } from '../utils/codexConfig.js'
+import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js'
 import { onGrowthBookRefresh } from '../services/analytics/growthbook.js'
 import { useAppState } from '../state/AppState.js'
 import {
@@ -13,6 +15,7 @@ import {
 export function useMainLoopModel(): ModelName {
   const mainLoopModel = useAppState(s => s.mainLoopModel)
   const mainLoopModelForSession = useAppState(s => s.mainLoopModelForSession)
+  const isCurrentPhase = isCurrentPhaseCustomCodexProvider()
 
   // parseUserSpecifiedModel reads tengu_ant_model_override via
   // _CACHED_MAY_BE_STALE (in resolveAntModel). Until GB init completes,
@@ -23,7 +26,19 @@ export function useMainLoopModel(): ModelName {
   // happens to re-render the component — the API would sample one model
   // while /model (which also re-resolves) displays another.
   const [, forceRerender] = useReducer(x => x + 1, 0)
-  useEffect(() => onGrowthBookRefresh(forceRerender), [])
+  useEffect(() => {
+    if (isCurrentPhase) {
+      return
+    }
+    return onGrowthBookRefresh(forceRerender)
+  }, [isCurrentPhase])
+
+  if (isCurrentPhase) {
+    const configuredModel = getCodexConfiguredModel()
+    return parseUserSpecifiedModel(
+      mainLoopModelForSession ?? mainLoopModel ?? configuredModel ?? 'gpt-5.4',
+    )
+  }
 
   const model = parseUserSpecifiedModel(
     mainLoopModelForSession ??

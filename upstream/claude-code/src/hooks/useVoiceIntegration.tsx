@@ -15,6 +15,7 @@ import { useVoiceEnabled } from './useVoiceEnabled.js';
 
 // Dead code elimination: conditional import for voice input hook.
 /* eslint-disable @typescript-eslint/no-require-imports */
+import { createRequire } from 'node:module';
 // Capture the module namespace, not the function: spyOn() mutates the module
 // object, so `voiceNs.useVoice(...)` resolves to the spy even if this module
 // was loaded before the spy was installed (test ordering independence).
@@ -32,6 +33,7 @@ const voiceNs: {
   })
 };
 /* eslint-enable @typescript-eslint/no-require-imports */
+const require = createRequire(import.meta.url);
 
 // Maximum gap (ms) between key presses to count as held (auto-repeat).
 // Terminal auto-repeat fires every 30-80ms; 120ms covers jitter while

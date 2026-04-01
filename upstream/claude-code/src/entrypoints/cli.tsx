@@ -31,7 +31,13 @@ if (feature('ABLATION_BASELINE') && process.env.CLAUDE_CODE_ABLATION_BASELINE) {
  * Fast-path for --version has zero imports beyond this file.
  */
 async function main(): Promise<void> {
+  const writeCliProbe = (message: string): void => {
+    if (process.argv.includes('--debug-to-stderr')) {
+      process.stderr.write(`[CLI_PROBE] ${message}\n`)
+    }
+  }
   const args = process.argv.slice(2);
+  writeCliProbe('main:start')
 
   // Fast-path for --version/-v: zero module loading needed
   if (args.length === 1 && (args[0] === '--version' || args[0] === '-v' || args[0] === '-V')) {
@@ -45,7 +51,18 @@ async function main(): Promise<void> {
   const {
     profileCheckpoint
   } = await import('../utils/startupProfiler.js');
+  writeCliProbe('main:after-startup-profiler')
   profileCheckpoint('cli_entry');
+  const {
+    applyCodexConfigToEnv,
+    loadCodexConfigIfPresent,
+  } = await import('../utils/codexConfig.js');
+  const codexConfig = await loadCodexConfigIfPresent();
+  if (codexConfig) {
+    applyCodexConfigToEnv(codexConfig);
+  }
+  writeCliProbe('main:after-codex-config')
+  profileCheckpoint('cli_after_codex_config');
 
   // Fast-path for --dump-system-prompt: output the rendered system prompt and exit.
   // Used by prompt sensitivity evals to extract the system prompt at a specific commit.
@@ -285,6 +302,9 @@ async function main(): Promise<void> {
   }
 
   // No special flags detected, load and run the full CLI
+  const { enableConfigs } = await import('../utils/config.js')
+  enableConfigs()
+  writeCliProbe('main:before-main-import')
   const {
     startCapturingEarlyInput
   } = await import('../utils/earlyInput.js');
@@ -293,8 +313,10 @@ async function main(): Promise<void> {
   const {
     main: cliMain
   } = await import('../main.js');
+  writeCliProbe('main:after-main-import')
   profileCheckpoint('cli_after_main_import');
   await cliMain();
+  writeCliProbe('main:after-main')
   profileCheckpoint('cli_after_main_complete');
 }
 

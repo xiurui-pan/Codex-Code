@@ -1,7 +1,8 @@
 import { getDirectConnectServerUrl, getSessionId } from '../bootstrap/state.js'
+import { createRequire } from 'node:module'
 import { stringWidth } from '../ink/stringWidth.js'
 import type { LogOption } from '../types/logs.js'
-import { getSubscriptionName, isClaudeAISubscriber } from './auth.js'
+import { isCurrentPhaseCustomCodexProvider } from './currentPhase.js'
 import { getCwd } from './cwd.js'
 import { getDisplayPath } from './file.js'
 import {
@@ -13,6 +14,8 @@ import { getStoredChangelogFromMemory, parseChangelog } from './releaseNotes.js'
 import { gt } from './semver.js'
 import { loadMessageLogs } from './sessionStorage.js'
 import { getInitialSettings } from './settings/settings.js'
+
+const require = createRequire(import.meta.url)
 
 // Layout constants
 const MAX_LEFT_WIDTH = 50
@@ -253,9 +256,15 @@ export function getLogoDisplayData(): {
   const cwd = serverUrl
     ? `${displayPath} in ${serverUrl.replace(/^https?:\/\//, '')}`
     : displayPath
-  const billingType = isClaudeAISubscriber()
-    ? getSubscriptionName()
-    : 'API Usage Billing'
+  const billingType = isCurrentPhaseCustomCodexProvider()
+    ? 'API Usage Billing'
+    : (() => {
+        const { getSubscriptionName, isClaudeAISubscriber } =
+          require('./auth.js') as typeof import('./auth.js')
+        return isClaudeAISubscriber()
+          ? getSubscriptionName()
+          : 'API Usage Billing'
+      })()
   const agentName = getInitialSettings().agent
 
   return {

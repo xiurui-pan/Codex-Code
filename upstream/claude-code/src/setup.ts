@@ -26,6 +26,7 @@ import { checkAndRestoreTerminalBackup } from './utils/appleTerminalBackup.js'
 import { prefetchApiKeyFromApiKeyHelperIfSafe } from './utils/auth.js'
 import { clearMemoryFileCaches } from './utils/claudemd.js'
 import { getCurrentProjectConfig, getGlobalConfig } from './utils/config.js'
+import { isCurrentPhaseCustomCodexProvider } from './utils/currentPhase.js'
 import { logForDiagnosticsNoPII } from './utils/diagLogs.js'
 import { env } from './utils/env.js'
 import { envDynamic } from './utils/envDynamic.js'
@@ -64,6 +65,10 @@ export async function setup(
   worktreePRNumber?: number,
   messagingSocketPath?: string,
 ): Promise<void> {
+  const currentPhaseCustomCodexProvider = isCurrentPhaseCustomCodexProvider()
+  if (process.argv.includes('--debug-to-stderr')) {
+    process.stderr.write('[PROBE] setup:start\n')
+  }
   logForDiagnosticsNoPII('info', 'setup_started')
 
   // Check for Node.js version < 18
@@ -300,7 +305,9 @@ export async function setup(
       /* eslint-enable @typescript-eslint/no-require-imports */
     }
   }
-  void lockCurrentVersion() // Lock current version to prevent deletion by other processes
+  if (!currentPhaseCustomCodexProvider) {
+    void lockCurrentVersion() // Lock current version to prevent deletion by other processes
+  }
   logForDiagnosticsNoPII('info', 'setup_background_jobs_launched')
 
   profileCheckpoint('setup_before_prefetch')
@@ -333,7 +340,7 @@ export async function setup(
   // commit code, and the 49ms attribution hook stat check (measured) is pure
   // overhead. NOT an early-return: the --dangerously-skip-permissions safety
   // gate, tengu_started beacon, and apiKeyHelper prefetch below must still run.
-  if (!isBareMode()) {
+  if (!isBareMode() && !currentPhaseCustomCodexProvider) {
     if (process.env.USER_TYPE === 'ant') {
       // Prime repo classification cache for auto-undercover mode. Default is
       // undercover ON until proven internal; if this resolves to internal, clear
@@ -375,15 +382,20 @@ export async function setup(
   // inc-3694 (P0 CHANGELOG crash) threw at checkForReleaseNotes below; every
   // event after this point was dead. This beacon is the earliest reliable
   // "process started" signal for release health monitoring.
-  logEvent('tengu_started', {})
+  if (!currentPhaseCustomCodexProvider) {
+    logEvent('tengu_started', {})
+  }
 
   void prefetchApiKeyFromApiKeyHelperIfSafe(getIsNonInteractiveSession()) // Prefetch safely - only executes if trust already confirmed
   profileCheckpoint('setup_after_prefetch')
+  if (process.argv.includes('--debug-to-stderr')) {
+    process.stderr.write('[PROBE] setup:after-prefetch\n')
+  }
 
   // Pre-fetch data for Logo v2 - await to ensure it's ready before logo renders.
   // --bare / SIMPLE: skip — release notes are interactive-UI display data,
   // and getRecentActivity() reads up to 10 session JSONL files.
-  if (!isBareMode()) {
+  if (!isBareMode() && !currentPhaseCustomCodexProvider) {
     const { hasReleaseNotes } = await checkForReleaseNotes(
       getGlobalConfig().lastReleaseNotesSeen,
     )
@@ -442,6 +454,9 @@ export async function setup(
   }
 
   if (process.env.NODE_ENV === 'test') {
+    if (process.argv.includes('--debug-to-stderr')) {
+      process.stderr.write('[PROBE] setup:done-test\n')
+    }
     return
   }
 
@@ -473,5 +488,8 @@ export async function setup(
     // Note: We intentionally don't clear these values after logging.
     // They're needed for cost restoration when resuming sessions.
     // The values will be overwritten when the next session exits.
+  }
+  if (process.argv.includes('--debug-to-stderr')) {
+    process.stderr.write('[PROBE] setup:done\n')
   }
 }

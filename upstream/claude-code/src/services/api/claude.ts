@@ -808,7 +808,7 @@ async function* queryModel(
   let {
     messagesForAPI,
     fingerprint,
-    systemPrompt,
+    systemPrompt: preparedSystemPrompt,
     system,
     useBetas,
     allTools,
@@ -825,6 +825,7 @@ async function* queryModel(
     advisorModel,
     needsToolBasedCacheMarker,
   })
+  systemPrompt = preparedSystemPrompt
 
   const {
     isFastMode,

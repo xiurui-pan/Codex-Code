@@ -1,3 +1,4 @@
+import { createRequire } from 'node:module'
 import { useCallback, useEffect } from 'react'
 import type { Command } from '../commands.js'
 import { useNotifications } from '../context/notifications.js'
@@ -13,14 +14,42 @@ import { logForDebugging } from '../utils/debug.js'
 import { logForDiagnosticsNoPII } from '../utils/diagLogs.js'
 import { toError } from '../utils/errors.js'
 import { logError } from '../utils/log.js'
-import { loadPluginAgents } from '../utils/plugins/loadPluginAgents.js'
-import { getPluginCommands } from '../utils/plugins/loadPluginCommands.js'
-import { loadPluginHooks } from '../utils/plugins/loadPluginHooks.js'
-import { loadPluginLspServers } from '../utils/plugins/lspPluginIntegration.js'
-import { loadPluginMcpServers } from '../utils/plugins/mcpPluginIntegration.js'
-import { detectAndUninstallDelistedPlugins } from '../utils/plugins/pluginBlocklist.js'
-import { getFlaggedPlugins } from '../utils/plugins/pluginFlagging.js'
-import { loadAllPlugins } from '../utils/plugins/pluginLoader.js'
+import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js'
+
+const require = createRequire(import.meta.url)
+const currentStageDisablePluginAutoLoad = isCurrentPhaseCustomCodexProvider()
+
+function getPluginRuntimeModules() {
+  return require('../utils/plugins/pluginLoader.js') as typeof import('../utils/plugins/pluginLoader.js')
+}
+
+function getPluginCommandsRuntime() {
+  return require('../utils/plugins/loadPluginCommands.js') as typeof import('../utils/plugins/loadPluginCommands.js')
+}
+
+function getPluginAgentsRuntime() {
+  return require('../utils/plugins/loadPluginAgents.js') as typeof import('../utils/plugins/loadPluginAgents.js')
+}
+
+function getPluginHooksRuntime() {
+  return require('../utils/plugins/loadPluginHooks.js') as typeof import('../utils/plugins/loadPluginHooks.js')
+}
+
+function getPluginLspRuntime() {
+  return require('../utils/plugins/lspPluginIntegration.js') as typeof import('../utils/plugins/lspPluginIntegration.js')
+}
+
+function getPluginMcpRuntime() {
+  return require('../utils/plugins/mcpPluginIntegration.js') as typeof import('../utils/plugins/mcpPluginIntegration.js')
+}
+
+function getPluginBlocklistRuntime() {
+  return require('../utils/plugins/pluginBlocklist.js') as typeof import('../utils/plugins/pluginBlocklist.js')
+}
+
+function getPluginFlaggingRuntime() {
+  return require('../utils/plugins/pluginFlagging.js') as typeof import('../utils/plugins/pluginFlagging.js')
+}
 
 /**
  * Hook to manage plugin state and synchronize with AppState.
@@ -49,7 +78,41 @@ export function useManagePlugins({
   // flagged-plugin notifications (session-start concerns), and does NOT bump
   // mcp.pluginReconnectKey (MCP effects fire on their own mount).
   const initialPluginLoad = useCallback(async () => {
+    if (currentStageDisablePluginAutoLoad) {
+      setAppState(prevState => ({
+        ...prevState,
+        plugins: {
+          ...prevState.plugins,
+          enabled: [],
+          disabled: [],
+          commands: [],
+        },
+      }))
+      return {
+        enabled_count: 0,
+        disabled_count: 0,
+        inline_count: 0,
+        marketplace_count: 0,
+        error_count: 0,
+        skill_count: 0,
+        agent_count: 0,
+        hook_count: 0,
+        mcp_count: 0,
+        lsp_count: 0,
+        ant_enabled_names: undefined,
+      }
+    }
+
     try {
+      const { loadAllPlugins } = getPluginRuntimeModules()
+      const { detectAndUninstallDelistedPlugins } = getPluginBlocklistRuntime()
+      const { getFlaggedPlugins } = getPluginFlaggingRuntime()
+      const { getPluginCommands } = getPluginCommandsRuntime()
+      const { loadPluginAgents } = getPluginAgentsRuntime()
+      const { loadPluginHooks } = getPluginHooksRuntime()
+      const { loadPluginMcpServers } = getPluginMcpRuntime()
+      const { loadPluginLspServers } = getPluginLspRuntime()
+
       // Load all plugins - capture errors array
       const { enabled, disabled, errors } = await loadAllPlugins()
 
@@ -267,7 +330,7 @@ export function useManagePlugins({
 
   // Load plugins on mount and emit telemetry
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || currentStageDisablePluginAutoLoad) return
     void initialPluginLoad().then(metrics => {
       const { ant_enabled_names, ...baseMetrics } = metrics
       const allMetrics = {
@@ -291,7 +354,7 @@ export function useManagePlugins({
   // and was incomplete (no MCP, no agentDefinitions). /reload-plugins
   // handles all of that correctly via refreshActivePlugins().
   useEffect(() => {
-    if (!enabled || !needsRefresh) return
+    if (!enabled || !needsRefresh || currentStageDisablePluginAutoLoad) return
     addNotification({
       key: 'plugin-reload-pending',
       text: 'Plugins changed. Run /reload-plugins to activate.',

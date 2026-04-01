@@ -14,6 +14,8 @@ import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEve
 import { useAppState, useSetAppState } from '../state/AppState.js';
 import { count } from '../utils/array.js';
 import { getTerminalPanel } from '../utils/terminalPanel.js';
+import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
 type Props = {
   screen: Screen;
   setScreen: React.Dispatch<React.SetStateAction<Screen>>;

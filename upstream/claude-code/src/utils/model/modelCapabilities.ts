@@ -6,7 +6,7 @@ import { join } from 'path'
 import { z } from 'zod/v4'
 import { OAUTH_BETA_HEADER } from '../../constants/oauth.js'
 import { getProviderClient } from '../../services/api/providerClient.js'
-import { isClaudeAISubscriber } from '../auth.js'
+import { createRequire } from 'node:module'
 import { logForDebugging } from '../debug.js'
 import { getClaudeConfigHomeDir } from '../envUtils.js'
 import { safeParseJSON } from '../json.js'
@@ -14,6 +14,13 @@ import { lazySchema } from '../lazySchema.js'
 import { isEssentialTrafficOnly } from '../privacyLevel.js'
 import { jsonStringify } from '../slowOperations.js'
 import { getAPIProvider, isFirstPartyAnthropicBaseUrl } from './providers.js'
+
+const require = createRequire(import.meta.url)
+const currentPhaseDisableLegacyModelCapabilities = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+
+function isClaudeAISubscriber() {
+  return currentPhaseDisableLegacyModelCapabilities ? false : (require('../auth.js') as typeof import('../auth.js')).isClaudeAISubscriber()
+}
 
 // .strip() — don't persist internal-only fields (mycro_deployments etc.) to disk
 const ModelCapabilitySchema = lazySchema(() =>

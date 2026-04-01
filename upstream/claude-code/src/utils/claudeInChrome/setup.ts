@@ -1,5 +1,5 @@
-import { BROWSER_TOOLS } from '@ant/claude-for-chrome-mcp'
 import { chmod, mkdir, readFile, writeFile } from 'fs/promises'
+import { createRequire } from 'module'
 import { homedir } from 'os'
 import { join } from 'path'
 import { fileURLToPath } from 'url'
@@ -8,7 +8,6 @@ import {
   getIsNonInteractiveSession,
   getSessionBypassPermissionsMode,
 } from '../../bootstrap/state.js'
-import { getFeatureValue_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js'
 import type { ScopedMcpServerConfig } from '../../services/mcp/types.js'
 import { isInBundledMode } from '../bundledMode.js'
 import { getGlobalConfig, saveGlobalConfig } from '../config.js'
@@ -31,10 +30,40 @@ import {
 import { getChromeSystemPrompt } from './prompt.js'
 import { isChromeExtensionInstalledPortable } from './setupPortable.js'
 
+const require = createRequire(import.meta.url)
+const currentPhaseDisableLegacyChromeGrowthbook = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+
+function getFeatureValue_CACHED_MAY_BE_STALE<T>(feature: string, fallback: T): T {
+  if (currentPhaseDisableLegacyChromeGrowthbook) return fallback
+  return (require('../../services/analytics/growthbook.js') as typeof import('../../services/analytics/growthbook.js')).getFeatureValue_CACHED_MAY_BE_STALE(feature, fallback)
+}
 const CHROME_EXTENSION_RECONNECT_URL = 'https://clau.de/chrome/reconnect'
 
 const NATIVE_HOST_IDENTIFIER = 'com.anthropic.claude_code_browser_extension'
 const NATIVE_HOST_MANIFEST_NAME = `${NATIVE_HOST_IDENTIFIER}.json`
+
+type BrowserToolDescriptor = {
+  name: string
+}
+
+let browserToolsCache: BrowserToolDescriptor[] | null | undefined
+
+function getBrowserTools(): BrowserToolDescriptor[] | null {
+  if (browserToolsCache !== undefined) {
+    return browserToolsCache
+  }
+
+  try {
+    const loaded = require('@ant/claude-for-chrome-mcp') as {
+      BROWSER_TOOLS?: BrowserToolDescriptor[]
+    }
+    browserToolsCache = loaded.BROWSER_TOOLS ?? []
+  } catch {
+    browserToolsCache = null
+  }
+
+  return browserToolsCache
+}
 
 export function shouldEnableClaudeInChrome(chromeFlag?: boolean): boolean {
   // Disable by default in non-interactive sessions (e.g., SDK, CI)
@@ -70,6 +99,11 @@ export function shouldEnableClaudeInChrome(chromeFlag?: boolean): boolean {
 let shouldAutoEnable: boolean | undefined = undefined
 
 export function shouldAutoEnableClaudeInChrome(): boolean {
+  if (!getBrowserTools()) {
+    shouldAutoEnable = false
+    return false
+  }
+
   if (shouldAutoEnable !== undefined) {
     return shouldAutoEnable
   }
@@ -93,8 +127,15 @@ export function setupClaudeInChrome(): {
   allowedTools: string[]
   systemPrompt: string
 } {
+  const browserTools = getBrowserTools()
+  if (!browserTools) {
+    throw new Error(
+      '当前阶段不支持 Claude in Chrome 集成：自定义 Codex provider 本地启动链未包含该外部扩展依赖。',
+    )
+  }
+
   const isNativeBuild = isInBundledMode()
-  const allowedTools = BROWSER_TOOLS.map(
+  const allowedTools = browserTools.map(
     tool => `mcp__claude-in-chrome__${tool.name}`,
   )
 

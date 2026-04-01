@@ -1,12 +1,8 @@
 import { useCallback, useState } from 'react'
 import { getIsNonInteractiveSession } from '../bootstrap/state.js'
 import { verifyModelAccess } from '../services/api/model.js'
-import {
-  getAnthropicApiKeyWithSource,
-  getApiKeyFromApiKeyHelper,
-  isAnthropicAuthEnabled,
-  isClaudeAISubscriber,
-} from '../utils/auth.js'
+import { createRequire } from 'node:module'
+import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js'
 
 export type VerificationStatus =
   | 'loading'
@@ -21,8 +17,20 @@ export type ApiKeyVerificationResult = {
   error: Error | null
 }
 
+/* eslint-disable @typescript-eslint/no-require-imports */
+const require = createRequire(import.meta.url)
+const currentStageDisableAnthropicAuth = isCurrentPhaseCustomCodexProvider()
+const getAuthModule = () =>
+  require('../utils/auth.js') as typeof import('../utils/auth.js')
+/* eslint-enable @typescript-eslint/no-require-imports */
+
 export function useApiKeyVerification(): ApiKeyVerificationResult {
   const [status, setStatus] = useState<VerificationStatus>(() => {
+    if (currentStageDisableAnthropicAuth) {
+      return 'valid'
+    }
+    const { isAnthropicAuthEnabled, isClaudeAISubscriber, getAnthropicApiKeyWithSource } =
+      getAuthModule()
     if (!isAnthropicAuthEnabled() || isClaudeAISubscriber()) {
       return 'valid'
     }
@@ -41,6 +49,16 @@ export function useApiKeyVerification(): ApiKeyVerificationResult {
   const [error, setError] = useState<Error | null>(null)
 
   const verify = useCallback(async (): Promise<void> => {
+    if (currentStageDisableAnthropicAuth) {
+      setStatus('valid')
+      return
+    }
+    const {
+      getApiKeyFromApiKeyHelper,
+      getAnthropicApiKeyWithSource,
+      isAnthropicAuthEnabled,
+      isClaudeAISubscriber,
+    } = getAuthModule()
     if (!isAnthropicAuthEnabled() || isClaudeAISubscriber()) {
       setStatus('valid')
       return

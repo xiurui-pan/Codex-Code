@@ -1,8 +1,9 @@
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNotifications } from 'src/context/notifications.js';
-import { Text } from 'src/ink.js';
-import { logEvent } from 'src/services/analytics/index.js';
+import { createRequire } from 'node:module';
+import { useNotifications } from '../context/notifications.js';
+import { Text } from '../ink.js';
+import { logEvent } from '../services/analytics/index.js';
 import { useDebounceCallback } from 'usehooks-ts';
 import { type Command, getCommandName } from '../commands.js';
 import { getModeFromInput, getValueFromInput } from '../components/PromptInput/inputModes.js';
@@ -27,8 +28,19 @@ import { getDirectoryCompletions, getPathCompletions, isPathLikeToken } from '..
 import { getShellHistoryCompletion } from '../utils/suggestions/shellHistoryCompletion.js';
 import { getSlackChannelSuggestions, hasSlackMcpServer } from '../utils/suggestions/slackChannelSuggestions.js';
 import { TEAM_LEAD_NAME } from '../utils/swarm/constants.js';
-import { applyFileSuggestion, findLongestCommonPrefix, onIndexBuildComplete, startBackgroundCacheRefresh } from './fileSuggestions.js';
-import { generateUnifiedSuggestions } from './unifiedSuggestions.js';
+import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js';
+
+/* eslint-disable @typescript-eslint/no-require-imports */
+const require = createRequire(import.meta.url);
+const currentPhaseDisableFileSuggestionImports = isCurrentPhaseCustomCodexProvider();
+const fileSuggestionsModule: typeof import('./fileSuggestions.js') | null = currentPhaseDisableFileSuggestionImports ? null : require('./fileSuggestions.js');
+const unifiedSuggestionsModule: typeof import('./unifiedSuggestions.js') | null = currentPhaseDisableFileSuggestionImports ? null : require('./unifiedSuggestions.js');
+const applyFileSuggestion: typeof import('./fileSuggestions.js').applyFileSuggestion = currentPhaseDisableFileSuggestionImports ? () => {} : fileSuggestionsModule!.applyFileSuggestion;
+const findLongestCommonPrefix: typeof import('./fileSuggestions.js').findLongestCommonPrefix = currentPhaseDisableFileSuggestionImports ? suggestions => suggestions.length === 1 ? suggestions[0]!.displayText : '' : fileSuggestionsModule!.findLongestCommonPrefix;
+const onIndexBuildComplete: typeof import('./fileSuggestions.js').onIndexBuildComplete = currentPhaseDisableFileSuggestionImports ? () => () => {} : fileSuggestionsModule!.onIndexBuildComplete;
+const startBackgroundCacheRefresh: typeof import('./fileSuggestions.js').startBackgroundCacheRefresh = currentPhaseDisableFileSuggestionImports ? async () => {} : fileSuggestionsModule!.startBackgroundCacheRefresh;
+const generateUnifiedSuggestions: typeof import('./unifiedSuggestions.js').generateUnifiedSuggestions = currentPhaseDisableFileSuggestionImports ? async () => [] : unifiedSuggestionsModule!.generateUnifiedSuggestions;
+/* eslint-enable @typescript-eslint/no-require-imports */
 
 // Unicode-aware character class for file path tokens:
 // \p{L} = letters (CJK, Latin, Cyrillic, etc.)

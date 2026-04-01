@@ -1,6 +1,7 @@
 // biome-ignore-all assist/source/organizeImports: ANT-ONLY import markers must not be reordered
 import { feature } from 'bun:bundle'
 import { readFile, stat } from 'fs/promises'
+import { createRequire } from 'module'
 import { dirname } from 'path'
 import {
   downloadUserSettings,
@@ -8,7 +9,6 @@ import {
 } from 'src/services/settingsSync/index.js'
 import { waitForRemoteManagedSettingsToLoad } from 'src/services/remoteManagedSettings/index.js'
 import { StructuredIO } from 'src/cli/structuredIO.js'
-import { RemoteIO } from 'src/cli/remoteIO.js'
 import {
   type Command,
   formatDescriptionWithSource,
@@ -187,9 +187,6 @@ import {
   type PromptVariant,
 } from 'src/services/PromptSuggestion/promptSuggestion.js'
 import { getLastCacheSafeParams } from 'src/utils/forkedAgent.js'
-import { getAccountInformation } from 'src/utils/auth.js'
-import { OAuthService } from 'src/services/oauth/index.js'
-import { installOAuthTokens } from 'src/cli/handlers/auth.js'
 import { getAPIProvider } from 'src/utils/model/providers.js'
 import type { HookCallbackMatcher } from 'src/types/hooks.js'
 import { AwsAuthStatusManager } from 'src/utils/awsAuthStatusManager.js'
@@ -353,15 +350,61 @@ import { errorMessage, toError } from '../utils/errors.js'
 import { sleep } from '../utils/sleep.js'
 import { isExtractModeActive } from '../memdir/paths.js'
 
+type AuthModule = typeof import('../utils/auth.js')
+type AuthHandlerModule = typeof import('./handlers/auth.js')
+type OAuthServiceModule = typeof import('../services/oauth/index.js')
+type AccountInformation = ReturnType<AuthModule['getAccountInformation']>
+type OAuthServiceLike = InstanceType<OAuthServiceModule['OAuthService']>
+
+const require = createRequire(import.meta.url)
+
+function isCustomProviderStage(): boolean {
+  return getAPIProvider() === 'custom'
+}
+
+function ensureSdkUrlSupported(sdkUrl: string | undefined): void {
+  if (!sdkUrl) {
+    return
+  }
+  throw new Error(
+    'Current stage only supports custom Codex provider local entry; sdkUrl remote transport is disabled.',
+  )
+}
+
+function getAccountInformationForProvider(): AccountInformation {
+  if (isCustomProviderStage()) {
+    return undefined
+  }
+  const authModule = require('../utils/auth.js') as AuthModule
+  return authModule.getAccountInformation()
+}
+
+function createOAuthServiceForProvider(): OAuthServiceLike {
+  if (isCustomProviderStage()) {
+    throw new Error(
+      'Current stage only supports custom Codex provider; Claude OAuth is disabled.',
+    )
+  }
+  const oauthModule = require('../services/oauth/index.js') as OAuthServiceModule
+  return new oauthModule.OAuthService()
+}
+
+async function installOAuthTokensForProvider(tokens: unknown): Promise<void> {
+  if (isCustomProviderStage()) {
+    throw new Error(
+      'Current stage only supports custom Codex provider; Claude OAuth is disabled.',
+    )
+  }
+  const authHandlerModule = require('./handlers/auth.js') as AuthHandlerModule
+  await authHandlerModule.installOAuthTokens(tokens)
+}
+
 // Dead code elimination: conditional imports
 /* eslint-disable @typescript-eslint/no-require-imports */
 const coordinatorModeModule = feature('COORDINATOR_MODE')
   ? (require('../coordinator/coordinatorMode.js') as typeof import('../coordinator/coordinatorMode.js'))
   : null
-const proactiveModule =
-  feature('PROACTIVE') || feature('KAIROS')
-    ? (require('../proactive/index.js') as typeof import('../proactive/index.js'))
-    : null
+const proactiveModule = null
 const cronSchedulerModule = feature('AGENT_TRIGGERS')
   ? (require('../utils/cronScheduler.js') as typeof import('../utils/cronScheduler.js'))
   : null
@@ -491,6 +534,7 @@ export async function runHeadless(
     setSDKStatus?: (status: SDKStatus) => void
   },
 ): Promise<void> {
+  logForDebugging('[HEADLESS] runHeadless entry')
   if (
     process.env.USER_TYPE === 'ant' &&
     isEnvTruthy(process.env.CLAUDE_CODE_EXIT_AFTER_FIRST_RENDER)
@@ -770,13 +814,14 @@ export async function runHeadless(
     return
   }
 
-  // Check if we need input prompt - skip if we're resuming with a valid session ID/JSONL file or using SDK URL
+  ensureSdkUrlSupported(options.sdkUrl)
+
+  // Check if we need input prompt - skip if we're resuming with a valid session ID/JSONL file
   const hasValidResumeSessionId =
     typeof options.resume === 'string' &&
     (Boolean(validateUuid(options.resume)) || options.resume.endsWith('.jsonl'))
-  const isUsingSdkUrl = Boolean(options.sdkUrl)
 
-  if (!inputPrompt && !hasValidResumeSessionId && !isUsingSdkUrl) {
+  if (!inputPrompt && !hasValidResumeSessionId) {
     process.stderr.write(
       `Error: Input must be provided either through stdin or as a prompt argument when using --print\n`,
     )
@@ -799,10 +844,7 @@ export async function runHeadless(
   )
   let filteredTools = [...tools, ...allowedMcpTools]
 
-  // When using SDK URL, always use stdio permission prompting to delegate to the SDK
-  const effectivePermissionPromptToolName = options.sdkUrl
-    ? 'stdio'
-    : options.permissionPromptToolName
+  const effectivePermissionPromptToolName = options.permissionPromptToolName
 
   // Callback for when a permission prompt is shown
   const onPermissionPrompt = (details: RequiresActionDetails) => {
@@ -2095,12 +2137,6 @@ function runHeadlessStreaming(
 
           const input = command.value
 
-          if (structuredIO instanceof RemoteIO && command.mode === 'prompt') {
-            logEvent('tengu_bridge_message_received', {
-              is_repl: false,
-            })
-          }
-
           // Abort any in-flight suggestion generation and track acceptance
           suggestionState.abortController?.abort()
           suggestionState.abortController = null
@@ -2682,15 +2718,10 @@ function runHeadlessStreaming(
 
   // Set up UDS inbox callback so the query loop is kicked off
   // when a message arrives via the UDS socket in headless mode.
-  if (feature('UDS_INBOX')) {
-    /* eslint-disable @typescript-eslint/no-require-imports */
-    const { setOnEnqueue } = require('../utils/udsMessaging.js')
-    /* eslint-enable @typescript-eslint/no-require-imports */
-    setOnEnqueue(() => {
-      if (!inputClosed) {
-        void run()
-      }
-    })
+  if (feature('UDS_INBOX') && !isCustomProviderStage()) {
+    throw new Error(
+      'Current stage only supports custom Codex provider; UDS inbox is disabled.',
+    )
   }
 
   // Cron scheduler: runs scheduled_tasks.json tasks in SDK/-p mode.
@@ -2800,7 +2831,7 @@ function runHeadlessStreaming(
   // installOAuthTokens — after it resolves, the in-process memoized token
   // cache is already cleared and the next API call picks up the new creds.
   let claudeOAuth: {
-    service: OAuthService
+    service: OAuthServiceLike
     flow: Promise<void>
   } | null = null
 
@@ -3512,6 +3543,13 @@ function runHeadlessStreaming(
             )
           }
         } else if (message.request.subtype === 'claude_authenticate') {
+          if (isCustomProviderStage()) {
+            sendControlResponseError(
+              message,
+              'Current stage only supports custom Codex provider; Claude OAuth is disabled.',
+            )
+            continue
+          }
           // Anthropic OAuth over the control channel. The SDK client owns
           // the user's browser (we're headless in -p mode); we hand back
           // both URLs and wait. Automatic URL → localhost listener catches
@@ -3530,7 +3568,7 @@ function runHeadlessStreaming(
             loginWithClaudeAi: loginWithClaudeAi ?? true,
           })
 
-          const service = new OAuthService()
+          const service = createOAuthServiceForProvider()
           let urlResolver!: (urls: {
             manualUrl: string
             automaticUrl: string
@@ -3560,7 +3598,7 @@ function runHeadlessStreaming(
               // → clearAuthRelatedCaches. After this resolves, the memoized
               // getClaudeAIOAuthTokens in this process is invalidated; the
               // next API call re-reads keychain/file and works. No respawn.
-              await installOAuthTokens(tokens)
+              await installOAuthTokensForProvider(tokens)
               logEvent('tengu_oauth_success', {
                 loginWithClaudeAi: loginWithClaudeAi ?? true,
               })
@@ -3632,7 +3670,7 @@ function runHeadlessStreaming(
             const { flow } = claudeOAuth
             void flow.then(
               () => {
-                const accountInfo = getAccountInformation()
+                const accountInfo = getAccountInformationForProvider()
                 sendControlResponseSuccess(message, {
                   account: {
                     email: accountInfo?.email,
@@ -3876,148 +3914,15 @@ function runHeadlessStreaming(
           (feature('PROACTIVE') || feature('KAIROS')) &&
           (message.request as { subtype: string }).subtype === 'set_proactive'
         ) {
-          const req = message.request as unknown as {
-            subtype: string
-            enabled: boolean
-          }
-          if (req.enabled) {
-            if (!proactiveModule!.isProactiveActive()) {
-              proactiveModule!.activateProactive('command')
-              scheduleProactiveTick!()
-            }
-          } else {
-            proactiveModule!.deactivateProactive()
-          }
-          sendControlResponseSuccess(message)
+          sendControlResponseError(
+            message,
+            'Current stage only supports custom Codex provider; proactive mode is disabled.',
+          )
         } else if (message.request.subtype === 'remote_control') {
-          if (message.request.enabled) {
-            if (bridgeHandle) {
-              // Already connected
-              sendControlResponseSuccess(message, {
-                session_url: getRemoteSessionUrl(
-                  bridgeHandle.bridgeSessionId,
-                  bridgeHandle.sessionIngressUrl,
-                ),
-                connect_url: buildBridgeConnectUrl(
-                  bridgeHandle.environmentId,
-                  bridgeHandle.sessionIngressUrl,
-                ),
-                environment_id: bridgeHandle.environmentId,
-              })
-            } else {
-              // initReplBridge surfaces gate-failure reasons via
-              // onStateChange('failed', detail) before returning null.
-              // Capture so the control-response error is actionable
-              // ("/login", "disabled by your organization's policy", etc.)
-              // instead of a generic "initialization failed".
-              let bridgeFailureDetail: string | undefined
-              try {
-                const { initReplBridge } = await import(
-                  'src/bridge/initReplBridge.js'
-                )
-                const handle = await initReplBridge({
-                  onInboundMessage(msg) {
-                    const fields = extractInboundMessageFields(msg)
-                    if (!fields) return
-                    const { content, uuid } = fields
-                    enqueue({
-                      value: content,
-                      mode: 'prompt' as const,
-                      uuid,
-                      skipSlashCommands: true,
-                    })
-                    void run()
-                  },
-                  onPermissionResponse(response) {
-                    // Forward bridge permission responses into the
-                    // stdin processing loop so they resolve pending
-                    // permission requests from the SDK consumer.
-                    structuredIO.injectControlResponse(response)
-                  },
-                  onInterrupt() {
-                    abortController?.abort()
-                  },
-                  onSetModel(model) {
-                    const resolved =
-                      model === 'default' ? getDefaultMainLoopModel() : model
-                    activeUserSpecifiedModel = resolved
-                    setMainLoopModelOverride(resolved)
-                  },
-                  onSetMaxThinkingTokens(maxTokens) {
-                    if (maxTokens === null) {
-                      options.thinkingConfig = undefined
-                    } else if (maxTokens === 0) {
-                      options.thinkingConfig = { type: 'disabled' }
-                    } else {
-                      options.thinkingConfig = {
-                        type: 'enabled',
-                        budgetTokens: maxTokens,
-                      }
-                    }
-                  },
-                  onStateChange(state, detail) {
-                    if (state === 'failed') {
-                      bridgeFailureDetail = detail
-                    }
-                    logForDebugging(
-                      `[bridge:sdk] State change: ${state}${detail ? ` — ${detail}` : ''}`,
-                    )
-                    output.enqueue({
-                      type: 'system' as StdoutMessage['type'],
-                      subtype: 'bridge_state' as string,
-                      state,
-                      detail,
-                      uuid: randomUUID(),
-                      session_id: getSessionId(),
-                    } as StdoutMessage)
-                  },
-                  initialMessages:
-                    mutableMessages.length > 0 ? mutableMessages : undefined,
-                })
-                if (!handle) {
-                  sendControlResponseError(
-                    message,
-                    bridgeFailureDetail ??
-                      'Remote Control initialization failed',
-                  )
-                } else {
-                  bridgeHandle = handle
-                  bridgeLastForwardedIndex = mutableMessages.length
-                  // Forward permission requests to the bridge
-                  structuredIO.setOnControlRequestSent(request => {
-                    handle.sendControlRequest(request)
-                  })
-                  // Cancel stale bridge permission prompts when the SDK
-                  // consumer resolves a can_use_tool request first.
-                  structuredIO.setOnControlRequestResolved(requestId => {
-                    handle.sendControlCancelRequest(requestId)
-                  })
-                  sendControlResponseSuccess(message, {
-                    session_url: getRemoteSessionUrl(
-                      handle.bridgeSessionId,
-                      handle.sessionIngressUrl,
-                    ),
-                    connect_url: buildBridgeConnectUrl(
-                      handle.environmentId,
-                      handle.sessionIngressUrl,
-                    ),
-                    environment_id: handle.environmentId,
-                  })
-                }
-              } catch (err) {
-                sendControlResponseError(message, errorMessage(err))
-              }
-            }
-          } else {
-            // Disable
-            if (bridgeHandle) {
-              structuredIO.setOnControlRequestSent(undefined)
-              structuredIO.setOnControlRequestResolved(undefined)
-              await bridgeHandle.teardown()
-              bridgeHandle = null
-            }
-            sendControlResponseSuccess(message)
-          }
+          sendControlResponseError(
+            message,
+            'Current stage only supports custom Codex provider; remote control is disabled.',
+          )
         } else {
           // Unknown control request subtype — send an error response so
           // the caller doesn't hang waiting for a reply that never comes.
@@ -4431,7 +4336,7 @@ async function handleInitializeRequest(
   const availableOutputStyles = await getAllOutputStyles(getCwd())
 
   // Get account information
-  const accountInfo = getAccountInformation()
+  const accountInfo = getAccountInformationForProvider()
   if (request.hooks) {
     const hooks: Partial<Record<HookEvent, HookCallbackMatcher[]>> = {}
     for (const [event, matchers] of Object.entries(request.hooks)) {
@@ -5203,6 +5108,7 @@ function getStructuredIO(
     replayUserMessages?: boolean
   },
 ): StructuredIO {
+  ensureSdkUrlSupported(options.sdkUrl)
   let inputStream: AsyncIterable<string>
   if (typeof inputPrompt === 'string') {
     if (inputPrompt.trim() !== '') {
@@ -5226,10 +5132,7 @@ function getStructuredIO(
     inputStream = inputPrompt
   }
 
-  // Use RemoteIO if sdkUrl is provided, otherwise use regular StructuredIO
-  return options.sdkUrl
-    ? new RemoteIO(options.sdkUrl, inputStream, options.replayUserMessages)
-    : new StructuredIO(inputStream, options.replayUserMessages)
+  return new StructuredIO(inputStream, options.replayUserMessages)
 }
 
 /**

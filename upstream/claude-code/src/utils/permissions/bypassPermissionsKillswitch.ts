@@ -1,8 +1,10 @@
 import { feature } from 'bun:bundle'
-import { useEffect, useRef } from 'react'
+import { useContext, useEffect, useRef } from 'react'
 import {
+  AppStoreContext,
   type AppState,
   useAppState,
+  useAppStateMaybeOutsideOfProvider,
   useAppStateStore,
   useSetAppState,
 } from 'src/state/AppState.js'
@@ -55,15 +57,17 @@ export function resetBypassPermissionsCheck(): void {
 }
 
 export function useKickOffCheckAndDisableBypassPermissionsIfNeeded(): void {
-  const toolPermissionContext = useAppState(s => s.toolPermissionContext)
-  const setAppState = useSetAppState()
+  const toolPermissionContext = useAppStateMaybeOutsideOfProvider(
+    s => s.toolPermissionContext,
+  )
+  const store = useContext(AppStoreContext)
 
   // Run once, when the component mounts
   useEffect(() => {
-    if (getIsRemoteMode()) return
+    if (getIsRemoteMode() || !toolPermissionContext || !store) return
     void checkAndDisableBypassPermissionsIfNeeded(
       toolPermissionContext,
-      setAppState,
+      store.setState,
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -125,11 +129,12 @@ export function resetAutoModeGateCheck(): void {
 }
 
 export function useKickOffCheckAndDisableAutoModeIfNeeded(): void {
-  const mainLoopModel = useAppState(s => s.mainLoopModel)
-  const mainLoopModelForSession = useAppState(s => s.mainLoopModelForSession)
-  const fastMode = useAppState(s => s.fastMode)
-  const setAppState = useSetAppState()
-  const store = useAppStateStore()
+  const mainLoopModel = useAppStateMaybeOutsideOfProvider(s => s.mainLoopModel)
+  const mainLoopModelForSession = useAppStateMaybeOutsideOfProvider(
+    s => s.mainLoopModelForSession,
+  )
+  const fastMode = useAppStateMaybeOutsideOfProvider(s => s.fastMode)
+  const store = useContext(AppStoreContext)
   const isFirstRunRef = useRef(true)
 
   // Runs on mount (startup check) AND whenever the model or fast mode changes
@@ -139,7 +144,7 @@ export function useKickOffCheckAndDisableAutoModeIfNeeded(): void {
   // breaker. The print.ts headless paths are covered by the sync
   // isAutoModeGateEnabled() check.
   useEffect(() => {
-    if (getIsRemoteMode()) return
+    if (getIsRemoteMode() || !store || !mainLoopModel || !mainLoopModelForSession) return
     if (isFirstRunRef.current) {
       isFirstRunRef.current = false
     } else {
@@ -147,7 +152,7 @@ export function useKickOffCheckAndDisableAutoModeIfNeeded(): void {
     }
     void checkAndDisableAutoModeIfNeeded(
       store.getState().toolPermissionContext,
-      setAppState,
+      store.setState,
       fastMode,
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
