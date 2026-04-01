@@ -170,7 +170,7 @@ function normalizeShellCommandFromPayload(
 }
 
 function extractShellCommandFromQuotedCode(text: string): ParsedToolCall | null {
-  const match = text.match(/code=(['"])([\s\S]*?)\1/)
+  const match = text.match(/^(['"])([\s\S]*?)\1$/)
   const command = match?.[2]?.trim()
   if (!command) {
     return null
@@ -182,84 +182,44 @@ function extractShellCommandFromQuotedCode(text: string): ParsedToolCall | null 
   }
 }
 
-function extractShellCommandFromInlineCommand(
-  text: string,
-): ParsedToolCall | null {
-  const normalizedText = text.replaceAll('\\"', '"')
-  const match = normalizedText.match(
-    /(?:command|cmd)"?\s*:\s*(\[[\s\S]*?\]|"[\s\S]*?")/,
-  )
-  const rawValue = match?.[1]?.trim()
-  if (!rawValue) {
-    return null
-  }
-
-  try {
-    const parsed = JSON.parse(rawValue) as unknown
-    if (typeof parsed === 'string') {
-      return normalizeShellCommandFromPayload({ command: parsed })
-    }
-    if (Array.isArray(parsed)) {
-      return normalizeShellCommandFromPayload({ command: parsed })
-    }
-  } catch {
-    return null
-  }
-
-  return null
-}
-
 function extractTextFallbackToolCall(text: string): ParsedToolCall | null {
-  const trimmedText = text.trimStart()
-  if (
-    !trimmedText.startsWith('to=shell') &&
-    !trimmedText.startsWith('code:')
-  ) {
+  const trimmedText = text.trim()
+  if (!trimmedText.startsWith('to=shell') && !trimmedText.startsWith('code:')) {
     return null
   }
 
-  const payloadCandidates = [
-    extractJsonObjectAfterMarker(trimmedText, 'code:'),
-    extractBalancedJsonObject(trimmedText, 0),
-  ]
+  const payloadText = trimmedText.startsWith('to=shell')
+    ? trimmedText.slice('to=shell'.length).trimStart()
+    : trimmedText.slice('code:'.length).trimStart()
 
-  for (const payloadText of payloadCandidates) {
-    if (!payloadText) {
-      continue
-    }
+  if (!payloadText) {
+    return null
+  }
 
+  const normalizedPayloadText = payloadText.startsWith('code:')
+    ? payloadText.slice('code:'.length).trimStart()
+    : payloadText
+
+  const jsonPayload = extractBalancedJsonObject(normalizedPayloadText, 0)
+  if (
+    jsonPayload &&
+    jsonPayload.length === normalizedPayloadText.length
+  ) {
     let payload: unknown
     try {
-      payload = JSON.parse(payloadText) as unknown
+      payload = JSON.parse(jsonPayload) as unknown
     } catch {
-      continue
+      payload = null
     }
 
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-      continue
+    if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+      return normalizeShellCommandFromPayload(
+        payload as Record<string, unknown>,
+      )
     }
-
-    const normalized = normalizeShellCommandFromPayload(
-      payload as Record<string, unknown>,
-    )
-    if (!normalized) {
-      continue
-    }
-
-    return normalized
   }
 
-  const quotedCode = extractShellCommandFromQuotedCode(trimmedText)
-  if (quotedCode) {
-    return quotedCode
-  }
-
-  const inlineCommand = extractShellCommandFromInlineCommand(trimmedText)
-  if (!inlineCommand) {
-    return null
-  }
-
-  return inlineCommand
+  return extractShellCommandFromQuotedCode(normalizedPayloadText)
 }
 
 function isProtocolLeakText(text: string): boolean {

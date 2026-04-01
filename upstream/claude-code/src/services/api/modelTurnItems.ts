@@ -3,8 +3,8 @@ import type {
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/index.mjs'
 import { randomUUID } from 'crypto'
+import { NO_CONTENT_MESSAGE } from '../../constants/messages.js'
 import type { AssistantMessage, SystemMessage } from '../../types/message.js'
-import { createAssistantMessage } from '../../utils/messages.js'
 
 export function getRenderableModelTurnItems(
   items: ModelTurnItem[],
@@ -215,10 +215,11 @@ export function buildAssistantMessageFromTurnItems(
     }
   }
 
-  return createAssistantMessage({
-    content,
-    modelTurnItems: renderableItems,
-  })
+  const message = createSyntheticAssistantMessage(content)
+  if (renderableItems.length > 0) {
+    message.modelTurnItems = renderableItems
+  }
+  return message
 }
 
 export function mergeStreamedAssistantMessages(
@@ -245,4 +246,50 @@ export function mergeStreamedAssistantMessages(
   }
 
   return buildAssistantMessageFromTurnItems(aggregatedTurnItems)
+}
+
+function createSyntheticAssistantMessage(
+  content: ContentBlock[] | string,
+): AssistantMessage {
+  const normalizedContent =
+    typeof content === 'string'
+      ? [
+          {
+            type: 'text' as const,
+            text: content === '' ? NO_CONTENT_MESSAGE : content,
+          },
+        ]
+      : content
+
+  return {
+    type: 'assistant',
+    uuid: randomUUID(),
+    timestamp: new Date().toISOString(),
+    message: {
+      id: randomUUID(),
+      container: null,
+      model: 'codex-synthetic',
+      role: 'assistant',
+      stop_reason: 'stop_sequence',
+      stop_sequence: '',
+      type: 'message',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+        server_tool_use: { web_search_requests: 0, web_fetch_requests: 0 },
+        service_tier: null,
+        cache_creation: {
+          ephemeral_1h_input_tokens: 0,
+          ephemeral_5m_input_tokens: 0,
+        },
+        inference_geo: null,
+        iterations: null,
+        speed: null,
+      },
+      content: normalizedContent,
+      context_management: null,
+    },
+  }
 }

@@ -13,6 +13,9 @@ async function runHeadlessSession(options) {
   const seenAt = {
     firstModelTurnItem: null,
     finalAssistant: null,
+    result: null,
+    close: null,
+    assistantTexts: {},
   }
   const tempHome = await mkdtemp(join(tmpdir(), 'codex-code-smoke-home-'))
   const codexDir = join(tempHome, '.codex')
@@ -132,6 +135,19 @@ async function runHeadlessSession(options) {
           seenAt.finalAssistant = Date.now()
         }
         if (
+          parsed.type === 'assistant' &&
+          Array.isArray(parsed.message?.content)
+        ) {
+          for (const part of parsed.message.content) {
+            if (part.type !== 'text' || typeof part.text !== 'string') {
+              continue
+            }
+            if (!(part.text in seenAt.assistantTexts)) {
+              seenAt.assistantTexts[part.text] = Date.now()
+            }
+          }
+        }
+        if (
           parsed.type === 'control_request' &&
           parsed.request?.subtype === 'can_use_tool'
         ) {
@@ -154,6 +170,7 @@ async function runHeadlessSession(options) {
           )
         }
         if (parsed.type === 'result' && !child.stdin.destroyed) {
+          seenAt.result = Date.now()
           child.stdin.end()
         }
       }
@@ -201,6 +218,7 @@ async function runHeadlessSession(options) {
       }),
     ])
     code = exitCode
+    seenAt.close = Date.now()
   } finally {
     for (const socket of sockets) {
       socket.destroy()
@@ -287,11 +305,72 @@ async function runStreamingAssertions() {
     Number(result.seenAt.firstModelTurnItem) < Number(result.seenAt.finalAssistant),
     'model_turn_item should arrive before the final assistant message is emitted',
   )
+  assert.notEqual(result.seenAt.result, null)
+  assert.notEqual(result.seenAt.close, null)
+  assert.ok(
+    Number(result.seenAt.result) <= Number(result.seenAt.close),
+    'final result should arrive before process exit',
+  )
+  assert.ok(
+    Number(result.seenAt.close) - Number(result.seenAt.result) < 1500,
+    'process should exit shortly after emitting the final result',
+  )
   assert.equal(
     result.messages.some(
       message => message.type === 'assistant' && message.message?.content?.[0]?.text === 'done',
     ),
     true,
+  )
+}
+
+async function runSameResponseIncrementalAssertions() {
+  const result = await runHeadlessSession({
+    prompt: '请处理同响应增量测试。',
+    responseBatches: [
+      [
+        {
+          label: 'same-response-first',
+          block:
+            'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"phase one"}]}}\n\n',
+          delayMs: 350,
+        },
+        {
+          label: 'same-response-second',
+          block:
+            'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"phase two"}]}}\n\n',
+        },
+        {
+          label: 'same-response-completed',
+          block:
+            'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp-same-response"}}\n\n',
+        },
+        {
+          label: 'same-response-done',
+          block: 'data: [DONE]\n\n',
+        },
+      ],
+    ],
+  })
+
+  assert.equal(result.code, 0)
+  assert.notEqual(result.seenAt.assistantTexts['phase one'], undefined)
+  assert.notEqual(result.seenAt.assistantTexts['phase two'], undefined)
+  assert.notEqual(result.sentAt['same-response-second'], undefined)
+  assert.ok(
+    Number(result.seenAt.assistantTexts['phase one']) <
+      Number(result.sentAt['same-response-second']),
+    'first same-response item should arrive before the server sends the second item',
+  )
+  assert.ok(
+    Number(result.seenAt.assistantTexts['phase one']) <
+      Number(result.seenAt.assistantTexts['phase two']),
+    'same-response items should be observed incrementally in order',
+  )
+  assert.notEqual(result.seenAt.result, null)
+  assert.notEqual(result.seenAt.close, null)
+  assert.ok(
+    Number(result.seenAt.close) - Number(result.seenAt.result) < 1500,
+    'same-response smoke should exit shortly after final result',
   )
 }
 
@@ -362,6 +441,7 @@ async function runPermissionAssertions() {
 
 async function main() {
   await runStreamingAssertions()
+  await runSameResponseIncrementalAssertions()
   await runPermissionAssertions()
 }
 

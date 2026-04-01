@@ -11,12 +11,10 @@ import { FILE_READ_TOOL_NAME } from '../../tools/FileReadTool/prompt.js'
 import { GLOB_TOOL_NAME } from '../../tools/GlobTool/prompt.js'
 import { GREP_TOOL_NAME } from '../../tools/GrepTool/prompt.js'
 import type { Message } from '../../types/message.js'
+import type { AssistantMessage } from '../../types/message.js'
 import { getCodexConfiguredModel } from '../../utils/codexConfig.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
-import {
-  createAssistantAPIErrorMessage,
-  createAssistantMessage,
-} from '../../utils/messages.js'
+import { NO_CONTENT_MESSAGE } from '../../constants/messages.js'
 import { zodToJsonSchema } from '../../utils/zodToJsonSchema.js'
 import {
   buildAssistantMessageFromTurnItems,
@@ -420,10 +418,9 @@ function buildAssistantMessageFromIncrementalTurnItems(
     assistantMessage.message.content.length === 0 &&
     renderableItems.some(item => item.kind !== 'ui_message')
   ) {
-    return createAssistantMessage({
-      content: '',
-      modelTurnItems: renderableItems,
-    })
+    const emptyMessage = createSyntheticAssistantMessage('')
+    emptyMessage.modelTurnItems = renderableItems
+    return emptyMessage
   }
 
   return assistantMessage
@@ -497,15 +494,11 @@ export async function* queryCodexResponsesStream({
   })
 
   if (!response.ok) {
-    const errorText = await response.text()
-    yield createAssistantAPIErrorMessage({
-      content: `Custom Codex provider request failed: ${response.status} ${errorText}`,
-      apiError: 'api_error',
-      error: {
-        type: 'api_error',
-        message: errorText,
-      },
-    })
+      const errorText = await response.text()
+    yield createSyntheticAssistantApiErrorMessage(
+      `Custom Codex provider request failed: ${response.status} ${errorText}`,
+      errorText,
+    )
     return
   }
 
@@ -526,14 +519,10 @@ export async function* queryCodexResponsesStream({
         event.detail ??
         event.message ??
         'custom Codex provider request failed'
-      yield createAssistantAPIErrorMessage({
-        content: errorMessage,
-        apiError: 'api_error',
-        error: {
-          type: 'api_error',
-          message: errorMessage,
-        },
-      })
+      yield createSyntheticAssistantApiErrorMessage(
+        errorMessage,
+        errorMessage,
+      )
       return
     }
   }
@@ -562,8 +551,64 @@ export async function queryCodexResponses({
 
   return (
     mergeStreamedAssistantMessages(streamedMessages) ??
-    createAssistantMessage({ content: '' })
+    createSyntheticAssistantMessage('')
   )
 }
 
 export { normalizeTextContent }
+
+function createSyntheticAssistantMessage(
+  content: string,
+): AssistantMessage {
+  return {
+    type: 'assistant',
+    uuid: randomUUID(),
+    timestamp: new Date().toISOString(),
+    message: {
+      id: randomUUID(),
+      container: null,
+      model: 'codex-synthetic',
+      role: 'assistant',
+      stop_reason: 'stop_sequence',
+      stop_sequence: '',
+      type: 'message',
+      usage: {
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 0,
+        server_tool_use: { web_search_requests: 0, web_fetch_requests: 0 },
+        service_tier: null,
+        cache_creation: {
+          ephemeral_1h_input_tokens: 0,
+          ephemeral_5m_input_tokens: 0,
+        },
+        inference_geo: null,
+        iterations: null,
+        speed: null,
+      },
+      content: [
+        {
+          type: 'text',
+          text: content === '' ? NO_CONTENT_MESSAGE : content,
+        },
+      ],
+      context_management: null,
+    },
+  }
+}
+
+function createSyntheticAssistantApiErrorMessage(
+  content: string,
+  errorMessage: string,
+): AssistantMessage {
+  return {
+    ...createSyntheticAssistantMessage(content),
+    apiError: 'api_error',
+    error: {
+      type: 'api_error',
+      message: errorMessage,
+    },
+    isApiErrorMessage: true,
+  }
+}
