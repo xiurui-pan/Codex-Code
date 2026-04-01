@@ -383,10 +383,11 @@ async function runSameResponseIncrementalAssertions() {
   )
 }
 
-async function runPermissionAssertions() {
+async function runPermissionAssertions(permissionDecision) {
+  const finalText = permissionDecision === 'allow' ? 'allowed' : 'denied'
   const result = await runHeadlessSession({
-    prompt: '请继续处理这个权限测试请求。',
-    permissionDecision: 'deny',
+    prompt: `请继续处理这个权限测试请求（${permissionDecision}）。`,
+    permissionDecision,
     responseBatches: [
       [
         {
@@ -408,7 +409,7 @@ async function runPermissionAssertions() {
         {
           label: 'permission-final-message',
           block:
-            'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"denied"}]}}\n\n',
+            `event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"${finalText}"}]}}\n\n`,
         },
         {
           label: 'permission-final-completed',
@@ -444,6 +445,22 @@ async function runPermissionAssertions() {
     'local_shell_call',
     'execution_result',
   ])
+  const permissionDecisionItem = modelTurnItems.find(
+    message => message.item_kind === 'permission_decision',
+  )
+  assert.equal(permissionDecisionItem?.item?.decision, permissionDecision)
+  assert.equal(
+    permissionDecisionItem?.item?.details?.reason_type,
+    'permissionPromptTool',
+  )
+  assert.equal(
+    permissionDecisionItem?.item?.details?.decision_source,
+    'permission_prompt_tool',
+  )
+  assert.equal(
+    typeof permissionDecisionItem?.item?.details?.permission_prompt_tool_name,
+    'string',
+  )
   assert.equal(
     result.messages.some(
       message =>
@@ -460,14 +477,15 @@ async function runPermissionAssertions() {
         Array.isArray(message.permission_denials) &&
         message.permission_denials.length === 1,
     ),
-    true,
+    permissionDecision === 'deny',
   )
 }
 
 async function main() {
   await runStreamingAssertions()
   await runSameResponseIncrementalAssertions()
-  await runPermissionAssertions()
+  await runPermissionAssertions('deny')
+  await runPermissionAssertions('allow')
 }
 
 main()

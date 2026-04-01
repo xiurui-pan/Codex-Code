@@ -1,6 +1,6 @@
-import type { ContentBlock } from '@anthropic-ai/sdk/resources/index.mjs'
 import { getUserContext } from 'src/context.js'
-import { callModelWithoutStreaming } from 'src/services/api/model.js'
+import { callModelTurnWithoutStreaming } from 'src/services/api/model.js'
+import { extractFinalAnswerTextFromTurnItems } from 'src/services/api/modelTurnItems.js'
 import { getEmptyToolPermissionContext } from 'src/Tool.js'
 import { AGENT_TOOL_NAME } from 'src/tools/AgentTool/constants.js'
 import { prependUserContext } from 'src/utils/api.js'
@@ -146,7 +146,7 @@ export async function generateAgent(
     ? AGENT_CREATION_SYSTEM_PROMPT + AGENT_MEMORY_INSTRUCTIONS
     : AGENT_CREATION_SYSTEM_PROMPT
 
-  const response = await callModelWithoutStreaming({
+  const response = await callModelTurnWithoutStreaming({
     messages: normalizeMessagesForAPI(messagesWithContext),
     systemPrompt: asSystemPrompt([systemPrompt]),
     thinkingConfig: { type: 'disabled' as const },
@@ -164,10 +164,14 @@ export async function generateAgent(
     },
   })
 
-  const textBlocks = response.message.content.filter(
-    (block): block is ContentBlock & { type: 'text' } => block.type === 'text',
+  if (response.errorMessage) {
+    throw new Error(response.errorMessage)
+  }
+
+  const responseText = extractFinalAnswerTextFromTurnItems(
+    response.turnItems,
+    '\n',
   )
-  const responseText = textBlocks.map(block => block.text).join('\n')
 
   let parsed: GeneratedAgent
   try {

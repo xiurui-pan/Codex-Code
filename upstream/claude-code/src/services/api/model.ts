@@ -38,6 +38,9 @@ export type ModelCaller = (
 export type SmallModelCaller = (
   args: SingleTurnModelCallArgs,
 ) => Promise<AssistantMessage>
+export type SmallModelTurnCaller = (
+  args: SingleTurnModelCallArgs,
+) => Promise<CodexResponseResult>
 export type ModelAccessVerifier = (
   apiKey?: string | null,
   throwOnError?: boolean,
@@ -148,8 +151,8 @@ export const callModel: ModelCaller = async args =>
     }),
   )
 
-export const callSmallModel: SmallModelCaller = async args =>
-  callModelWithoutStreaming(
+export const callSmallModelTurn: SmallModelTurnCaller = async args =>
+  callModelTurnWithoutStreaming(
     buildSingleTurnRequest({
       systemPrompt: args.systemPrompt,
       userPrompt: args.userPrompt,
@@ -160,6 +163,9 @@ export const callSmallModel: SmallModelCaller = async args =>
       signal: args.signal,
     }),
   )
+
+export const callSmallModel: SmallModelCaller = async args =>
+  codexResultToAssistantMessage(await callSmallModelTurn(args))
 
 export const verifyModelAccess: ModelAccessVerifier = async (
   apiKey,

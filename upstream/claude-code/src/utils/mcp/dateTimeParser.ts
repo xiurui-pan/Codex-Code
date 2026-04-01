@@ -1,6 +1,6 @@
-import { callSmallModel } from '../../services/api/model.js'
+import { callSmallModelTurn } from '../../services/api/model.js'
+import { extractFinalAnswerTextFromTurnItems } from '../../services/api/modelTurnItems.js'
 import { logError } from '../log.js'
-import { extractTextContent } from '../messages.js'
 import { asSystemPrompt } from '../systemPromptType.js'
 
 export type DateTimeParseResult =
@@ -65,7 +65,7 @@ Output format: ${formatDescription}
 Parse the user's input into ISO 8601 format. Return ONLY the formatted string, or "INVALID" if the input is incomplete or unparseable.`
 
   try {
-    const result = await callSmallModel({
+    const result = await callSmallModelTurn({
       systemPrompt,
       userPrompt,
       signal,
@@ -79,8 +79,14 @@ Parse the user's input into ISO 8601 format. Return ONLY the formatted string, o
       },
     })
 
-    // Extract text from result
-    const parsedText = extractTextContent(result.message.content).trim()
+    if (result.errorMessage) {
+      return {
+        success: false,
+        error: 'Unable to parse date/time from input',
+      }
+    }
+
+    const parsedText = extractFinalAnswerTextFromTurnItems(result.turnItems).trim()
 
     // Validate that we got something usable
     if (!parsedText || parsedText === 'INVALID') {

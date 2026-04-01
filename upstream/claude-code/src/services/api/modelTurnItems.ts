@@ -198,6 +198,17 @@ export type ModelTurnItem =
   | ModelFinalAnswerItem
   | ModelUiMessageItem
 
+export function extractFinalAnswerTextFromTurnItems(
+  items: readonly ModelTurnItem[],
+  separator = '\n',
+): string {
+  return items
+    .filter((item): item is ModelFinalAnswerItem => item.kind === 'final_answer')
+    .map(item => item.text.trim())
+    .filter(text => text.length > 0)
+    .join(separator)
+}
+
 export function buildAssistantMessageFromTurnItems(
   items: ModelTurnItem[],
 ): AssistantMessage {

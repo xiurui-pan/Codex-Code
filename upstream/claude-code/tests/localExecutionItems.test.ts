@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 
 import {
   buildToolCallItemsForLocalExecution,
+  buildPermissionItemsForLocalExecution,
   buildToolResultItemsForLocalExecution,
 } from '../src/services/api/localExecutionItems.js'
 
@@ -63,4 +64,26 @@ test('denied shell result is marked denied instead of allow', () => {
 
   const result = items.find(item => item.kind === 'execution_result')
   assert.equal(result?.status, 'denied')
+})
+
+test('permission decision keeps structured details', () => {
+  const items = buildPermissionItemsForLocalExecution(
+    'tool-4',
+    'Bash',
+    'allow',
+    'tool_execution',
+    true,
+    {
+      reason_type: 'permissionPromptTool',
+      permission_prompt_tool_name: 'stdio',
+      decision_source: 'permission_prompt_tool',
+    },
+  )
+
+  const decision = items.find(item => item.kind === 'permission_decision')
+  assert.deepEqual(decision?.details, {
+    reason_type: 'permissionPromptTool',
+    permission_prompt_tool_name: 'stdio',
+    decision_source: 'permission_prompt_tool',
+  })
 })
