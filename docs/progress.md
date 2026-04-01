@@ -113,6 +113,9 @@
 - 已补一组更贴近行为的本地验证材料：除了现有单元测试，还新增 `upstream/claude-code/tests/headlessStreaming.smoke.mjs`，专门用本地假 Responses 服务和真实 headless CLI 去验证 request shape、SSE 增量进入主链、以及执行对象输出。
 
 ## 当前新增判断
+- 这一轮把权限对象链也补进了系统执行对象主路：`--permission-prompt-tool stdio` 这类宿主审批不再只靠旧消息壳侧写，headless 宿主现在可以直接从 `permission_request -> permission_decision -> tool_output -> execution_result` 这条对象顺序理解权限流。
+- `model.ts` 这一层也继续往 Codex-only 主路收窄：保留兼容壳只作为外围边界，新增更直接的 turn-item 入口，避免还走 `callModelWithStreaming` / `callModelWithoutStreaming` 的调用点继续把旧 assistant 壳当主出口。
+
 
 - 这一轮已经明确：Claude Code 的 harness 本身适合继续复用，真正不适合直接沿用的是默认按 Claude 表示回合、工具、审批和结果的中间结构。
 - 所以接下来的主线不再是继续给 `codexResponses.ts` 增加一条条兼容分支，也不再是只改提示词或协议名，而是转向更系统地借鉴本地 `codex/` 的回合表示、能力建模和 shell / 审批 / 结果对象设计。

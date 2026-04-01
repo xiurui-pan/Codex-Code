@@ -41,6 +41,7 @@ This snapshot is also being used as a working base for a `Codex Code` prototype.
 - Codex responses are being pushed toward explicit turn items and execution objects instead of synthetic assistant wrappers
 - text fallback tool calls are being reduced to isolated debug-only paths rather than normal execution paths
 - headless execution events are being normalized around one-shot system execution objects so permission and execution state is not duplicated on the wire
+- permission flow is being completed on that same object chain so hosts can understand request → decision → result without scraping assistant text
 
 ## Built with `oh-my-codex`
 

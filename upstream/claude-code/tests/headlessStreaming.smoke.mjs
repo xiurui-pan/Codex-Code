@@ -432,10 +432,14 @@ async function runPermissionAssertions() {
     .filter(message => message.item_kind === 'local_shell_call')
     .map(message => message.item?.phase)
   assert.deepEqual(localShellPhases, ['requested', 'completed'])
+  assert.equal(itemKinds.filter(kind => kind === 'permission_request').length, 1)
+  assert.equal(itemKinds.filter(kind => kind === 'permission_decision').length, 1)
   assert.equal(itemKinds.filter(kind => kind === 'tool_output').length, 1)
   assert.equal(itemKinds.filter(kind => kind === 'execution_result').length, 1)
   assert.deepEqual(itemKinds, [
     'local_shell_call',
+    'permission_request',
+    'permission_decision',
     'tool_output',
     'local_shell_call',
     'execution_result',

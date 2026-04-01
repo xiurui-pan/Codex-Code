@@ -131,6 +131,7 @@ export function buildPermissionItemsForLocalExecution(
   decision: 'allow' | 'deny' | 'ask',
   source: 'provider' | 'history' | 'tool_execution',
   includeRequest = true,
+  details?: Record<string, unknown>,
 ): ModelTurnItem[] {
   const items: ModelTurnItem[] = []
   if (includeRequest) {
@@ -149,6 +150,7 @@ export function buildPermissionItemsForLocalExecution(
     toolName,
     decision,
     source,
+    ...(details ? { details } : {}),
   } satisfies ModelPermissionDecisionItem)
   return items
 }

@@ -31,6 +31,7 @@ test('model entry keeps codex-only local usage and token helpers', async () => {
   assert.equal(source.includes('export const updateModelUsage'), true)
   assert.equal(source.includes('export const accumulateModelUsage'), true)
   assert.equal(source.includes('getCodexConfiguredModel'), true)
+  assert.equal(source.includes('export const callModelTurnWithoutStreaming'), true)
 })
 
 test('codex responses entry now returns raw turn-item chunks and leaves assistant-shell compatibility to outer layers', async () => {

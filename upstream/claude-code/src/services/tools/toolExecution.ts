@@ -210,6 +210,52 @@ function ruleSourceToOTelSource(
   }
 }
 
+function shouldEmitInteractivePermissionItems(source: string | undefined): boolean {
+  return (
+    source === 'user_temporary' ||
+    source === 'user_permanent' ||
+    source === 'user_reject' ||
+    source === 'user_abort'
+  )
+}
+
+function buildPermissionTurnItems(args: {
+  toolUseId: string
+  toolName: string
+  decision: 'allow' | 'deny' | 'ask'
+  decisionSource: string | undefined
+  decisionReason:
+    | { type: string; permissionPromptToolName?: string }
+    | undefined
+}): ModelTurnItem[] {
+  const includePermissionPromptTool =
+    args.decisionReason?.type === 'permissionPromptTool'
+  if (
+    !shouldEmitInteractivePermissionItems(args.decisionSource) &&
+    !includePermissionPromptTool
+  ) {
+    return []
+  }
+
+  return buildPermissionItemsForLocalExecution(
+    args.toolUseId,
+    args.toolName,
+    args.decision,
+    'tool_execution',
+    true,
+    includePermissionPromptTool
+      ? {
+          reason_type: 'permissionPromptTool',
+          permission_prompt_tool_name:
+            args.decisionReason?.permissionPromptToolName ?? null,
+          decision_source: args.decisionSource ?? 'permission_prompt_tool',
+        }
+      : args.decisionSource
+        ? { decision_source: args.decisionSource }
+        : undefined,
+  )
+}
+
 /**
  * Map a PermissionDecisionReason to the OTel `source` label for the
  * non-interactive tool_decision path, staying within the documented
@@ -1079,15 +1125,13 @@ async function checkPermissionsAndCallTool(
       }
     }
 
-    const permissionItems =
-      decisionInfo?.source === 'user'
-        ? buildPermissionItemsForLocalExecution(
-            toolUseID,
-            tool.name,
-            'deny',
-            'tool_execution',
-          )
-        : []
+    const permissionItems = buildPermissionTurnItems({
+      toolUseId: toolUseID,
+      toolName: tool.name,
+      decision: 'deny',
+      decisionSource: decisionInfo?.source,
+      decisionReason: permissionDecision.decisionReason,
+    })
     const modelTurnItems = [
       ...permissionItems,
       ...buildToolResultItemsForLocalExecution(
@@ -1493,15 +1537,13 @@ async function checkPermissionsAndCallTool(
         }
       }
 
-      const permissionItems =
-        decisionInfo?.source === 'user'
-          ? buildPermissionItemsForLocalExecution(
-              toolUseID,
-              tool.name,
-              'allow',
-              'tool_execution',
-            )
-          : []
+      const permissionItems = buildPermissionTurnItems({
+        toolUseId: toolUseID,
+        toolName: tool.name,
+        decision: 'allow',
+        decisionSource: decisionInfo?.source,
+        decisionReason: permissionDecision.decisionReason,
+      })
       const modelTurnItems = [
         ...permissionItems,
         ...buildToolResultItemsForLocalExecution(

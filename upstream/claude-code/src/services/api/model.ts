@@ -25,6 +25,7 @@ export type NonStreamingModelCaller = (
   args: Parameters<typeof queryCodexResponses>[0],
 ) => Promise<AssistantMessage>
 export type StreamingModelTurnCaller = typeof queryCodexResponsesStream
+export type NonStreamingModelTurnCaller = typeof queryCodexResponses
 export type SingleTurnModelCallArgs = {
   systemPrompt: SystemPrompt
   userPrompt: string
@@ -131,8 +132,11 @@ export const callModelWithStreaming: StreamingModelCaller = async function* (
 export const callModelTurnWithStreaming: StreamingModelTurnCaller =
   queryCodexResponsesStream
 
+export const callModelTurnWithoutStreaming: NonStreamingModelTurnCaller =
+  queryCodexResponses
+
 export const callModelWithoutStreaming: NonStreamingModelCaller = async args =>
-  codexResultToAssistantMessage(await queryCodexResponses(args))
+  codexResultToAssistantMessage(await callModelTurnWithoutStreaming(args))
 
 export const callModel: ModelCaller = async args =>
   callModelWithoutStreaming(
