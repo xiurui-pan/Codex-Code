@@ -187,6 +187,13 @@ export type ModelUiMessageItem = {
   source: string
 }
 
+export type PreferredAssistantTurnContent = {
+  kind: 'empty' | 'text' | 'tool_use_message'
+  renderableItems: ModelTurnItem[]
+  text?: string
+  contentBlocks?: ContentBlock[]
+}
+
 export type ModelTurnItem =
   | RawModelOutputItem
   | ModelToolCallItem
@@ -220,35 +227,32 @@ export function extractFinalAnswerTextFromTurnItems(
     .join(separator)
 }
 
-export function buildPreferredAssistantMessageFromTurnItems(
+export function resolvePreferredAssistantTurnContent(
   items: ModelTurnItem[],
-): AssistantMessage {
+): PreferredAssistantTurnContent {
   const renderableItems = getRenderableModelTurnItems(items)
   if (renderableItems.length === 0) {
-    return createSyntheticAssistantMessage([])
+    return {
+      kind: 'empty',
+      renderableItems,
+    }
   }
 
   const hasToolCall = renderableItems.some(item => item.kind === 'tool_call')
   const finalAnswerText = extractFinalAnswerTextFromTurnItems(renderableItems)
 
   if (!hasToolCall && finalAnswerText) {
-    const message = createSyntheticAssistantMessage(finalAnswerText)
-    message.modelTurnItems = renderableItems
-    return message
+    return {
+      kind: 'text',
+      renderableItems,
+      text: finalAnswerText,
+    }
   }
 
-  return buildAssistantMessageFromTurnItems(renderableItems)
-}
-
-export function buildAssistantMessageFromTurnItems(
-  items: ModelTurnItem[],
-): AssistantMessage {
-  const content: ContentBlock[] = []
-  const renderableItems = getRenderableModelTurnItems(items)
-
+  const contentBlocks: ContentBlock[] = []
   for (const item of renderableItems) {
     if (item.kind === 'final_answer' && item.text) {
-      content.push({
+      contentBlocks.push({
         type: 'text',
         text: item.text,
       })
@@ -256,7 +260,7 @@ export function buildAssistantMessageFromTurnItems(
     }
 
     if (item.kind === 'tool_call') {
-      content.push({
+      contentBlocks.push({
         type: 'tool_use',
         id: item.toolUseId,
         name: item.toolName,
@@ -265,11 +269,53 @@ export function buildAssistantMessageFromTurnItems(
     }
   }
 
-  const message = createSyntheticAssistantMessage(content)
-  if (renderableItems.length > 0) {
-    message.modelTurnItems = renderableItems
+  return {
+    kind: contentBlocks.length > 0 ? 'tool_use_message' : 'empty',
+    renderableItems,
+    contentBlocks,
+  }
+}
+
+export function buildAssistantMessageFromPreferredContent(
+  preferred: PreferredAssistantTurnContent,
+): AssistantMessage {
+  const message =
+    preferred.kind === 'text'
+      ? createSyntheticAssistantMessage(preferred.text ?? '')
+      : createSyntheticAssistantMessage(preferred.contentBlocks ?? [])
+
+  if (preferred.renderableItems.length > 0) {
+    message.modelTurnItems = preferred.renderableItems
   }
   return message
+}
+
+export function buildPreferredAssistantMessageFromTurnItems(
+  items: ModelTurnItem[],
+): AssistantMessage {
+  return buildAssistantMessageFromPreferredContent(
+    resolvePreferredAssistantTurnContent(items),
+  )
+}
+
+export function buildAssistantMessageFromTurnItems(
+  items: ModelTurnItem[],
+): AssistantMessage {
+  const preferred = resolvePreferredAssistantTurnContent(items)
+  if (preferred.kind === 'text') {
+    return buildAssistantMessageFromPreferredContent({
+      ...preferred,
+      kind: 'tool_use_message',
+      contentBlocks: [
+        {
+          type: 'text',
+          text: preferred.text ?? '',
+        },
+      ],
+    })
+  }
+
+  return buildAssistantMessageFromPreferredContent(preferred)
 }
 
 export function mergeStreamedAssistantMessages(

@@ -1,11 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  buildPreferredAssistantMessageFromTurnItems,
+  buildAssistantMessageFromPreferredContent,
+  resolvePreferredAssistantTurnContent,
 } from '../src/services/api/modelTurnItems.js'
 
-test('preferred assistant message uses plain text content when no tool call exists', () => {
-  const message = buildPreferredAssistantMessageFromTurnItems([
+test('preferred assistant content resolves plain text when no tool call exists', () => {
+  const preferred = resolvePreferredAssistantTurnContent([
     {
       kind: 'final_answer',
       provider: 'custom',
@@ -14,6 +15,10 @@ test('preferred assistant message uses plain text content when no tool call exis
     },
   ])
 
+  assert.equal(preferred.kind, 'text')
+  assert.equal(preferred.text, 'plain reply')
+
+  const message = buildAssistantMessageFromPreferredContent(preferred)
   assert.deepEqual(message.message.content, [
     {
       type: 'text',
@@ -22,8 +27,8 @@ test('preferred assistant message uses plain text content when no tool call exis
   ])
 })
 
-test('preferred assistant message keeps tool_use blocks when turn items contain a tool call', () => {
-  const message = buildPreferredAssistantMessageFromTurnItems([
+test('preferred assistant content keeps tool_use blocks when turn items contain a tool call', () => {
+  const preferred = resolvePreferredAssistantTurnContent([
     {
       kind: 'tool_call',
       provider: 'custom',
@@ -40,5 +45,7 @@ test('preferred assistant message keeps tool_use blocks when turn items contain 
     },
   ])
 
+  assert.equal(preferred.kind, 'tool_use_message')
+  const message = buildAssistantMessageFromPreferredContent(preferred)
   assert.equal(message.message.content.some(block => block.type === 'tool_use'), true)
 })

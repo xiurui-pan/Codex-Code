@@ -113,6 +113,8 @@
 - 已补一组更贴近行为的本地验证材料：除了现有单元测试，还新增 `upstream/claude-code/tests/headlessStreaming.smoke.mjs`，专门用本地假 Responses 服务和真实 headless CLI 去验证 request shape、SSE 增量进入主链、以及执行对象输出。
 
 ## 当前新增判断
+- 这轮把 `modelTurnItems` 再拆了一层：先产出更薄的“首选回答对象”，再由单独的包装函数决定是否生成 synthetic assistant 壳，给 `query.ts` / `model.ts` 后续直接消费更薄对象留出落点。
+- 同时把 `WebSearchTool` 的多 citation 边界补稳：同一次搜索的多个 citation 文本块会合并回同一个搜索结果；如果中间某次搜索没有 citation，后续 citation 至少不会错位挂到前一条，前面的空搜索会保留成零链接结果。
 - 这轮继续把核心兼容边界往里收：`query.ts` 和 `services/api/model.ts` 不再各自手搓“纯文本时直接出 assistant、否则退回 synthetic 壳”的分支，而是统一改成走 `modelTurnItems` 里的首选回答构造逻辑。
 - 同时补稳了 `WebSearchTool` 的多次搜索归属：当同一轮里有多次 `web_search_call` 时，带 citation 的结果会按完成顺序归到对应的 `toolUseId`，不再全挂到最后一次搜索上。
 - 这轮把 `WebSearchTool` 的 Codex 数据源假设修正成当前主路真实能看到的形状：不再按 `content_block_start/content_block_delta` 读 Anthropic 风格块事件，而是直接从 `response.output_item.done -> web_search_call` 和 assistant `message.output_text.annotations` 提取搜索进度、链接和来源文本，不再把结果降成 `No links found.` 空壳。

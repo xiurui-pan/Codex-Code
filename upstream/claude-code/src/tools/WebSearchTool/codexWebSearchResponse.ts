@@ -77,6 +77,136 @@ type ResponsesMessageItem = {
   content?: ResponsesOutputTextPart[]
 }
 
+
+type PendingSearchContext = {
+  toolUseId: string
+  query: string
+}
+
+type CitationGroup = {
+  text: string
+  hits: SearchResponseHit[]
+}
+
+function pushSearchResult(
+  blocks: SearchResponseBlock[],
+  progressEvents: WebSearchProgressEvent[],
+  context: PendingSearchContext,
+  hits: SearchResponseHit[],
+) {
+  blocks.push({
+    type: 'search_result',
+    toolUseId: context.toolUseId,
+    query: context.query,
+    hits,
+  })
+  progressEvents.push({
+    toolUseID: context.toolUseId,
+    data: {
+      type: 'search_results_received',
+      resultCount: hits.length,
+      query: context.query,
+    },
+  })
+}
+
+function flushCitationGroups(
+  groups: CitationGroup[],
+  pendingContexts: PendingSearchContext[],
+  blocks: SearchResponseBlock[],
+  progressEvents: WebSearchProgressEvent[],
+): void {
+  if (groups.length === 0) {
+    return
+  }
+
+  if (pendingContexts.length === 0) {
+    for (const group of groups) {
+      blocks.push({
+        type: 'text',
+        text: group.text,
+      })
+    }
+    return
+  }
+
+  if (pendingContexts.length === 1) {
+    const [context] = pendingContexts
+    const mergedHits = groups.flatMap(group => group.hits)
+    const mergedText = groups
+      .map(group => group.text)
+      .filter(text => text.trim())
+      .join('\n')
+
+    if (mergedText.trim()) {
+      blocks.push({
+        type: 'text',
+        text: mergedText,
+      })
+    }
+
+    pushSearchResult(blocks, progressEvents, context, mergedHits)
+    return
+  }
+
+  if (groups.length <= pendingContexts.length) {
+    const unmatchedCount = pendingContexts.length - groups.length
+    for (const context of pendingContexts.slice(0, unmatchedCount)) {
+      pushSearchResult(blocks, progressEvents, context, [])
+    }
+
+    const mappedContexts = pendingContexts.slice(unmatchedCount)
+    for (let index = 0; index < mappedContexts.length; index += 1) {
+      const context = mappedContexts[index]
+      const group = groups[index]
+      if (group.text.trim()) {
+        blocks.push({
+          type: 'text',
+          text: group.text,
+        })
+      }
+      pushSearchResult(blocks, progressEvents, context, group.hits)
+    }
+    return
+  }
+
+  const leadingContexts = pendingContexts.slice(0, -1)
+  for (let index = 0; index < leadingContexts.length; index += 1) {
+    const context = leadingContexts[index]
+    const group = groups[index]
+    if (group.text.trim()) {
+      blocks.push({
+        type: 'text',
+        text: group.text,
+      })
+    }
+    pushSearchResult(blocks, progressEvents, context, group.hits)
+  }
+
+  const trailingContext = pendingContexts.at(-1)
+  if (!trailingContext) {
+    return
+  }
+
+  const trailingGroups = groups.slice(leadingContexts.length)
+  const mergedText = trailingGroups
+    .map(group => group.text)
+    .filter(text => text.trim())
+    .join('\n')
+  if (mergedText.trim()) {
+    blocks.push({
+      type: 'text',
+      text: mergedText,
+    })
+  }
+  pushSearchResult(
+    blocks,
+    progressEvents,
+    trailingContext,
+    trailingGroups.flatMap(group => group.hits),
+  )
+}
+
 function normalizeCitationHits(annotations: ResponsesUrlCitation[] | undefined): SearchResponseHit[] {
   const hits: SearchResponseHit[] = []
 
@@ -150,7 +280,7 @@ export function collectCodexWebSearchResponse(
   const progressEvents: WebSearchProgressEvent[] = []
   const seenQueryByToolUseId = new Map<string, string>()
   const pendingCompletedToolUseIds = new Set<string>()
-  const pendingCompletedToolUseQueue: string[] = []
+  const pendingCompletedSearches: PendingSearchContext[] = []
   let lastSearchToolUseId: string | null = null
   let sawMessageText = false
 
@@ -187,7 +317,10 @@ export function collectCodexWebSearchResponse(
 
       if (payload.status === 'completed' && !pendingCompletedToolUseIds.has(toolUseId)) {
         pendingCompletedToolUseIds.add(toolUseId)
-        pendingCompletedToolUseQueue.push(toolUseId)
+        pendingCompletedSearches.push({
+          toolUseId,
+          query,
+        })
       }
       continue
     }
@@ -198,6 +331,9 @@ export function collectCodexWebSearchResponse(
 
     const fallbackToolUseId =
       lastSearchToolUseId || `web-search-${seenQueryByToolUseId.size + 1}`
+    const fallbackQueryForMessage =
+      seenQueryByToolUseId.get(fallbackToolUseId) || fallbackQuery
+    const citationGroups: CitationGroup[] = []
 
     for (const part of payload.content ?? []) {
       if (part?.type !== 'output_text') {
@@ -205,6 +341,16 @@ export function collectCodexWebSearchResponse(
       }
 
       const textValue = typeof part.text === 'string' ? part.text : ''
+      const hits = normalizeCitationHits(part.annotations)
+      if (hits.length > 0) {
+        sawMessageText = true
+        citationGroups.push({
+          text: textValue,
+          hits,
+        })
+        continue
+      }
+
       if (textValue.trim()) {
         sawMessageText = true
         blocks.push({
@@ -212,47 +358,37 @@ export function collectCodexWebSearchResponse(
           text: textValue,
         })
       }
+    }
 
-      const hits = normalizeCitationHits(part.annotations)
-      if (hits.length > 0) {
-        const queuedToolUseId = pendingCompletedToolUseQueue.shift()
-        const toolUseId = queuedToolUseId || fallbackToolUseId
-        const query = seenQueryByToolUseId.get(toolUseId) || fallbackQuery
-        pendingCompletedToolUseIds.delete(toolUseId)
-        blocks.push({
-          type: 'search_result',
-          toolUseId,
-          query,
-          hits,
-        })
-        progressEvents.push({
-          toolUseID: toolUseId,
-          data: {
-            type: 'search_results_received',
-            resultCount: hits.length,
-            query,
-          },
-        })
+    const pendingContexts = pendingCompletedSearches.splice(0)
+    for (const context of pendingContexts) {
+      pendingCompletedToolUseIds.delete(context.toolUseId)
+    }
+
+    if (citationGroups.length > 0) {
+      flushCitationGroups(
+        citationGroups,
+        pendingContexts.length > 0
+          ? pendingContexts
+          : [
+              {
+                toolUseId: fallbackToolUseId,
+                query: fallbackQueryForMessage,
+              },
+            ],
+        blocks,
+        progressEvents,
+      )
+    } else {
+      for (const context of pendingContexts) {
+        pushSearchResult(blocks, progressEvents, context, [])
       }
     }
   }
 
   for (const toolUseId of pendingCompletedToolUseIds) {
     const query = seenQueryByToolUseId.get(toolUseId) || fallbackQuery
-    blocks.push({
-      type: 'search_result',
-      toolUseId,
-      query,
-      hits: [],
-    })
-    progressEvents.push({
-      toolUseID: toolUseId,
-      data: {
-        type: 'search_results_received',
-        resultCount: 0,
-        query,
-      },
-    })
+    pushSearchResult(blocks, progressEvents, { toolUseId, query }, [])
   }
 
   if (!sawMessageText) {

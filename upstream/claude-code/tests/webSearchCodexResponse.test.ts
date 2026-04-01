@@ -109,6 +109,142 @@ test('web search response parsing keeps citation links from assistant message co
 })
 
 
+
+test('web search response parsing keeps multiple citation text blocks on the same search result', () => {
+  const result = collectCodexWebSearchResponse(
+    [
+      {
+        kind: 'raw_model_output',
+        provider: 'custom',
+        itemType: 'web_search_call',
+        payload: {
+          type: 'web_search_call',
+          id: 'ws-1',
+          status: 'completed',
+          action: { type: 'search', query: 'single query' },
+        },
+      },
+      {
+        kind: 'raw_model_output',
+        provider: 'custom',
+        itemType: 'message',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          content: [
+            {
+              type: 'output_text',
+              text: 'Part one.',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  title: 'First Link',
+                  url: 'https://example.com/one',
+                },
+              ],
+            },
+            {
+              type: 'output_text',
+              text: 'Part two.',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  title: 'Second Link',
+                  url: 'https://example.com/two',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+    'fallback query',
+  )
+
+  const searchResults = result.blocks.filter(block => block.type === 'search_result')
+  assert.deepEqual(searchResults, [
+    {
+      type: 'search_result',
+      toolUseId: 'ws-1',
+      query: 'single query',
+      hits: [
+        { title: 'First Link', url: 'https://example.com/one' },
+        { title: 'Second Link', url: 'https://example.com/two' },
+      ],
+    },
+  ])
+})
+
+test('web search response parsing does not mis-assign a later citation when an earlier search has no citation', () => {
+  const result = collectCodexWebSearchResponse(
+    [
+      {
+        kind: 'raw_model_output',
+        provider: 'custom',
+        itemType: 'web_search_call',
+        payload: {
+          type: 'web_search_call',
+          id: 'ws-1',
+          status: 'completed',
+          action: { type: 'search', query: 'first query' },
+        },
+      },
+      {
+        kind: 'raw_model_output',
+        provider: 'custom',
+        itemType: 'web_search_call',
+        payload: {
+          type: 'web_search_call',
+          id: 'ws-2',
+          status: 'completed',
+          action: { type: 'search', query: 'second query' },
+        },
+      },
+      {
+        kind: 'raw_model_output',
+        provider: 'custom',
+        itemType: 'message',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          content: [
+            {
+              type: 'output_text',
+              text: 'Only second search has a citation.',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  title: 'Second Link',
+                  url: 'https://example.com/second-only',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+    'fallback query',
+  )
+
+  const searchResults = result.blocks.filter(block => block.type === 'search_result')
+  assert.deepEqual(searchResults, [
+    {
+      type: 'search_result',
+      toolUseId: 'ws-1',
+      query: 'first query',
+      hits: [],
+    },
+    {
+      type: 'search_result',
+      toolUseId: 'ws-2',
+      query: 'second query',
+      hits: [
+        { title: 'Second Link', url: 'https://example.com/second-only' },
+      ],
+    },
+  ])
+})
+
 test('web search response parsing keeps multiple search result citations on their own tool use ids', () => {
   const result = collectCodexWebSearchResponse(
     [
