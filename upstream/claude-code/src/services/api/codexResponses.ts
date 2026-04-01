@@ -19,10 +19,15 @@ import {
   type ModelTurnItem,
 } from './modelTurnItems.js'
 import {
+  buildToolCallItemsForLocalExecution,
+  buildToolResultItemsForLocalExecution,
+  getLocalExecutionOutputText,
+} from './localExecutionItems.js'
+import {
   normalizeResponsesOutputToTurnItems,
   type ResponsesOutputItem,
 } from './codexTurnItems.js'
-import { getCurrentProviderProfile } from './providerProfiles.js'
+import { getCodexProviderProfile } from './providerProfiles.js'
 
 type CodexRequestOptions = {
   model?: string
@@ -193,6 +198,7 @@ function pushMessageInput(
 
 function buildResponsesInput(messages: Message[]): ResponsesInputItem[] {
   const items: ResponsesInputItem[] = []
+  const toolNameByUseId = new Map<string, string>()
 
   for (const message of messages) {
     if (message.type !== 'user' && message.type !== 'assistant') {
@@ -215,12 +221,24 @@ function buildResponsesInput(messages: Message[]): ResponsesInputItem[] {
         if (block.type === 'tool_use') {
           pushMessageInput(items, 'assistant', pendingAssistantText)
           pendingAssistantText = ''
-          items.push({
-            type: 'function_call',
-            call_id: block.id,
-            name: block.name,
-            arguments: JSON.stringify(block.input ?? {}),
-          })
+          const turnItems = buildToolCallItemsForLocalExecution(
+            block.id,
+            block.name,
+            (block.input ?? {}) as Record<string, unknown>,
+            'history',
+          )
+          const toolCall = turnItems.find(
+            item => item.kind === 'tool_call',
+          )
+          if (toolCall?.kind === 'tool_call') {
+            toolNameByUseId.set(toolCall.toolUseId, toolCall.toolName)
+            items.push({
+              type: 'function_call',
+              call_id: toolCall.toolUseId,
+              name: toolCall.toolName,
+              arguments: JSON.stringify(toolCall.input),
+            })
+          }
         }
       }
 
@@ -238,13 +256,18 @@ function buildResponsesInput(messages: Message[]): ResponsesInputItem[] {
       if (block.type === 'tool_result') {
         pushMessageInput(items, 'user', pendingUserText)
         pendingUserText = ''
+        const turnItems = buildToolResultItemsForLocalExecution(
+          block.tool_use_id,
+          toolNameByUseId.get(block.tool_use_id),
+          block,
+        )
         items.push({
           type: 'function_call_output',
           call_id: block.tool_use_id,
           output: [
             {
               type: 'input_text',
-              text: normalizeToolResultText(block.content),
+              text: getLocalExecutionOutputText(turnItems),
             },
           ],
         })
@@ -313,7 +336,7 @@ async function buildResponsesBody({
   systemPrompt,
   options,
 }: Omit<CodexStreamingArgs, 'signal'>) {
-  const profile = getCurrentProviderProfile()
+  const profile = getCodexProviderProfile()
   const body: Record<string, unknown> = {
     model: options.model ?? process.env.ANTHROPIC_MODEL ?? 'gpt-5.4',
     stream: true,
@@ -403,7 +426,7 @@ function parseSsePayload(rawText: string): {
 }
 
 export function shouldUseCodexResponsesAdapter(): boolean {
-  return getCurrentProviderProfile().turnAdapter === 'responses-api'
+  return true
 }
 
 export async function queryCodexResponses({

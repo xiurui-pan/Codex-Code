@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import type { ModelTurnItem } from './modelTurnItems.js'
 import { BASH_TOOL_NAME } from '../../tools/BashTool/toolName.js'
+import { buildToolCallItemsForLocalExecution } from './localExecutionItems.js'
 
 type ResponsesOutputText = {
   type: 'output_text'
@@ -31,6 +32,7 @@ type ParsedToolCall = {
 }
 
 const TOOL_PROTOCOL_LEAK_MARKERS = [
+  'to=shell',
   'recipient_name',
   'functions.Bash',
   'with_escalated_permissions',
@@ -302,14 +304,14 @@ export function normalizeResponsesOutputToTurnItems(
     })
 
     if (item.type === 'function_call' && item.call_id && item.name) {
-      turnItems.push({
-        kind: 'tool_call',
-        provider: 'custom',
-        toolUseId: item.call_id,
-        toolName: item.name,
-        input: normalizeToolArguments(item.arguments),
-        source: 'structured',
-      })
+      turnItems.push(
+        ...buildToolCallItemsForLocalExecution(
+          item.call_id,
+          item.name,
+          normalizeToolArguments(item.arguments),
+          'structured',
+        ),
+      )
       continue
     }
 
@@ -328,17 +330,6 @@ export function normalizeResponsesOutputToTurnItems(
       continue
     }
 
-    if (isProtocolLeakText(text)) {
-      turnItems.push({
-        kind: 'ui_message',
-        provider: 'custom',
-        level: 'warn',
-        text,
-        source: 'protocol_leak_filtered',
-      })
-      continue
-    }
-
     const fallbackToolCall = extractTextFallbackToolCall(text)
     if (fallbackToolCall) {
       if (fallbackToolCall.prefixText) {
@@ -349,13 +340,24 @@ export function normalizeResponsesOutputToTurnItems(
           source: 'text_fallback',
         })
       }
+      turnItems.push(
+        ...buildToolCallItemsForLocalExecution(
+          randomUUID(),
+          fallbackToolCall.toolName,
+          fallbackToolCall.input,
+          'text_fallback',
+        ),
+      )
+      continue
+    }
+
+    if (isProtocolLeakText(text)) {
       turnItems.push({
-        kind: 'tool_call',
+        kind: 'ui_message',
         provider: 'custom',
-        toolUseId: randomUUID(),
-        toolName: fallbackToolCall.toolName,
-        input: fallbackToolCall.input,
-        source: 'text_fallback',
+        level: 'warn',
+        text,
+        source: 'protocol_leak_filtered',
       })
       continue
     }

@@ -2,20 +2,14 @@ import {
   accumulateUsage,
   getMaxOutputTokensForModel,
   queryHaiku,
-  queryModelWithStreaming,
-  queryModelWithoutStreaming,
-  queryWithModel,
   updateUsage,
   verifyApiKey,
 } from './claude.js'
-import {
-  queryCodexResponses,
-  shouldUseCodexResponsesAdapter,
-} from './codexResponses.js'
+import { queryCodexResponses } from './codexResponses.js'
 
-export type StreamingModelCaller = typeof queryModelWithStreaming
-export type NonStreamingModelCaller = typeof queryModelWithoutStreaming
-export type ModelCaller = typeof queryWithModel
+export type StreamingModelCaller = typeof queryCodexResponses
+export type NonStreamingModelCaller = typeof queryCodexResponses
+export type ModelCaller = typeof queryCodexResponses
 export type SmallModelCaller = typeof queryHaiku
 export type ModelAccessVerifier = typeof verifyApiKey
 export type ModelOutputTokenResolver = typeof getMaxOutputTokensForModel
@@ -25,26 +19,13 @@ export type UsageAccumulator = typeof accumulateUsage
 export const callModelWithStreaming: StreamingModelCaller = async function* (
   args,
 ) {
-  if (!shouldUseCodexResponsesAdapter()) {
-    return yield* queryModelWithStreaming(args)
-  }
-
   yield await queryCodexResponses(args)
 }
 
-export const callModelWithoutStreaming: NonStreamingModelCaller = async args => {
-  if (!shouldUseCodexResponsesAdapter()) {
-    return queryModelWithoutStreaming(args)
-  }
-
-  return queryCodexResponses(args)
-}
+export const callModelWithoutStreaming: NonStreamingModelCaller =
+  queryCodexResponses
 
 export const callModel: ModelCaller = async args => {
-  if (!shouldUseCodexResponsesAdapter()) {
-    return queryWithModel(args)
-  }
-
   return queryCodexResponses({
     messages: [
       {
@@ -62,10 +43,6 @@ export const callModel: ModelCaller = async args => {
 }
 
 export const callSmallModel: SmallModelCaller = async args => {
-  if (!shouldUseCodexResponsesAdapter()) {
-    return queryHaiku(args)
-  }
-
   return queryCodexResponses({
     messages: [
       {

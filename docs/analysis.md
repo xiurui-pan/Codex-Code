@@ -40,6 +40,8 @@
 
 这也是为什么我们后续不该再把主目标写成“把 Claude 协议换成 Responses 协议”，而应该写成“保留 Claude Code 的本地外壳，重做中间结构”。
 
+当前阶段还要再补一条硬约束：`Codex Code` 不是多模型框架。后续实现只围绕自定义 Codex provider 主链收口，不再为了 Claude/Anthropic 或其他 provider 预留双栈抽象。
+
 ## Claude Code 里真正绑死 Claude 的部分
 
 ### 模型接入层

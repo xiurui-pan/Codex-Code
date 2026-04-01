@@ -21,6 +21,7 @@
 - 当前正式源码基线固定为 `upstream/claude-code`，不会切到 `claw-code`、`open-agent-sdk` 或其他第三方仓库。
 - 第一阶段模型范围：只做 `Codex`。
 - 第一阶段接入范围：只支持自定义 Codex provider API。
+- 当前阶段明确不做多模型兼容；凡是只为 Claude/Anthropic 双栈或通用 provider 想象存在的中间层，后续都按 Codex 主链收窄或下线。
 - 工具策略：尽量保留 Claude Code 的工具使用面，重写后端执行与模型适配层。
 - 本地执行链策略：明确保留并逐步接管 Claude Code 现有的启动链、REPL、`QueryEngine`、`query`、工具执行、权限、结果回灌、TUI 渲染；这不是抽象的“外围系统”，而是当前产品可用性的核心。
 - 评估方式：同时对比 `Claude Code` 和 `Codex CLI`，而不是只和其中一边比。
@@ -156,3 +157,8 @@
 - 先保行为正确，再做体验调优。
 - 每一轮先检查是否偏离 `claude-code` 基线改造目标，再决定是否保留实验原型。
 - 当前阶段只为 Codex provider 主链补工程壳和运行入口，不以补齐 Anthropic 专属路径为目标。
+
+## 后续已记录但不抢当前优先级
+
+- 后续要把项目名、UI 文案和残留的 `Claude Code` 命名系统性改成 `Codex Code`。
+- 后续要对照 Claude Code 官方文档的能力列表，凡是不是 Anthropic/Claude 特化的能力，都逐项测试和验收。

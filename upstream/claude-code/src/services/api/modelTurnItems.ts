@@ -22,21 +22,49 @@ export type ModelToolCallItem = {
 }
 
 export type ModelToolResultItem = {
-  kind: 'tool_result'
+  kind: 'tool_output'
   provider: string
   toolUseId: string
   outputText: string
   source: 'history' | 'tool_execution'
 }
 
-export type ModelPermissionEventItem = {
-  kind: 'permission_event'
+export type ModelShellExecutionItem = {
+  kind: 'local_shell_call'
   provider: string
-  phase: 'requested' | 'resolved'
   toolUseId: string
   toolName: string
-  decision?: 'allow' | 'deny' | 'ask'
+  command: string
+  phase: 'requested' | 'completed'
+  source: 'provider' | 'history'
+}
+
+export type ModelPermissionRequestItem = {
+  kind: 'permission_request'
+  provider: string
+  toolUseId: string
+  toolName: string
+  source: 'provider' | 'history'
+}
+
+export type ModelPermissionDecisionItem = {
+  kind: 'permission_decision'
+  provider: string
+  toolUseId: string
+  toolName: string
+  decision: 'allow' | 'deny' | 'ask'
+  source: 'provider' | 'history'
   details?: Record<string, unknown>
+}
+
+export type ModelExecutionResultItem = {
+  kind: 'execution_result'
+  provider: string
+  toolUseId: string
+  toolName: string
+  status: 'success' | 'error' | 'denied'
+  outputText: string
+  source: 'history' | 'tool_execution'
 }
 
 export type ModelFinalAnswerItem = {
@@ -58,7 +86,10 @@ export type ModelTurnItem =
   | RawModelOutputItem
   | ModelToolCallItem
   | ModelToolResultItem
-  | ModelPermissionEventItem
+  | ModelShellExecutionItem
+  | ModelPermissionRequestItem
+  | ModelPermissionDecisionItem
+  | ModelExecutionResultItem
   | ModelFinalAnswerItem
   | ModelUiMessageItem
 

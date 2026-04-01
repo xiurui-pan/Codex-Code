@@ -24,6 +24,7 @@
 - `Claude Code` 目前在很多关键使用感上确实比 `Codex CLI` 更好用，而且原因不只是界面。
 - `Codex CLI` 目前在模型能力建模、结构化工具、权限参数化、阶段化输出这些底层设计上更适合 Codex。
 - `Codex Code` 的目标不是在两者之间二选一，而是保住 Claude Code 这层本地外壳，再把中间结构改到更适合 Codex。
+- 当前阶段只支持自定义 Codex provider，不做多模型兼容，也不再为 Claude/Anthropic 双栈保留额外抽象负担。
 
 ## 仓库结构
 

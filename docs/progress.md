@@ -5,6 +5,7 @@
 当前项目里，“请求和消息”与“本地执行链”不是两套互不相关的东西。很多能力最终会体现在请求和消息里，但启动链、REPL、`QueryEngine`、`query`、工具执行、权限、结果回灌、TUI 渲染这些能力必须由本地执行链实现，不能简化成“把规则写进消息发给模型”。
 
 当前阶段边界：只支持自定义 Codex provider API，不做 Anthropic 专属链路，包括 `claude.ai` 登录、OAuth、Bridge、assistant mode、proactive 等；这是当前阶段的收口范围，不代表永久删除这些能力。
+当前阶段只支持自定义 Codex provider，不做多模型兼容，也不再为 Claude/Anthropic 双栈继续保留额外中间层负担。
 
 ## 已完成
 
@@ -109,6 +110,7 @@
 - 这一轮已经明确：Claude Code 的 harness 本身适合继续复用，真正不适合直接沿用的是默认按 Claude 表示回合、工具、审批和结果的中间结构。
 - 所以接下来的主线不再是继续给 `codexResponses.ts` 增加一条条兼容分支，也不再是只改提示词或协议名，而是转向更系统地借鉴本地 `codex/` 的回合表示、能力建模和 shell / 审批 / 结果对象设计。
 - 已继续往这个方向推进一小步：把 provider 返回里的工具协议杂质文本拦在统一条目归一化层，不再让拒绝分支后的脏文本继续污染后续回合。
+- 已把后续两条远期目标记入计划：一是系统把残留 `Claude Code` 命名改成 `Codex Code`，二是对照 Claude Code 官方文档能力列表逐项做非 Anthropic 特化能力验收。
 
 - 当前阶段已经明确收口：只继续推进自定义 Codex provider API 这一条主线，不再为 `claude.ai` 登录、OAuth、Bridge、assistant mode、proactive 这些 Anthropic 专属能力补齐可运行链路。
 - 当前改造对象已经明确分成三类：只需提示词适配的、需要改消息生产规则的、必须本地实现的。当前重点在第三类，也就是把真实启动链、REPL、`QueryEngine`、`query`、工具执行、权限、结果回灌和 TUI 渲染继续保住并改到 Codex 路线。
