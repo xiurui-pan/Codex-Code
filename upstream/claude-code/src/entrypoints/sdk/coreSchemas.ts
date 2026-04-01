@@ -1052,32 +1052,12 @@ export const ModelInfoSchema = lazySchema(() =>
       description: z
         .string()
         .describe("Description of the model's capabilities"),
-      supportsEffort: z
-        .boolean()
-        .optional()
-        .describe('Whether this model supports effort levels'),
       supportedEffortLevels: z
         .array(z.enum(['low', 'medium', 'high', 'max']))
-        .optional()
-        .describe('Available effort levels for this model'),
+        .describe('Available reasoning levels for this Codex model'),
       defaultEffortLevel: z
         .enum(['low', 'medium', 'high', 'max'])
-        .optional()
-        .describe('Default effort level used when no explicit override is set'),
-      supportsAdaptiveThinking: z
-        .boolean()
-        .optional()
-        .describe(
-          'Whether this model supports adaptive thinking (Claude decides when and how much to think)',
-        ),
-      supportsFastMode: z
-        .boolean()
-        .optional()
-        .describe('Whether this model supports fast mode'),
-      supportsAutoMode: z
-        .boolean()
-        .optional()
-        .describe('Whether this model supports auto mode'),
+        .describe('Default reasoning level used when no explicit override is set'),
     })
     .describe('Information about an available model.'),
 )

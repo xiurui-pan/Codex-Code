@@ -1,5 +1,14 @@
 import type { EffortLevel } from 'src/entrypoints/sdk/runtimeTypes.js'
 
+
+export type CodexPublicModelInfo = {
+  value: string
+  displayName: string
+  description: string
+  defaultEffortLevel: EffortLevel
+  supportedEffortLevels: readonly EffortLevel[]
+}
+
 export type CodexModelCapability = {
   value: string
   displayName: string
@@ -92,4 +101,21 @@ export function codexModelSupportsMaxEffort(
   model: string | null | undefined,
 ): boolean {
   return getCodexSupportedEffortLevels(model).includes('max')
+}
+
+
+export function createCodexPublicModelInfo(params: {
+  value: string
+  displayName?: string
+  description?: string
+  publicValue?: string
+}): CodexPublicModelInfo {
+  const resolvedModel = resolveCodexModelInput(params.value)
+  return {
+    value: params.publicValue ?? resolvedModel,
+    displayName: params.displayName ?? resolvedModel,
+    description: params.description ?? 'Custom Codex model',
+    defaultEffortLevel: getCodexDefaultEffortForModel(resolvedModel),
+    supportedEffortLevels: [...getCodexSupportedEffortLevels(resolvedModel)],
+  }
 }

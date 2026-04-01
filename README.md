@@ -35,6 +35,7 @@ Already validated in the real `upstream/claude-code` tree:
 - real permission loop with `--permission-prompt-tool stdio`
 - allow / deny permission branches
 - first pass of Codex turn items and execution items in `src/services/api`
+- unified Codex model switching across CLI, TUI, config-facing options, and headless model metadata
 
 ## Current Focus
 

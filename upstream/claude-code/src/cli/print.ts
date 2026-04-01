@@ -247,17 +247,14 @@ import {
 } from 'src/utils/model/model.js'
 import {
   DEFAULT_CODEX_MODEL,
-  getCodexDefaultEffortForModel,
-  getCodexSupportedEffortLevels,
 } from 'src/utils/model/codexModels.js'
-import { getModelOptions } from 'src/utils/model/modelOptions.js'
 import {
-  modelSupportsEffort,
-  modelSupportsMaxEffort,
+  getModelOptions,
+  getPublicModelInfoForOption,
+} from 'src/utils/model/modelOptions.js'
+import {
   resolveAppliedEffort,
 } from 'src/utils/effort.js'
-import { modelSupportsAdaptiveThinking } from 'src/utils/thinking.js'
-import { modelSupportsAutoMode } from 'src/utils/betas.js'
 import { ensureModelStringsInitialized } from 'src/utils/model/modelStrings.js'
 import {
   getSessionId,
@@ -1419,43 +1416,10 @@ function runHeadlessStreaming(
     activeUserSpecifiedModel ??
     getCodexConfiguredModel() ??
     DEFAULT_CODEX_MODEL
-  const modelOptions = getModelOptions()
-  const optionsWithCurrentPhaseModel =
-    currentPhaseDisableLegacyHeadlessModules &&
-    !modelOptions.some(option => option.value === currentPhaseResolvedModel)
-      ? [
-          ...modelOptions,
-          {
-            value: currentPhaseResolvedModel,
-            label: currentPhaseResolvedModel,
-            description: 'Current configured Codex model',
-          },
-        ]
-      : modelOptions
-  const modelInfos = optionsWithCurrentPhaseModel.map(option => {
-    const modelId = option.value === null ? 'default' : option.value
-    const resolvedModel =
-      modelId === 'default'
-        ? getDefaultMainLoopModel()
-        : parseUserSpecifiedModel(modelId)
-    const hasEffort = modelSupportsEffort(resolvedModel)
-    const hasAdaptiveThinking = modelSupportsAdaptiveThinking(resolvedModel)
-    const hasFastMode = isFastModeSupportedByModel(option.value)
-    const hasAutoMode = modelSupportsAutoMode(resolvedModel)
-    return {
-      value: modelId,
-      displayName: option.label,
-      description: option.description,
-      ...(hasEffort && {
-        supportsEffort: true,
-        defaultEffortLevel: getCodexDefaultEffortForModel(resolvedModel),
-        supportedEffortLevels: [...getCodexSupportedEffortLevels(resolvedModel)],
-      }),
-      ...(hasAdaptiveThinking && { supportsAdaptiveThinking: true }),
-      ...(hasFastMode && { supportsFastMode: true }),
-      ...(hasAutoMode && { supportsAutoMode: true }),
-    }
+  const modelOptions = getModelOptions({
+    extraModels: [activeUserSpecifiedModel, currentPhaseResolvedModel],
   })
+  const modelInfos = modelOptions.map(option => getPublicModelInfoForOption(option))
   process.stderr.write('[HEADLESS_PROBE] runHeadlessStreaming-after-model-options\n')
 
   function injectModelSwitchBreadcrumbs(

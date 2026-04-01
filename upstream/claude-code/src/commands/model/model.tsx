@@ -9,9 +9,9 @@ import type {
 import type { EffortLevel } from '../../utils/effort.js'
 import { modelDisplayString } from '../../utils/model/model.js'
 import {
-  findCodexModelCapability,
-  resolveCodexModelInput,
-} from '../../utils/model/codexModels.js'
+  findSelectableModelOption,
+  getModelCommandChoices,
+} from '../../utils/model/modelOptions.js'
 
 const COMMON_HELP_ARGS = ['help', '-h', '--help']
 const COMMON_INFO_ARGS = ['', 'current', 'status']
@@ -69,6 +69,7 @@ function SetModelAndClose({
   onDone: OnDone
 }): React.ReactNode {
   const setAppState = useSetAppState()
+  const mainLoopModel = useAppState(state => state.mainLoopModel)
 
   useEffect(() => {
     const rawInput = args.trim()
@@ -84,11 +85,12 @@ function SetModelAndClose({
       return
     }
 
-    const resolved = resolveCodexModelInput(rawInput)
-    const capability = findCodexModelCapability(resolved)
-    if (!capability) {
+    const option = findSelectableModelOption(rawInput, {
+      extraModels: [mainLoopModel],
+    })
+    if (!option || option.value === null) {
       onDone(
-        `Unknown model '${rawInput}'. Use /model to pick one of gpt-5.1-codex-mini, gpt-5.1-codex, gpt-5.1-codex-max, or pass default.`,
+        `Unknown model '${rawInput}'. Use /model to pick one of ${getModelCommandChoices({ extraModels: [mainLoopModel] }).join(', ')}, or pass default.`,
         { display: 'system' },
       )
       return
@@ -96,11 +98,11 @@ function SetModelAndClose({
 
     setAppState(prev => ({
       ...prev,
-      mainLoopModel: capability.value,
+      mainLoopModel: option.value,
       mainLoopModelForSession: null,
     }))
-    onDone(`Set model to ${capability.displayName}`, { display: 'system' })
-  }, [args, onDone, setAppState])
+    onDone(`Set model to ${option.label}`, { display: 'system' })
+  }, [args, mainLoopModel, onDone, setAppState])
 
   return null
 }
@@ -128,7 +130,7 @@ export const call: LocalJSXCommandCall = async (onDone, _context, args) => {
 
   if (COMMON_HELP_ARGS.includes(normalizedArgs)) {
     onDone(
-      'Usage: /model [gpt-5.1-codex-mini|gpt-5.1-codex|gpt-5.1-codex-max|mini|codex|max|default]\n\nRun /model with no argument to open the Codex model picker and adjust reasoning.',
+      `Usage: /model [${getModelCommandChoices().join('|')}|default]\n\nRun /model with no argument to open the Codex model picker and adjust reasoning.`,
       { display: 'system' },
     )
     return

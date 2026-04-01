@@ -6,6 +6,7 @@ import {
   createAssistantMessageFromPreferredAssistantResponsePayload,
 } from '../src/services/api/assistantEnvelope.js'
 import {
+  createCodexPublicModelInfo,
   DEFAULT_CODEX_MODEL,
   getCodexSupportedEffortLevels,
   resolveCodexModelInput,
@@ -98,6 +99,39 @@ test('codex model capability table resolves aliases and supported reasoning leve
     'high',
     'max',
   ])
+})
+
+
+test('unknown custom codex models use the same public reasoning shape everywhere', () => {
+  const publicInfo = createCodexPublicModelInfo({
+    value: 'gpt-5.1-codex-enterprise',
+  })
+
+  assert.deepEqual(publicInfo, {
+    value: 'gpt-5.1-codex-enterprise',
+    displayName: 'gpt-5.1-codex-enterprise',
+    description: 'Custom Codex model',
+    defaultEffortLevel: 'medium',
+    supportedEffortLevels: ['medium'],
+  })
+})
+
+
+test('default public model info keeps a distinct default id while using default model reasoning', () => {
+  const publicInfo = createCodexPublicModelInfo({
+    value: 'gpt-5.1-codex-mini',
+    publicValue: 'default',
+    displayName: 'Default (recommended)',
+    description: 'Use the default Codex model',
+  })
+
+  assert.deepEqual(publicInfo, {
+    value: 'default',
+    displayName: 'Default (recommended)',
+    description: 'Use the default Codex model',
+    defaultEffortLevel: 'medium',
+    supportedEffortLevels: ['medium', 'high'],
+  })
 })
 
 test('codex responses entry now returns raw turn-item chunks and leaves assistant-shell compatibility to outer layers', async () => {

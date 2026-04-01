@@ -1,8 +1,11 @@
 import { getGlobalConfig } from '../config.js'
+import { getCodexConfiguredModel } from '../codexConfig.js'
 import {
   DEFAULT_CODEX_MODEL,
+  createCodexPublicModelInfo,
   getCodexModelCapabilities,
   resolveCodexModelInput,
+  type CodexPublicModelInfo,
 } from './codexModels.js'
 import {
   getDefaultMainLoopModelSetting,
@@ -27,16 +30,17 @@ export function getDefaultOptionForUser(): ModelOption {
 }
 
 function createKnownModelOption(model: string): ModelOption {
+  const normalizedModel = resolveCodexModelInput(model)
   const capability = getCodexModelCapabilities().find(
-    item => item.value === resolveCodexModelInput(model),
+    item => item.value === normalizedModel,
   )
 
   if (!capability) {
     return {
-      value: model,
-      label: model,
+      value: normalizedModel,
+      label: normalizedModel,
       description: 'Custom Codex model',
-      descriptionForModel: `Custom Codex model (${model})`,
+      descriptionForModel: `Custom Codex model (${normalizedModel})`,
     }
   }
 
@@ -48,7 +52,16 @@ function createKnownModelOption(model: string): ModelOption {
   }
 }
 
-export function getModelOptions(_fastMode = false): ModelOption[] {
+function appendUniqueModelOption(options: ModelOption[], option: ModelOption): void {
+  if (options.some(existing => existing.value === option.value)) {
+    return
+  }
+  options.push(option)
+}
+
+export function getModelOptions(params?: {
+  extraModels?: Array<ModelSetting | undefined>
+}): ModelOption[] {
   const options: ModelOption[] = [
     getDefaultOptionForUser(),
     ...getCodexModelCapabilities().map(capability => ({
@@ -63,21 +76,59 @@ export function getModelOptions(_fastMode = false): ModelOption[] {
   for (const option of additional) {
     const normalized =
       option.value === null ? null : resolveCodexModelInput(String(option.value))
-    if (
-      normalized !== null &&
-      !options.some(existing => existing.value === normalized)
-    ) {
-      options.push({
-        ...option,
-        value: normalized,
-      })
+    if (normalized === null) {
+      continue
     }
+    appendUniqueModelOption(options, {
+      ...option,
+      value: normalized,
+    })
   }
 
-  const configuredDefault = resolveCodexModelInput(DEFAULT_CODEX_MODEL)
-  if (!options.some(option => option.value === configuredDefault)) {
-    options.push(createKnownModelOption(configuredDefault))
+  const extraModels = [
+    getCodexConfiguredModel(),
+    DEFAULT_CODEX_MODEL,
+    ...(params?.extraModels ?? []),
+  ]
+  for (const model of extraModels) {
+    if (!model) {
+      continue
+    }
+    appendUniqueModelOption(options, createKnownModelOption(String(model)))
   }
 
   return options
+}
+
+export function findSelectableModelOption(
+  modelInput: string,
+  params?: { extraModels?: Array<ModelSetting | undefined> },
+): ModelOption | undefined {
+  const normalized = resolveCodexModelInput(modelInput)
+  return getModelOptions(params).find(option => option.value === normalized)
+}
+
+export function getModelCommandChoices(
+  params?: { extraModels?: Array<ModelSetting | undefined> },
+): string[] {
+  return getModelOptions(params)
+    .map(option => option.value)
+    .filter((value): value is string => value !== null)
+}
+
+export function getPublicModelInfoForOption(option: ModelOption): CodexPublicModelInfo {
+  if (option.value === null) {
+    return createCodexPublicModelInfo({
+      value: DEFAULT_CODEX_MODEL,
+      publicValue: 'default',
+      displayName: option.label,
+      description: option.description,
+    })
+  }
+
+  return createCodexPublicModelInfo({
+    value: option.value,
+    displayName: option.label,
+    description: option.description,
+  })
 }

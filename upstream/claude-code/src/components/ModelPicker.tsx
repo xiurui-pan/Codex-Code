@@ -21,7 +21,6 @@ import {
   getDefaultEffortForModel,
   getEffortLevelDescription,
   modelSupportsEffort,
-  modelSupportsMaxEffort,
   resolvePickerEffortPersistence,
   toPersistableEffort,
 } from '../utils/effort.js'
@@ -76,7 +75,9 @@ export function ModelPicker({
     effortValue !== undefined ? convertEffortValueToLevel(effortValue) : undefined,
   )
 
-  const options = getModelOptions(isFastMode ?? false)
+  const options = getModelOptions({
+    extraModels: [initial, sessionModel],
+  })
   const initialValue = initial ?? NO_PREFERENCE
   const selectOptions = options.map(option => ({
     ...option,
@@ -269,15 +270,7 @@ function getEffortLevelsForModel(model: string | undefined): EffortLevel[] {
     return []
   }
 
-  if (model.includes('codex')) {
-    return [...getCodexSupportedEffortLevels(model)]
-  }
-
-  if (modelSupportsMaxEffort(model)) {
-    return ['low', 'medium', 'high', 'max']
-  }
-
-  return ['low', 'medium', 'high']
+  return [...getCodexSupportedEffortLevels(model)]
 }
 
 function clampEffortLevel(
