@@ -124,6 +124,7 @@
 - 这轮把上面两条补成了真实行为测试：compact 不再只做源码检查，而是直接验证 preferred streaming 的聚合结果；远端权限桥也不再只查源码字符串，而是直接验证 payload 和最终 assistant message 的形状一致。
 - 已把模型切换正式抬成 Codex-only 交互能力：`ModelPicker`、`/model`、CLI 初始化返回的 `models` 列表现在都围绕 `gpt-5.1-codex-mini` 默认模型和 `medium` 默认 reasoning 对齐，同一份能力表会准确暴露每个模型真实支持的 reasoning 档位。
 - 这一轮继续把模型能力面收成单一来源：附加自定义模型不再只在 picker 可见，`/model` 和 headless `models` 列表现在也共用同一份模型目录；未知自定义模型的 reasoning 档位也统一成同一条 Codex 规则，并把公开模型能力面压成最小的 Codex-only 字段。
+- 已开始把记忆/上下文系统接回 Codex 主路的最小闭环：当前阶段先打通会话内记忆，Codex 路径下会启用 session memory 提取与 session-memory compact，并把已有会话摘要作为结构化上下文重新注入主线程与 SDK 查询，和现有 compact / resume 主链共用同一份摘要文件。
 - `modelTurnItems` 这轮又往壳中心外推了一点：现在可以直接从 turn items 产出 synthetic payload，`query.ts` / `model.ts` / compact 聚合都开始优先走这层 payload，再决定是否包装成 `AssistantMessage`。
 - 这轮继续把核心兼容边界往里收：`query.ts` 和 `services/api/model.ts` 不再各自手搓“纯文本时直接出 assistant、否则退回 synthetic 壳”的分支，而是统一改成走 `modelTurnItems` 里的首选回答构造逻辑。
 - 同时补稳了 `WebSearchTool` 的多次搜索归属：当同一轮里有多次 `web_search_call` 时，带 citation 的结果会按完成顺序归到对应的 `toolUseId`，不再全挂到最后一次搜索上。

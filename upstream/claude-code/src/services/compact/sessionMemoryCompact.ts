@@ -6,6 +6,7 @@ import type { AgentId } from '../../types/ids.js'
 import type { HookResultMessage, Message } from '../../types/message.js'
 import { logForDebugging } from '../../utils/debug.js'
 import { isEnvTruthy } from '../../utils/envUtils.js'
+import { isCodexSessionMemoryEnabled } from '../SessionMemory/sessionMemoryContext.js'
 import { errorMessage } from '../../utils/errors.js'
 import {
   createCompactBoundaryMessage,
@@ -407,6 +408,10 @@ export function shouldUseSessionMemoryCompaction(): boolean {
   }
   if (isEnvTruthy(process.env.DISABLE_CLAUDE_CODE_SM_COMPACT)) {
     return false
+  }
+
+  if (isCodexSessionMemoryEnabled()) {
+    return true
   }
 
   const sessionMemoryFlag = getFeatureValue_CACHED_MAY_BE_STALE(

@@ -3716,6 +3716,16 @@ Read the team config to discover your teammates' names. Check the task list peri
         }),
       ])
     }
+    case 'current_session_memory': {
+      return wrapMessagesInSystemReminder([
+        createUserMessage({
+          content:
+            `Current session memory from ${attachment.path}:\n\n${attachment.content}` +
+            '\n\nUse this summary to stay consistent with the active session state and any resumed work.',
+          isMeta: true,
+        }),
+      ])
+    }
     case 'relevant_memories': {
       return wrapMessagesInSystemReminder(
         attachment.memories.map(m => {

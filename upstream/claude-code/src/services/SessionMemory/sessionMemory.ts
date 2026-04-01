@@ -60,6 +60,7 @@ import {
   setLastSummarizedMessageId,
   setSessionMemoryConfig,
 } from './sessionMemoryUtils.js'
+import { isCodexSessionMemoryEnabled } from './sessionMemoryContext.js'
 
 // ============================================================================
 // Feature Gate and Config (Cached - Non-blocking)
@@ -78,6 +79,9 @@ import {
  * Uses cached gate value - returns immediately without blocking.
  */
 function isSessionMemoryGateEnabled(): boolean {
+  if (isCodexSessionMemoryEnabled()) {
+    return true
+  }
   return getFeatureValue_CACHED_MAY_BE_STALE('tengu_session_memory', false)
 }
 
