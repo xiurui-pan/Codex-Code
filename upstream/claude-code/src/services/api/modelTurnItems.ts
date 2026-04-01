@@ -220,3 +220,29 @@ export function buildAssistantMessageFromTurnItems(
     modelTurnItems: renderableItems,
   })
 }
+
+export function mergeStreamedAssistantMessages(
+  messages: readonly AssistantMessage[],
+): AssistantMessage | null {
+  if (messages.length === 0) {
+    return null
+  }
+
+  const lastMessage = messages.at(-1) ?? null
+  if (!lastMessage) {
+    return null
+  }
+
+  if (lastMessage.isApiErrorMessage) {
+    return lastMessage
+  }
+
+  const aggregatedTurnItems = messages.flatMap(
+    message => message.modelTurnItems ?? [],
+  )
+  if (aggregatedTurnItems.length === 0) {
+    return lastMessage
+  }
+
+  return buildAssistantMessageFromTurnItems(aggregatedTurnItems)
+}

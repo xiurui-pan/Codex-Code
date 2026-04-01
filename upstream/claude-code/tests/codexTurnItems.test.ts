@@ -53,3 +53,29 @@ test('protocol leak text without a valid shell payload is filtered', () => {
     true,
   )
 })
+
+test('text fallback does not execute when tool payload is embedded in normal prose', () => {
+  const items = normalizeResponsesOutputToTurnItems([
+    {
+      type: 'message',
+      role: 'assistant',
+      content: [
+        {
+          type: 'output_text',
+          text: '我本来想这样做：to=shell code:{"command":"pwd"}',
+        },
+      ],
+    },
+  ])
+
+  assert.equal(items.some(item => item.kind === 'tool_call'), false)
+  assert.equal(items.some(item => item.kind === 'local_shell_call'), false)
+  assert.equal(
+    items.some(
+      item =>
+        item.kind === 'ui_message' &&
+        item.source === 'protocol_leak_filtered',
+    ),
+    true,
+  )
+})

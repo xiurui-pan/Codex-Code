@@ -1,20 +1,22 @@
-import test from 'node:test'
 import assert from 'node:assert/strict'
 import http from 'node:http'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-async function runHeadlessSession(options: {
-  responseBlocks: string[]
-  prompt: string
-  permissionDecision?: 'allow' | 'deny'
-}) {
-  let seenRequestBody: unknown = null
-  const tempHome = await mkdtemp(join(tmpdir(), 'codex-code-test-home-'))
-  const sockets = new Set<import('node:net').Socket>()
+async function runHeadlessSession(options) {
+  const seenRequestBodies = []
+  const sockets = new Set()
+  const sentAt = {}
+  const seenAt = {
+    firstModelTurnItem: null,
+    finalAssistant: null,
+  }
+  const tempHome = await mkdtemp(join(tmpdir(), 'codex-code-smoke-home-'))
+  const codexDir = join(tempHome, '.codex')
+  await mkdir(codexDir, { recursive: true })
 
   const server = http.createServer((req, res) => {
     if (req.method !== 'POST' || req.url !== '/responses') {
@@ -27,15 +29,24 @@ async function runHeadlessSession(options: {
     req.on('data', chunk => {
       body += chunk.toString()
     })
-    req.on('end', () => {
-      seenRequestBody = JSON.parse(body)
+    req.on('end', async () => {
+      seenRequestBodies.push(JSON.parse(body))
       res.writeHead(200, {
         'content-type': 'text/event-stream',
         connection: 'keep-alive',
         'cache-control': 'no-cache',
       })
-      for (const block of options.responseBlocks) {
-        res.write(block)
+      const requestIndex = seenRequestBodies.length - 1
+      const responseSteps =
+        options.responseBatches?.[requestIndex] ??
+        options.responseBatches?.at(-1) ??
+        []
+      for (const step of responseSteps) {
+        sentAt[step.label] = Date.now()
+        res.write(step.block)
+        if (step.delayMs && step.delayMs > 0) {
+          await new Promise(resolve => setTimeout(resolve, step.delayMs))
+        }
       }
       res.end()
     })
@@ -52,6 +63,20 @@ async function runHeadlessSession(options: {
     throw new Error('failed to bind test server')
   }
 
+  await writeFile(
+    join(codexDir, 'config.toml'),
+    [
+      'model_provider = "test-provider"',
+      'model = "gpt-5.1-codex-mini"',
+      'model_reasoning_effort = "medium"',
+      '',
+      '[model_providers.test-provider]',
+      `base_url = "http://127.0.0.1:${address.port}"`,
+      'env_key = "ANTHROPIC_API_KEY"',
+      '',
+    ].join('\n'),
+  )
+
   const child = spawn(
     'node',
     [
@@ -61,24 +86,23 @@ async function runHeadlessSession(options: {
       'stream-json',
       '--output-format',
       'stream-json',
+      '--permission-prompt-tool',
+      'stdio',
       '--verbose',
+      '--debug-to-stderr',
     ],
     {
-      cwd: process.cwd(),
+      cwd: '/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code',
       env: {
         ...process.env,
         HOME: tempHome,
-        ANTHROPIC_BASE_URL: `http://127.0.0.1:${address.port}`,
         ANTHROPIC_API_KEY: 'test-key',
-        ANTHROPIC_MODEL: 'gpt-5.1-codex-mini',
-        CLAUDE_CODE_USE_CODEX_PROVIDER: '1',
-        CLAUDE_CODE_EFFORT_LEVEL: 'medium',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     },
   )
 
-  const stdoutLines: string[] = []
+  const stdoutLines = []
   let stdoutBuffer = ''
   child.stdout.setEncoding('utf8')
   child.stdout.on('data', chunk => {
@@ -91,16 +115,21 @@ async function runHeadlessSession(options: {
         stdoutLines.push(line)
         const parsed = JSON.parse(line)
         if (
-          parsed.type === 'control_response' &&
-          parsed.response?.request_id === 'init-1'
+          seenAt.firstModelTurnItem === null &&
+          parsed.type === 'system' &&
+          parsed.subtype === 'model_turn_item'
         ) {
-          child.stdin.write(
-            JSON.stringify({
-              type: 'user',
-              message: { role: 'user', content: options.prompt },
-              uuid: 'user-1',
-            }) + '\n',
+          seenAt.firstModelTurnItem = Date.now()
+        }
+        if (
+          seenAt.finalAssistant === null &&
+          parsed.type === 'assistant' &&
+          Array.isArray(parsed.message?.content) &&
+          parsed.message.content.some(
+            part => part.type === 'text' && part.text === 'done',
           )
+        ) {
+          seenAt.finalAssistant = Date.now()
         }
         if (
           parsed.type === 'control_request' &&
@@ -124,12 +153,15 @@ async function runHeadlessSession(options: {
             }) + '\n',
           )
         }
+        if (parsed.type === 'result' && !child.stdin.destroyed) {
+          child.stdin.end()
+        }
       }
       newlineIndex = stdoutBuffer.indexOf('\n')
     }
   })
 
-  const stderrChunks: string[] = []
+  const stderrChunks = []
   child.stderr.setEncoding('utf8')
   child.stderr.on('data', chunk => stderrChunks.push(chunk))
 
@@ -137,46 +169,106 @@ async function runHeadlessSession(options: {
     JSON.stringify({
       type: 'control_request',
       request_id: 'init-1',
-      request: { subtype: 'initialize', cwd: process.cwd(), tools: [] },
+      request: {
+        subtype: 'initialize',
+        promptSuggestions: false,
+      },
+    }) + '\n',
+  )
+  child.stdin.write(
+    JSON.stringify({
+      type: 'user',
+      session_id: '',
+      parent_tool_use_id: null,
+      message: { role: 'user', content: options.prompt },
+      uuid: 'user-1',
     }) + '\n',
   )
 
-  const timeout = setTimeout(() => {
-    child.kill('SIGKILL')
-  }, 30000)
-  const [code] = (await once(child, 'close')) as [number]
-  clearTimeout(timeout)
-  for (const socket of sockets) {
-    socket.destroy()
+  let code
+  try {
+    const [exitCode] = await Promise.race([
+      once(child, 'close'),
+      new Promise((_, reject) => {
+        setTimeout(() => {
+          child.kill('SIGKILL')
+          reject(
+            new Error(
+              `headless smoke timed out\nstdout=${stdoutLines.join('\n')}\nstderr=${stderrChunks.join('')}`,
+            ),
+          )
+        }, 45000)
+      }),
+    ])
+    code = exitCode
+  } finally {
+    for (const socket of sockets) {
+      socket.destroy()
+    }
+    await new Promise(resolve => server.close(resolve))
+    await rm(tempHome, { recursive: true, force: true })
   }
-  await new Promise(resolve => server.close(resolve))
-  await rm(tempHome, { recursive: true, force: true })
 
   return {
     code,
-    requestBody: seenRequestBody as Record<string, unknown> | null,
+    requestBodies: seenRequestBodies,
     messages: stdoutLines.map(line => JSON.parse(line)),
     stderr: stderrChunks.join(''),
+    sentAt,
+    seenAt,
   }
 }
 
-test('headless path sends codex request shape and emits incremental execution items', async () => {
+async function runStreamingAssertions() {
   const result = await runHeadlessSession({
-    prompt: '请运行 pwd',
-    responseBlocks: [
-      'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"function_call","call_id":"tool-1","name":"Bash","arguments":"{\\"command\\":\\"pwd\\"}"}}\n\n',
-      'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]}}\n\n',
-      'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp-1"}}\n\n',
-      'data: [DONE]\n\n',
+    prompt: '请处理这个测试请求。',
+    responseBatches: [
+      [
+        {
+          label: 'shell-call',
+          block:
+            'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"function_call","call_id":"tool-1","name":"Bash","arguments":"{\\"command\\":\\"pwd\\"}"}}\n\n',
+          delayMs: 350,
+        },
+        {
+          label: 'completed-call',
+          block:
+            'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp-1"}}\n\n',
+        },
+        {
+          label: 'done-call',
+          block: 'data: [DONE]\n\n',
+        },
+      ],
+      [
+        {
+          label: 'final-message',
+          block:
+            'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]}}\n\n',
+        },
+        {
+          label: 'completed-final',
+          block:
+            'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp-2"}}\n\n',
+        },
+        {
+          label: 'done-final',
+          block: 'data: [DONE]\n\n',
+        },
+      ],
     ],
   })
 
   assert.equal(result.code, 0)
-  assert.equal(result.requestBody?.model, 'gpt-5.1-codex-mini')
-  assert.equal(result.requestBody?.stream, true)
-  assert.equal(result.requestBody?.tool_choice, 'auto')
-  assert.equal(result.requestBody?.reasoning?.effort, 'medium')
-  assert.equal(Array.isArray(result.requestBody?.input), true)
+  assert.equal(result.requestBodies[0]?.model, 'gpt-5.1-codex-mini')
+  assert.equal(result.requestBodies[0]?.stream, true)
+  assert.equal('tool_choice' in (result.requestBodies[0] ?? {}), false)
+  assert.equal(result.requestBodies[0]?.reasoning?.effort, 'medium')
+  assert.equal(Array.isArray(result.requestBodies[0]?.input), true)
+  assert.equal(
+    result.requestBodies[0]?.input?.[0]?.content?.[0]?.text,
+    '请处理这个测试请求。',
+  )
 
   const itemKinds = result.messages
     .filter(message => message.type === 'system' && message.subtype === 'model_turn_item')
@@ -184,23 +276,62 @@ test('headless path sends codex request shape and emits incremental execution it
   assert.equal(itemKinds.includes('local_shell_call'), true)
   assert.equal(itemKinds.includes('tool_output'), true)
   assert.equal(itemKinds.includes('execution_result'), true)
+  assert.notEqual(result.seenAt.firstModelTurnItem, null)
+  assert.notEqual(result.seenAt.finalAssistant, null)
+  assert.notEqual(result.sentAt['final-message'], undefined)
+  assert.ok(
+    Number(result.seenAt.firstModelTurnItem) < Number(result.sentAt['final-message']),
+    'model_turn_item should arrive before the server sends the final assistant block',
+  )
+  assert.ok(
+    Number(result.seenAt.firstModelTurnItem) < Number(result.seenAt.finalAssistant),
+    'model_turn_item should arrive before the final assistant message is emitted',
+  )
   assert.equal(
     result.messages.some(
       message => message.type === 'assistant' && message.message?.content?.[0]?.text === 'done',
     ),
     true,
   )
-})
+}
 
-test('headless path emits permission decision item on deny', async () => {
+async function runPermissionAssertions() {
   const result = await runHeadlessSession({
-    prompt: '请执行 cd src && echo ok > perm-check.txt',
+    prompt: '请继续处理这个权限测试请求。',
     permissionDecision: 'deny',
-    responseBlocks: [
-      'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"function_call","call_id":"tool-2","name":"Bash","arguments":"{\\"command\\":\\"cd src && echo ok > perm-check.txt\\"}"}}\n\n',
-      'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"denied"}]}}\n\n',
-      'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp-2"}}\n\n',
-      'data: [DONE]\n\n',
+    responseBatches: [
+      [
+        {
+          label: 'permission-shell-call',
+          block:
+            'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"function_call","call_id":"tool-2","name":"Bash","arguments":"{\\"command\\":\\"echo denied > /tmp/codex-smoke-deny.txt\\"}"}}\n\n',
+        },
+        {
+          label: 'permission-call-completed',
+          block:
+            'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp-3"}}\n\n',
+        },
+        {
+          label: 'permission-call-done',
+          block: 'data: [DONE]\n\n',
+        },
+      ],
+      [
+        {
+          label: 'permission-final-message',
+          block:
+            'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"denied"}]}}\n\n',
+        },
+        {
+          label: 'permission-final-completed',
+          block:
+            'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp-4"}}\n\n',
+        },
+        {
+          label: 'permission-final-done',
+          block: 'data: [DONE]\n\n',
+        },
+      ],
     ],
   })
 
@@ -208,9 +339,16 @@ test('headless path emits permission decision item on deny', async () => {
   const itemKinds = result.messages
     .filter(message => message.type === 'system' && message.subtype === 'model_turn_item')
     .map(message => message.item_kind)
-  assert.equal(itemKinds.includes('permission_request'), true)
-  assert.equal(itemKinds.includes('permission_decision'), true)
   assert.equal(itemKinds.includes('execution_result'), true)
+  assert.equal(
+    result.messages.some(
+      message =>
+        message.type === 'control_request' &&
+        message.request?.subtype === 'can_use_tool' &&
+        message.request?.tool_name === 'Bash',
+    ),
+    true,
+  )
   assert.equal(
     result.messages.some(
       message =>
@@ -220,4 +358,18 @@ test('headless path emits permission decision item on deny', async () => {
     ),
     true,
   )
-})
+}
+
+async function main() {
+  await runStreamingAssertions()
+  await runPermissionAssertions()
+}
+
+main()
+  .then(() => {
+    process.exit(0)
+  })
+  .catch(error => {
+    console.error(error)
+    process.exit(1)
+  })

@@ -21,6 +21,7 @@ import { zodToJsonSchema } from '../../utils/zodToJsonSchema.js'
 import {
   buildAssistantMessageFromTurnItems,
   getRenderableModelTurnItems,
+  mergeStreamedAssistantMessages,
   type ModelTurnItem,
 } from './modelTurnItems.js'
 import {
@@ -548,7 +549,7 @@ export async function queryCodexResponses({
   options,
   signal,
 }: CodexStreamingArgs) {
-  let lastAssistantMessage = createAssistantMessage({ content: '' })
+  const streamedMessages = []
 
   for await (const assistantMessage of queryCodexResponsesStream({
     messages,
@@ -556,10 +557,13 @@ export async function queryCodexResponses({
     options,
     signal,
   })) {
-    lastAssistantMessage = assistantMessage
+    streamedMessages.push(assistantMessage)
   }
 
-  return lastAssistantMessage
+  return (
+    mergeStreamedAssistantMessages(streamedMessages) ??
+    createAssistantMessage({ content: '' })
+  )
 }
 
 export { normalizeTextContent }

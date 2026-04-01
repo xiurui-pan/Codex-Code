@@ -26,7 +26,6 @@ export type ResponsesOutputItem =
   | ResponsesFunctionCallItem
 
 type ParsedToolCall = {
-  prefixText: string
   toolName: string
   input: Record<string, unknown>
 }
@@ -165,7 +164,6 @@ function normalizeShellCommandFromPayload(
   }
 
   return {
-    prefixText: '',
     toolName: BASH_TOOL_NAME,
     input,
   }
@@ -179,7 +177,6 @@ function extractShellCommandFromQuotedCode(text: string): ParsedToolCall | null 
   }
 
   return {
-    prefixText: '',
     toolName: BASH_TOOL_NAME,
     input: { command },
   }
@@ -221,11 +218,9 @@ function extractTextFallbackToolCall(text: string): ParsedToolCall | null {
     return null
   }
 
-  const markerIndex = text.indexOf('to=shell')
-  const searchStart = markerIndex === -1 ? 0 : markerIndex
   const payloadCandidates = [
-    extractJsonObjectAfterMarker(text, 'code:'),
-    extractBalancedJsonObject(text, searchStart),
+    extractJsonObjectAfterMarker(trimmedText, 'code:'),
+    extractBalancedJsonObject(trimmedText, 0),
   ]
 
   for (const payloadText of payloadCandidates) {
@@ -251,25 +246,19 @@ function extractTextFallbackToolCall(text: string): ParsedToolCall | null {
       continue
     }
 
-    normalized.prefixText =
-      markerIndex === -1 ? '' : text.slice(0, markerIndex).trim()
     return normalized
   }
 
-  const quotedCode = extractShellCommandFromQuotedCode(text)
+  const quotedCode = extractShellCommandFromQuotedCode(trimmedText)
   if (quotedCode) {
-    quotedCode.prefixText =
-      markerIndex === -1 ? '' : text.slice(0, markerIndex).trim()
     return quotedCode
   }
 
-  const inlineCommand = extractShellCommandFromInlineCommand(text)
+  const inlineCommand = extractShellCommandFromInlineCommand(trimmedText)
   if (!inlineCommand) {
     return null
   }
 
-  inlineCommand.prefixText =
-    markerIndex === -1 ? '' : text.slice(0, markerIndex).trim()
   return inlineCommand
 }
 
@@ -343,14 +332,6 @@ export function normalizeResponsesOutputToTurnItems(
         text: 'Provider emitted a text fallback tool call; using temporary parser.',
         source: 'text_fallback_tool_call',
       })
-      if (fallbackToolCall.prefixText) {
-        turnItems.push({
-          kind: 'final_answer',
-          provider: 'custom',
-          text: fallbackToolCall.prefixText,
-          source: 'text_fallback',
-        })
-      }
       turnItems.push(
         ...buildToolCallItemsForLocalExecution(
           randomUUID(),
