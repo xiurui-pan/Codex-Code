@@ -64,20 +64,21 @@
 - `9a1c7af` `refactor: move request params builder out of claude api`
   把 `paramsFromContext` 这层请求参数构造逻辑搬到 `requestParamsBuilder.ts`，并让 `claude.ts` 改成调用这层；同时保持 system prompt 骨架和流式解析主干不变。
 
-- 未提交：请求前置状态准备层内移
+- `3bf8c47` `refactor: move request preflight state out of claude api`
   把请求前置状态准备这一层搬到 `requestPreflightState.ts`，并让 `claude.ts` 改成调用这层；同时保持 system prompt 骨架、`paramsFromContext` 本体和流式解析主干不变。
 
 ## 当前进行中
 
 - `providerClient`、`model`、`requestConfig` 三条入口已经初步成形，外围外部直连点也已经基本清零，当前已经进入 `services/api/claude.ts` 内部能力拆分阶段。
-- 当前焦点已经从请求参数构造层继续推进到请求前置状态准备层，正在把 `isFastMode`、锁存状态、`recordPromptState`、`newContext`、`llmSpan` 之前的准备逻辑从 `claude.ts` 内部拆出来。
+- `requestPreflightState` 已经提交，当前大块是 `request input preparation extraction`，正在把 `messagesForAPI` 归一化、tool-search 后处理、tool result 成对修复、advisor/media 清理、指纹、deferred tools prepend、Chrome 指令注入、`systemPrompt/system/allTools` 组装从 `claude.ts` 内部搬到独立入口。
+- 当前工作树里的未提交改动集中在 `upstream/claude-code/src/services/api/requestInputPreparation.ts` 和 `upstream/claude-code/src/services/api/claude.ts`，目标是继续缩小 `claude.ts` 的请求输入准备主段，但不改 system prompt 骨架、流式解析主干和 QueryEngine 收口。
 - 明确不再保留 Anthropic 专用的 `anti_distillation` 逻辑，后续拆分以通用调用能力为主。
 - 控制改动范围，避免又回到 prototype 扩功能的路线。
 
 ## 下一步
 
-- 继续从 `services/api/claude.ts` 内部挑选最小的高频能力接缝，优先推进请求输入准备层的内移，例如 `messagesForAPI` 归一化、deferred tools、Chrome 指令、`extraToolSchemas` / `allTools` 组装这类逻辑。
-- 在请求前置状态准备层继续稳定后，进一步朝查询主循环入口和回合边界推进。
+- 先完成并验证 `request input preparation extraction` 这一块，确保提示词骨架、输入归一化顺序、deferred tools 和 `allTools` 组装行为不漂。
+- 这一块稳定后，再继续从 `services/api/claude.ts` 内部挑选最小的高频能力接缝，优先考虑请求包络与请求发送前后的衔接层，而不是直接碰主循环收口。
 - 优先选择高频复用、但写入范围还能控制住的主链入口，避免一次跨太大。
 - 在 facade 足够稳定后，再进入下一层：抽更中立的调用类型和回合边界。
 - 每轮都同步更新这份文件，记录已完成提交、当前进行中和下一步。
