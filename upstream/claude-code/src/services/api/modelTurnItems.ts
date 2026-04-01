@@ -53,6 +53,14 @@ export function createSystemMessageFromModelTurnItem(
         content: `${item.toolName} 执行${item.status === 'success' ? '完成' : item.status === 'denied' ? '被拒绝' : '失败'}`,
         modelTurnItem: item,
       }
+    case 'tool_output':
+      return {
+        type: 'system',
+        subtype: 'informational',
+        level: 'info',
+        content: `工具结果已回灌: ${item.toolUseId}`,
+        modelTurnItem: item,
+      }
     default:
       return null
   }

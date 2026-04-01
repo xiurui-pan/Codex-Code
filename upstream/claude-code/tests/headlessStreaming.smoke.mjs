@@ -424,12 +424,22 @@ async function runPermissionAssertions() {
   })
 
   assert.equal(result.code, 0, result.stderr)
-  const itemKinds = result.messages
-    .filter(message => message.type === 'system' && message.subtype === 'model_turn_item')
-    .map(message => message.item_kind)
-  assert.equal(itemKinds.includes('local_shell_call'), true)
-  assert.equal(itemKinds.includes('execution_result'), true)
-  assert.equal(itemKinds.includes('tool_output'), true)
+  const modelTurnItems = result.messages.filter(
+    message => message.type === 'system' && message.subtype === 'model_turn_item',
+  )
+  const itemKinds = modelTurnItems.map(message => message.item_kind)
+  const localShellPhases = modelTurnItems
+    .filter(message => message.item_kind === 'local_shell_call')
+    .map(message => message.item?.phase)
+  assert.deepEqual(localShellPhases, ['requested', 'completed'])
+  assert.equal(itemKinds.filter(kind => kind === 'tool_output').length, 1)
+  assert.equal(itemKinds.filter(kind => kind === 'execution_result').length, 1)
+  assert.deepEqual(itemKinds, [
+    'local_shell_call',
+    'tool_output',
+    'local_shell_call',
+    'execution_result',
+  ])
   assert.equal(
     result.messages.some(
       message =>

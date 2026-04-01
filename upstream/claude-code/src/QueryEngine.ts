@@ -827,7 +827,6 @@ export class QueryEngine {
           break
         case 'user':
           this.mutableMessages.push(message)
-          yield* this.emitExecutionItemMessages(message.modelTurnItems)
           yield* normalizeMessage(message)
           break
         case 'stream_event':

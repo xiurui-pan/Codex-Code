@@ -40,6 +40,7 @@ This snapshot is also being used as a working base for a `Codex Code` prototype.
 - the old Claude-shaped middle layer is being narrowed out of the main path
 - Codex responses are being pushed toward explicit turn items and execution objects instead of synthetic assistant wrappers
 - text fallback tool calls are being reduced to isolated debug-only paths rather than normal execution paths
+- headless execution events are being normalized around one-shot system execution objects so permission and execution state is not duplicated on the wire
 
 ## Built with `oh-my-codex`
 

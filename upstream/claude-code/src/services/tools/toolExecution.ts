@@ -1098,11 +1098,7 @@ async function checkPermissionsAndCallTool(
       ),
     ]
 
-    appendModelTurnItemMessages(resultingMessages, permissionItems)
-    appendModelTurnItemMessages(
-      resultingMessages,
-      modelTurnItems.filter(item => item.kind === 'execution_result'),
-    )
+    appendModelTurnItemMessages(resultingMessages, modelTurnItems)
 
     resultingMessages.push({
       message: createUserMessage({
@@ -1516,11 +1512,7 @@ async function checkPermissionsAndCallTool(
         ),
       ]
 
-      appendModelTurnItemMessages(resultingMessages, permissionItems)
-      appendModelTurnItemMessages(
-        resultingMessages,
-        modelTurnItems.filter(item => item.kind === 'execution_result'),
-      )
+      appendModelTurnItemMessages(resultingMessages, modelTurnItems)
 
       resultingMessages.push({
         message: createUserMessage({

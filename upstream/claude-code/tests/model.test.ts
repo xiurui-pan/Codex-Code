@@ -33,7 +33,7 @@ test('model entry keeps codex-only local usage and token helpers', async () => {
   assert.equal(source.includes('getCodexConfiguredModel'), true)
 })
 
-test('codex responses entry no longer folds raw turn items back into a synthetic assistant shell', async () => {
+test('codex responses entry now returns raw turn-item chunks and leaves assistant-shell compatibility to outer layers', async () => {
   const source = await readCodexResponsesSource()
 
   assert.equal(source.includes("kind: 'turn_items'"), true)
