@@ -99,9 +99,9 @@ import { createDumpPromptsFetch } from './services/api/dumpPrompts.js'
 import type { CodexResponseChunk } from './services/api/codexResponses.js'
 import {
   createAssistantMessageFromPreferredAssistantResponsePayload,
-  createPreferredAssistantResponsePayloadFromPreferredContent,
+  createPreferredAssistantResponsePayloadFromTurnItems,
   createSystemMessageFromModelTurnItem,
-  resolvePreferredAssistantTurnContent,
+  preferredAssistantResponsePayloadHasContent,
 } from './services/api/modelTurnItems.js'
 import { StreamingToolExecutor } from './services/tools/StreamingToolExecutor.js'
 import { queryCheckpoint } from './utils/queryProfiler.js'
@@ -753,18 +753,11 @@ async function* queryLoop(
                 yield systemMessage
               }
 
-              const preferredAssistant = resolvePreferredAssistantTurnContent(
-                turnChunk.turnItems,
-              )
-              if (preferredAssistant.kind === 'empty') {
-                continue
-              }
-
               const assistantPayload =
-                createPreferredAssistantResponsePayloadFromPreferredContent(
-                  preferredAssistant,
+                createPreferredAssistantResponsePayloadFromTurnItems(
+                  turnChunk.turnItems,
                 )
-              if (assistantPayload.kind !== 'synthetic_payload') {
+              if (!preferredAssistantResponsePayloadHasContent(assistantPayload)) {
                 continue
               }
 

@@ -10,12 +10,16 @@ import {
   queryCodexResponses,
   queryCodexResponsesStream,
 } from './codexResponses.js'
+import type { PreferredAssistantResponsePayload } from './modelTurnItems.js'
 import {
+  createAssistantMessageFromPreferredAssistantResponsePayload,
   getRenderableModelTurnItems,
+  isEmptyPreferredAssistantResponsePayload,
+  maybeCreateAssistantMessageFromPreferredAssistantResponsePayload,
   resolvePreferredAssistantTurnContent,
 } from './modelTurnItems.js'
 import {
-  preferredTurnResultToAssistantMessage,
+  preferredTurnResultToPayload,
   type PreferredAssistantTurnResult,
 } from './preferredAssistantResponse.js'
 
@@ -27,6 +31,12 @@ export type StreamingModelCaller = (
 export type NonStreamingModelCaller = (
   args: Parameters<typeof queryCodexResponses>[0],
 ) => Promise<AssistantMessage>
+export type StreamingModelPayloadCaller = (
+  args: Parameters<typeof queryCodexResponsesStream>[0],
+) => AsyncGenerator<PreferredAssistantResponsePayload, void, unknown>
+export type NonStreamingModelPayloadCaller = (
+  args: Parameters<typeof queryCodexResponses>[0],
+) => Promise<PreferredAssistantResponsePayload>
 export type StreamingModelTurnCaller = typeof queryCodexResponsesStream
 export type NonStreamingModelTurnCaller = typeof queryCodexResponses
 export type SingleTurnModelCallArgs = {
@@ -41,6 +51,9 @@ export type ModelCaller = (
 export type SmallModelCaller = (
   args: SingleTurnModelCallArgs,
 ) => Promise<AssistantMessage>
+export type SmallModelPayloadCaller = (
+  args: SingleTurnModelCallArgs,
+) => Promise<PreferredAssistantResponsePayload>
 export type SmallModelTurnCaller = (
   args: SingleTurnModelCallArgs,
 ) => Promise<CodexResponseResult>
@@ -148,16 +161,27 @@ export const callModelPreferredWithStreaming: StreamingPreferredModelCaller =
     }
   }
 
+export const callModelPayloadWithStreaming: StreamingModelPayloadCaller =
+  async function* (args) {
+    for await (const result of callModelPreferredWithStreaming(args)) {
+      yield preferredTurnResultToPayload(result)
+    }
+  }
+
 export const callModelWithStreaming: StreamingModelCaller = async function* (
   args,
 ) {
-  for await (const result of callModelPreferredWithStreaming(args)) {
-    const assistantMessage = preferredTurnResultToAssistantMessage(result)
-    if (assistantMessage) {
-      yield assistantMessage
+  for await (const result of callModelPayloadWithStreaming(args)) {
+    if (isEmptyPreferredAssistantResponsePayload(result)) {
+      continue
     }
+    yield createAssistantMessageFromPreferredAssistantResponsePayload(result)
   }
 }
+
+export const callModelPayloadWithoutStreaming: NonStreamingModelPayloadCaller =
+  async args =>
+    preferredTurnResultToPayload(await callModelPreferredWithoutStreaming(args))
 
 export const callModelTurnWithStreaming: StreamingModelTurnCaller =
   queryCodexResponsesStream
@@ -172,9 +196,7 @@ export const callModelPreferredWithoutStreaming: NonStreamingPreferredModelCalle
     )
 
 export const callModelWithoutStreaming: NonStreamingModelCaller = async args =>
-  preferredTurnResultToAssistantMessage(
-    await callModelPreferredWithoutStreaming(args),
-  ) ?? createAssistantMessage({ content: '' })
+  createAssistantMessageFromPayloadOrEmpty(await callModelPayloadWithoutStreaming(args))
 
 export const callModel: ModelCaller = async args =>
   callModelWithoutStreaming(
@@ -202,9 +224,20 @@ export const callSmallModelTurn: SmallModelTurnCaller = async args =>
 export const callSmallModelPreferred: SmallPreferredModelCaller = async args =>
   codexResultToPreferredAssistantTurnResult(await callSmallModelTurn(args))
 
+export const callSmallModelPayload: SmallModelPayloadCaller = async args =>
+  preferredTurnResultToPayload(await callSmallModelPreferred(args))
+
 export const callSmallModel: SmallModelCaller = async args =>
-  preferredTurnResultToAssistantMessage(await callSmallModelPreferred(args)) ??
-  createAssistantMessage({ content: '' })
+  createAssistantMessageFromPayloadOrEmpty(await callSmallModelPayload(args))
+
+function createAssistantMessageFromPayloadOrEmpty(
+  payload: PreferredAssistantResponsePayload,
+): AssistantMessage {
+  return (
+    maybeCreateAssistantMessageFromPreferredAssistantResponsePayload(payload) ??
+    createAssistantMessage({ content: '' })
+  )
+}
 
 export const verifyModelAccess: ModelAccessVerifier = async (
   apiKey,

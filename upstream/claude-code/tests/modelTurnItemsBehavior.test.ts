@@ -1,9 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  createPreferredAssistantResponsePayloadFromTurnItems,
   createSyntheticPayloadFromTurnItems,
   createAssistantMessageFromSyntheticPayload,
   createSyntheticAssistantPayloadFromPreferredContent,
+  maybeCreateAssistantMessageFromPreferredAssistantResponsePayload,
+  preferredAssistantResponsePayloadHasContent,
   resolvePreferredAssistantTurnContent,
 } from '../src/services/api/modelTurnItems.js'
 
@@ -89,4 +92,23 @@ test('turn items can now produce a synthetic payload before the assistant shell 
       },
     ],
   })
+})
+
+test('preferred response payload keeps empty distinct from an empty assistant shell', () => {
+  const payload = createPreferredAssistantResponsePayloadFromTurnItems([
+    {
+      kind: 'ui_message',
+      provider: 'custom',
+      level: 'info',
+      text: 'skip me',
+      source: 'test',
+    },
+  ])
+
+  assert.equal(payload.kind, 'empty')
+  assert.equal(preferredAssistantResponsePayloadHasContent(payload), false)
+  assert.equal(
+    maybeCreateAssistantMessageFromPreferredAssistantResponsePayload(payload),
+    null,
+  )
 })

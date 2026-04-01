@@ -302,6 +302,20 @@ export function buildAssistantMessageFromPreferredContent(
   )
 }
 
+export function isEmptyPreferredAssistantResponsePayload(
+  payload: PreferredAssistantResponsePayload,
+): boolean {
+  return payload.kind === 'empty'
+}
+
+export function preferredAssistantResponsePayloadHasContent(
+  payload: PreferredAssistantResponsePayload,
+): boolean {
+  return (
+    payload.kind === 'synthetic_payload' && payload.payload.content.length > 0
+  )
+}
+
 export function createPreferredAssistantResponsePayloadFromPreferredContent(
   preferred: PreferredAssistantTurnContent,
 ): PreferredAssistantResponsePayload {
@@ -348,6 +362,16 @@ export function buildPreferredAssistantMessageFromTurnItems(
   return createAssistantMessageFromPreferredAssistantResponsePayload(
     createPreferredAssistantResponsePayloadFromTurnItems(items),
   )
+}
+
+export function maybeCreateAssistantMessageFromPreferredAssistantResponsePayload(
+  payload: PreferredAssistantResponsePayload,
+): AssistantMessage | null {
+  if (isEmptyPreferredAssistantResponsePayload(payload)) {
+    return null
+  }
+
+  return createAssistantMessageFromPreferredAssistantResponsePayload(payload)
 }
 
 export function buildAssistantMessageFromTurnItems(
