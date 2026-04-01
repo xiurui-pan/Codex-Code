@@ -1,0 +1,18 @@
+Codex Code licensing notice
+===========================
+
+The root LICENSE file applies to original content created in this repository,
+unless a file or directory states otherwise.
+
+This repository also contains imported upstream snapshots and may contain other
+third-party material. Those materials are not relicensed by the root LICENSE.
+They remain subject to their own original licenses, notices, or usage terms.
+
+Current known example:
+- `upstream/claude-code/` is an imported upstream snapshot preserved for
+  baseline and migration work. Its provenance is documented in
+  `upstream/README.md`.
+
+When redistributing, reviewing, or reusing content from this repository,
+please evaluate original repository content and imported third-party content
+separately.
