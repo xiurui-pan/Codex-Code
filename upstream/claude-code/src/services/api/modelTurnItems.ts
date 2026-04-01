@@ -199,6 +199,19 @@ export type SyntheticAssistantPayload = {
   modelTurnItems: ModelTurnItem[]
 }
 
+export type PreferredAssistantResponsePayload =
+  | {
+      kind: 'empty'
+    }
+  | {
+      kind: 'api_error'
+      errorMessage: string
+    }
+  | {
+      kind: 'synthetic_payload'
+      payload: SyntheticAssistantPayload
+    }
+
 export type ModelTurnItem =
   | RawModelOutputItem
   | ModelToolCallItem
@@ -284,19 +297,40 @@ export function resolvePreferredAssistantTurnContent(
 export function buildAssistantMessageFromPreferredContent(
   preferred: PreferredAssistantTurnContent,
 ): AssistantMessage {
-  return createAssistantMessageFromSyntheticPayload(
-    createSyntheticAssistantPayloadFromPreferredContent(preferred),
+  return createAssistantMessageFromPreferredAssistantResponsePayload(
+    createPreferredAssistantResponsePayloadFromPreferredContent(preferred),
   )
+}
+
+export function createPreferredAssistantResponsePayloadFromPreferredContent(
+  preferred: PreferredAssistantTurnContent,
+): PreferredAssistantResponsePayload {
+  if (preferred.kind === 'empty') {
+    return { kind: 'empty' }
+  }
+
+  return {
+    kind: 'synthetic_payload',
+    payload: createSyntheticAssistantPayloadFromPreferredContent(preferred),
+  }
 }
 
 export function createSyntheticPayloadFromTurnItems(
   items: ModelTurnItem[],
 ): SyntheticAssistantPayload | null {
-  const preferred = resolvePreferredAssistantTurnContent(items)
-  if (preferred.kind === 'empty') {
+  const payload = createPreferredAssistantResponsePayloadFromTurnItems(items)
+  if (payload.kind !== 'synthetic_payload') {
     return null
   }
-  return createSyntheticAssistantPayloadFromPreferredContent(preferred)
+  return payload.payload
+}
+
+export function createPreferredAssistantResponsePayloadFromTurnItems(
+  items: ModelTurnItem[],
+): PreferredAssistantResponsePayload {
+  return createPreferredAssistantResponsePayloadFromPreferredContent(
+    resolvePreferredAssistantTurnContent(items),
+  )
 }
 
 export function createSyntheticAssistantPayloadFromPreferredContent(
@@ -311,12 +345,8 @@ export function createSyntheticAssistantPayloadFromPreferredContent(
 export function buildPreferredAssistantMessageFromTurnItems(
   items: ModelTurnItem[],
 ): AssistantMessage {
-  const payload = createSyntheticPayloadFromTurnItems(items)
-  return createAssistantMessageFromSyntheticPayload(
-    payload ?? {
-      content: [],
-      modelTurnItems: [],
-    },
+  return createAssistantMessageFromPreferredAssistantResponsePayload(
+    createPreferredAssistantResponsePayloadFromTurnItems(items),
   )
 }
 
@@ -408,6 +438,41 @@ export function createAssistantMessageFromSyntheticPayload(
   const message = createSyntheticAssistantMessage(payload.content)
   if (payload.modelTurnItems.length > 0) {
     message.modelTurnItems = payload.modelTurnItems
+  }
+  return message
+}
+
+export function createAssistantMessageFromPreferredAssistantResponsePayload(
+  payload: PreferredAssistantResponsePayload,
+): AssistantMessage {
+  if (payload.kind === 'api_error') {
+    return createSyntheticAssistantApiErrorMessage(payload.errorMessage)
+  }
+
+  if (payload.kind === 'empty') {
+    return createAssistantMessageFromSyntheticPayload({
+      content: [],
+      modelTurnItems: [],
+    })
+  }
+
+  return createAssistantMessageFromSyntheticPayload(payload.payload)
+}
+
+function createSyntheticAssistantApiErrorMessage(
+  errorMessage: string,
+): AssistantMessage {
+  const message = createSyntheticAssistantMessage([
+    {
+      type: 'text',
+      text: errorMessage === '' ? NO_CONTENT_MESSAGE : errorMessage,
+    },
+  ])
+  message.isApiErrorMessage = true
+  message.apiError = 'api_error'
+  message.error = {
+    type: 'api_error',
+    message: errorMessage,
   }
   return message
 }

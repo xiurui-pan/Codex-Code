@@ -1,8 +1,11 @@
 import type { AssistantMessage } from '../../types/message.js'
-import type { PreferredAssistantTurnResult } from '../api/model.js'
 import {
-  createAssistantMessageFromSyntheticPayload,
-  createSyntheticAssistantPayloadFromPreferredContent,
+  preferredTurnResultToAssistantMessage,
+  type PreferredAssistantTurnResult,
+} from '../api/preferredAssistantResponse.js'
+import {
+  createAssistantMessageFromPreferredAssistantResponsePayload,
+  createPreferredAssistantResponsePayloadFromPreferredContent,
   resolvePreferredAssistantTurnContent,
   type ModelTurnItem,
 } from '../api/modelTurnItems.js'
@@ -23,39 +26,7 @@ export function accumulatePreferredStreamingEvent(
       hasStartedStreaming: false,
       responseLengthDelta: 0,
       aggregatedItems,
-      immediateResponse: {
-        type: 'assistant',
-        uuid: 'compact-preferred-streaming-api-error',
-        timestamp: new Date().toISOString(),
-        isApiErrorMessage: true,
-        apiError: 'api_error',
-        error: {
-          type: 'api_error',
-          message: event.errorMessage,
-        },
-        message: {
-          id: 'compact-preferred-streaming-api-error',
-          container: null,
-          model: 'codex-synthetic',
-          role: 'assistant',
-          stop_reason: 'stop_sequence',
-          stop_sequence: '',
-          type: 'message',
-          usage: {
-            input_tokens: 0,
-            output_tokens: 0,
-            cache_creation_input_tokens: 0,
-            cache_read_input_tokens: 0,
-          },
-          context_management: null,
-          content: [
-            {
-              type: 'text',
-              text: event.errorMessage,
-            },
-          ],
-        },
-      },
+      immediateResponse: preferredTurnResultToAssistantMessage(event),
     }
   }
 
@@ -69,10 +40,18 @@ export function accumulatePreferredStreamingEvent(
   }
 
   const nextItems = [...aggregatedItems, ...event.preferred.renderableItems]
-  const payload = createSyntheticAssistantPayloadFromPreferredContent(
+  const payload = createPreferredAssistantResponsePayloadFromPreferredContent(
     event.preferred,
   )
-  const responseLengthDelta = payload.content.reduce((count, block) => {
+  if (payload.kind !== 'synthetic_payload') {
+    return {
+      hasStartedStreaming: false,
+      responseLengthDelta: 0,
+      aggregatedItems: nextItems,
+      immediateResponse: null,
+    }
+  }
+  const responseLengthDelta = payload.payload.content.reduce((count, block) => {
     if (block.type === 'text') {
       return count + block.text.length
     }
@@ -97,7 +76,7 @@ export function finalizePreferredStreamingAggregation(
     return null
   }
 
-  return createAssistantMessageFromSyntheticPayload(
-    createSyntheticAssistantPayloadFromPreferredContent(finalPreferred),
+  return createAssistantMessageFromPreferredAssistantResponsePayload(
+    createPreferredAssistantResponsePayloadFromPreferredContent(finalPreferred),
   )
 }

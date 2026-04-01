@@ -165,6 +165,7 @@
 - 控制改动范围，避免又回到 prototype 扩功能的路线。
 - 当前新的重点已经不是登录、OAuth 或远端传输链路，也不是“能不能显示首个 REPL 画面”，而是让已经打通的真实交互问答链继续稳定下来，并逐步接上后续能力。
 - 当前这一整块主线已经从“打通最小权限闭环”推进到“收尾与稳定化”：后续重点不再是找权限事件，而是继续减少 provider 文本输出形状带来的适配脆弱点，并逐步把更多工具场景收进同一条稳定路径。
+- 这一轮又往外推了一层 synthetic assistant 包壳：`compact` 的 `api_error` 不再在边界手写 assistant 结构，而是回到统一的 preferred payload 包装；`query.ts` 和 `model.ts` 也开始优先在 payload 层传递，再在更外层按需生成 `AssistantMessage`。
 
 ## 下一步
 

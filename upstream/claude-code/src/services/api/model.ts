@@ -1,11 +1,8 @@
 import type { NonNullableUsage } from '../../entrypoints/sdk/sdkUtilityTypes.js'
 import type { AssistantMessage } from '../../types/message.js'
 import { getCodexConfiguredModel } from '../../utils/codexConfig.js'
-import {
-  createAssistantAPIErrorMessage,
-  createAssistantMessage,
-} from '../../utils/messages.js'
 import { getModelMaxOutputTokens as getContextMaxOutputTokens } from '../../utils/context.js'
+import { createAssistantMessage } from '../../utils/messages.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import {
   type CodexResponseChunk,
@@ -14,12 +11,15 @@ import {
   queryCodexResponsesStream,
 } from './codexResponses.js'
 import {
-  createAssistantMessageFromSyntheticPayload,
-  createSyntheticPayloadFromTurnItems,
   getRenderableModelTurnItems,
-  type PreferredAssistantTurnContent,
   resolvePreferredAssistantTurnContent,
 } from './modelTurnItems.js'
+import {
+  preferredTurnResultToAssistantMessage,
+  type PreferredAssistantTurnResult,
+} from './preferredAssistantResponse.js'
+
+export type { PreferredAssistantTurnResult } from './preferredAssistantResponse.js'
 
 export type StreamingModelCaller = (
   args: Parameters<typeof queryCodexResponsesStream>[0],
@@ -47,18 +47,6 @@ export type SmallModelTurnCaller = (
 export type SmallPreferredModelCaller = (
   args: SingleTurnModelCallArgs,
 ) => Promise<PreferredAssistantTurnResult>
-export type PreferredAssistantTurnResult =
-  | {
-      kind: 'api_error'
-      errorMessage: string
-    }
-  | {
-      kind: 'preferred_content'
-      preferred: PreferredAssistantTurnContent
-    }
-  | {
-      kind: 'empty'
-    }
 export type StreamingPreferredModelCaller = (
   args: Parameters<typeof queryCodexResponsesStream>[0],
 ) => AsyncGenerator<PreferredAssistantTurnResult, void, unknown>
@@ -151,36 +139,6 @@ function codexChunkToPreferredAssistantTurnResult(
     kind: 'preferred_content',
     preferred: preferredAssistant,
   }
-}
-
-function preferredTurnResultToAssistantMessage(
-  result: PreferredAssistantTurnResult,
-): AssistantMessage | null {
-  if (result.kind === 'api_error') {
-    return createAssistantAPIErrorMessage({
-      content: result.errorMessage,
-      apiError: 'api_error',
-      error: {
-        type: 'api_error',
-        message: result.errorMessage,
-      },
-    })
-  }
-
-  if (result.kind === 'empty') {
-    return null
-  }
-
-  const payload = createSyntheticPayloadFromTurnItems(
-    result.preferred.renderableItems,
-  )
-  if (!payload) {
-    return null
-  }
-
-  return createAssistantMessageFromSyntheticPayload(
-    payload,
-  )
 }
 
 export const callModelPreferredWithStreaming: StreamingPreferredModelCaller =

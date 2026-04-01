@@ -98,8 +98,8 @@ import type { QuerySource } from './constants/querySource.js'
 import { createDumpPromptsFetch } from './services/api/dumpPrompts.js'
 import type { CodexResponseChunk } from './services/api/codexResponses.js'
 import {
-  createAssistantMessageFromSyntheticPayload,
-  createSyntheticPayloadFromTurnItems,
+  createAssistantMessageFromPreferredAssistantResponsePayload,
+  createPreferredAssistantResponsePayloadFromPreferredContent,
   createSystemMessageFromModelTurnItem,
   resolvePreferredAssistantTurnContent,
 } from './services/api/modelTurnItems.js'
@@ -761,13 +761,17 @@ async function* queryLoop(
               }
 
               const assistantPayload =
-                createSyntheticPayloadFromTurnItems(turnChunk.turnItems)
-              if (!assistantPayload) {
+                createPreferredAssistantResponsePayloadFromPreferredContent(
+                  preferredAssistant,
+                )
+              if (assistantPayload.kind !== 'synthetic_payload') {
                 continue
               }
 
               const assistantCandidate =
-                createAssistantMessageFromSyntheticPayload(assistantPayload)
+                createAssistantMessageFromPreferredAssistantResponsePayload(
+                  assistantPayload,
+                )
               if (assistantCandidate.message.content.length > 0) {
                 internalAssistantMessage = assistantCandidate
                 if (assistantMessageContainsRenderableText(assistantCandidate)) {
