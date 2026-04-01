@@ -103,6 +103,7 @@ import {
   createSystemMessageFromModelTurnItem,
   preferredAssistantResponsePayloadHasContent,
 } from './services/api/modelTurnItems.js'
+import { preferredTurnResultToPayload } from './services/api/preferredAssistantResponse.js'
 import { StreamingToolExecutor } from './services/tools/StreamingToolExecutor.js'
 import { queryCheckpoint } from './utils/queryProfiler.js'
 import { runTools } from './services/tools/toolOrchestration.js'
@@ -732,14 +733,13 @@ async function* queryLoop(
 
             if ((chunk as CodexResponseChunk).kind === 'api_error') {
               const errorChunk = chunk as CodexResponseChunk
-              message = createAssistantAPIErrorMessage({
-                content: errorChunk.errorMessage,
-                apiError: 'api_error',
-                error: {
-                  type: 'api_error',
-                  message: errorChunk.errorMessage,
-                },
-              })
+              message =
+                createAssistantMessageFromPreferredAssistantResponsePayload(
+                  preferredTurnResultToPayload({
+                    kind: 'api_error',
+                    errorMessage: errorChunk.errorMessage,
+                  }),
+                )
             } else if ((chunk as CodexResponseChunk).kind === 'turn_items') {
               const turnChunk = chunk as Extract<
                 CodexResponseChunk,

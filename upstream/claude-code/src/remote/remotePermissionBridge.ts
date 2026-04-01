@@ -1,8 +1,7 @@
 import type { SDKControlPermissionRequest } from '../entrypoints/sdk/controlTypes.js'
 import type { Tool } from '../Tool.js'
-import type { AssistantMessage } from '../types/message.js'
 import {
-  buildRemotePermissionAssistantMessage,
+  applyRemotePermissionAssistantFields,
   buildRemotePermissionPayload,
 } from './remotePermissionShape.js'
 import { jsonStringify } from '../utils/slowOperations.js'
@@ -18,16 +17,7 @@ export function createRemotePermissionPayload(
   return buildRemotePermissionPayload(request)
 }
 
-/**
- * Create a synthetic AssistantMessage for remote permission requests.
- * The ToolUseConfirm type still requires an AssistantMessage at this boundary.
- */
-export function createRemotePermissionAssistantMessage(
-  request: SDKControlPermissionRequest,
-  requestId: string,
-): AssistantMessage {
-  return buildRemotePermissionAssistantMessage(request, requestId)
-}
+export { applyRemotePermissionAssistantFields }
 
 /**
  * Create a minimal Tool stub for tools that aren't loaded locally.

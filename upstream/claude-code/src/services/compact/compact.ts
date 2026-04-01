@@ -102,8 +102,11 @@ import {
 } from '../api/model.js'
 import {
   accumulatePreferredStreamingEvent,
-  finalizePreferredStreamingAggregation,
+  finalizePreferredStreamingAggregationPayload,
 } from './preferredStreaming.js'
+import {
+  maybeCreateAssistantMessageFromPreferredAssistantResponsePayload,
+} from '../api/modelTurnItems.js'
 import { getCompactSummaryText } from './summaryText.js'
 import {
   getPromptTooLongTokenGap,
@@ -1361,8 +1364,11 @@ async function streamCompactSummary({
           )
         }
 
-        if (aggregated.immediateResponse) {
-          response = aggregated.immediateResponse
+        if (aggregated.immediatePayload) {
+          response =
+            maybeCreateAssistantMessageFromPreferredAssistantResponsePayload(
+              aggregated.immediatePayload,
+            )
           break
         }
 
@@ -1370,7 +1376,12 @@ async function streamCompactSummary({
       }
 
       if (!response) {
-        response = finalizePreferredStreamingAggregation(aggregatedPreferredItems)
+        response =
+          maybeCreateAssistantMessageFromPreferredAssistantResponsePayload(
+            finalizePreferredStreamingAggregationPayload(
+              aggregatedPreferredItems,
+            ) ?? { kind: 'empty' },
+          )
       }
 
       if (response) {

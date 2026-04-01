@@ -2,6 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import {
+  createAssistantMessageFromPreferredAssistantResponsePayload,
+} from '../src/services/api/modelTurnItems.js'
+import { preferredTurnResultToPayload } from '../src/services/api/preferredAssistantResponse.js'
 
 async function readModelSource(): Promise<string> {
   const modelPath = fileURLToPath(
@@ -24,23 +28,50 @@ test('model entry no longer imports claude facade or ANTHROPIC_MODEL', async () 
   assert.equal(source.includes('ANTHROPIC_MODEL'), false)
 })
 
-test('model entry keeps codex-only local usage and token helpers', async () => {
-  const source = await readModelSource()
+test('preferred response conversion keeps payload first and only wraps at the outer assistant edge', () => {
+  const payload = preferredTurnResultToPayload({
+    kind: 'preferred_content',
+    preferred: {
+      kind: 'text',
+      text: 'payload text',
+      renderableItems: [
+        {
+          kind: 'final_answer',
+          provider: 'custom',
+          text: 'payload text',
+          source: 'message_output',
+        },
+      ],
+    },
+  })
 
-  assert.equal(source.includes('getContextMaxOutputTokens'), true)
-  assert.equal(source.includes('export const updateModelUsage'), true)
-  assert.equal(source.includes('export const accumulateModelUsage'), true)
-  assert.equal(source.includes('getCodexConfiguredModel'), true)
-  assert.equal(source.includes('export const callModelPreferredWithStreaming'), true)
-  assert.equal(source.includes('export const callModelPayloadWithStreaming'), true)
-  assert.equal(source.includes('export const callModelPreferredWithoutStreaming'), true)
-  assert.equal(source.includes('export const callModelPayloadWithoutStreaming'), true)
-  assert.equal(source.includes('export const callModelTurnWithoutStreaming'), true)
-  assert.equal(source.includes('export const callSmallModelPreferred'), true)
-  assert.equal(source.includes('export const callSmallModelPayload'), true)
-  assert.equal(source.includes('export const callSmallModelTurn'), true)
-  assert.equal(source.includes("'./preferredAssistantResponse.js'"), true)
-  assert.equal(source.includes('createSyntheticPayloadFromTurnItems'), false)
+  assert.equal(payload.kind, 'synthetic_payload')
+  assert.equal(payload.payload.content[0]?.type, 'text')
+  assert.equal(payload.payload.content[0]?.text, 'payload text')
+  assert.equal('message' in payload, false)
+
+  const assistantMessage =
+    createAssistantMessageFromPreferredAssistantResponsePayload(payload)
+  assert.equal(assistantMessage.message.content[0]?.type, 'text')
+  assert.equal(assistantMessage.message.content[0]?.text, 'payload text')
+})
+
+test('preferred response conversion keeps api_error on the payload side until wrapping', () => {
+  const payload = preferredTurnResultToPayload({
+    kind: 'api_error',
+    errorMessage: 'boom',
+  })
+
+  assert.deepEqual(payload, {
+    kind: 'api_error',
+    errorMessage: 'boom',
+  })
+
+  const assistantMessage =
+    createAssistantMessageFromPreferredAssistantResponsePayload(payload)
+  assert.equal(assistantMessage.isApiErrorMessage, true)
+  assert.equal(assistantMessage.message.content[0]?.type, 'text')
+  assert.equal(assistantMessage.message.content[0]?.text, 'boom')
 })
 
 test('codex responses entry now returns raw turn-item chunks and leaves assistant-shell compatibility to outer layers', async () => {

@@ -1,11 +1,11 @@
-import type { AssistantMessage } from '../../types/message.js'
 import {
-  preferredTurnResultToAssistantMessage,
+  preferredTurnResultToPayload,
   type PreferredAssistantTurnResult,
 } from '../api/preferredAssistantResponse.js'
 import {
-  createAssistantMessageFromPreferredAssistantResponsePayload,
   createPreferredAssistantResponsePayloadFromPreferredContent,
+  maybeCreateAssistantMessageFromPreferredAssistantResponsePayload,
+  type PreferredAssistantResponsePayload,
   resolvePreferredAssistantTurnContent,
   type ModelTurnItem,
 } from '../api/modelTurnItems.js'
@@ -14,7 +14,7 @@ export type PreferredStreamingAggregation = {
   hasStartedStreaming: boolean
   responseLengthDelta: number
   aggregatedItems: ModelTurnItem[]
-  immediateResponse: AssistantMessage | null
+  immediatePayload: PreferredAssistantResponsePayload | null
 }
 
 export function accumulatePreferredStreamingEvent(
@@ -26,7 +26,7 @@ export function accumulatePreferredStreamingEvent(
       hasStartedStreaming: false,
       responseLengthDelta: 0,
       aggregatedItems,
-      immediateResponse: preferredTurnResultToAssistantMessage(event),
+      immediatePayload: preferredTurnResultToPayload(event),
     }
   }
 
@@ -35,7 +35,7 @@ export function accumulatePreferredStreamingEvent(
       hasStartedStreaming: false,
       responseLengthDelta: 0,
       aggregatedItems,
-      immediateResponse: null,
+      immediatePayload: null,
     }
   }
 
@@ -48,7 +48,7 @@ export function accumulatePreferredStreamingEvent(
       hasStartedStreaming: false,
       responseLengthDelta: 0,
       aggregatedItems: nextItems,
-      immediateResponse: null,
+      immediatePayload: null,
     }
   }
   const responseLengthDelta = payload.payload.content.reduce((count, block) => {
@@ -62,13 +62,13 @@ export function accumulatePreferredStreamingEvent(
     hasStartedStreaming: true,
     responseLengthDelta,
     aggregatedItems: nextItems,
-    immediateResponse: null,
+    immediatePayload: null,
   }
 }
 
-export function finalizePreferredStreamingAggregation(
+export function finalizePreferredStreamingAggregationPayload(
   aggregatedItems: readonly ModelTurnItem[],
-): AssistantMessage | null {
+): PreferredAssistantResponsePayload | null {
   const finalPreferred = resolvePreferredAssistantTurnContent([
     ...aggregatedItems,
   ])
@@ -76,7 +76,17 @@ export function finalizePreferredStreamingAggregation(
     return null
   }
 
-  return createAssistantMessageFromPreferredAssistantResponsePayload(
-    createPreferredAssistantResponsePayloadFromPreferredContent(finalPreferred),
+  return createPreferredAssistantResponsePayloadFromPreferredContent(
+    finalPreferred,
+  )
+}
+
+export function finalizePreferredStreamingAggregation(
+  aggregatedItems: readonly ModelTurnItem[],
+) {
+  return maybeCreateAssistantMessageFromPreferredAssistantResponsePayload(
+    finalizePreferredStreamingAggregationPayload(aggregatedItems) ?? {
+      kind: 'empty',
+    },
   )
 }

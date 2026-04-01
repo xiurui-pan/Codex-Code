@@ -13,9 +13,11 @@ import { randomUUID } from 'crypto'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ToolUseConfirm } from '../components/permissions/PermissionRequest.js'
 import {
-  createRemotePermissionAssistantMessage,
+  applyRemotePermissionAssistantFields,
+  createRemotePermissionPayload,
   createToolStub,
 } from '../remote/remotePermissionBridge.js'
+import { createAssistantMessageFromSyntheticPayload } from '../services/api/modelTurnItems.js'
 import {
   convertSDKMessage,
   isSessionEndMessage,
@@ -97,8 +99,10 @@ export function useSSHSession({
           findToolByName(toolsRef.current, request.tool_name) ??
           createToolStub(request.tool_name)
 
-        const syntheticMessage = createRemotePermissionAssistantMessage(
-          request,
+        const syntheticMessage = applyRemotePermissionAssistantFields(
+          createAssistantMessageFromSyntheticPayload(
+            createRemotePermissionPayload(request),
+          ),
           requestId,
         )
 

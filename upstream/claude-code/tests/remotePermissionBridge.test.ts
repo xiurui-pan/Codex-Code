@@ -1,11 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  buildRemotePermissionAssistantMessage,
+  applyRemotePermissionAssistantFields,
   buildRemotePermissionPayload,
 } from '../src/remote/remotePermissionShape.js'
+import { createAssistantMessageFromSyntheticPayload } from '../src/services/api/modelTurnItems.js'
 
-test('remote permission bridge keeps payload and wrapped assistant message in sync', () => {
+test('remote permission bridge keeps payload and UI-edge assistant message in sync', () => {
   const request = {
     tool_use_id: 'tool-1',
     tool_name: 'Bash',
@@ -26,8 +27,8 @@ test('remote permission bridge keeps payload and wrapped assistant message in sy
     modelTurnItems: [],
   })
 
-  const assistantMessage = buildRemotePermissionAssistantMessage(
-    request,
+  const assistantMessage = applyRemotePermissionAssistantFields(
+    createAssistantMessageFromSyntheticPayload(payload),
     'req-1',
   )
   assert.equal(assistantMessage.message.id, 'remote-req-1')

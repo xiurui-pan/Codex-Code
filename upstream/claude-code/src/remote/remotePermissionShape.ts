@@ -1,10 +1,6 @@
-import { randomUUID } from 'crypto'
 import type { SDKControlPermissionRequest } from '../entrypoints/sdk/controlTypes.js'
 import type { AssistantMessage } from '../types/message.js'
-import {
-  createAssistantMessageFromSyntheticPayload,
-  type SyntheticAssistantPayload,
-} from '../services/api/modelTurnItems.js'
+import type { SyntheticAssistantPayload } from '../services/api/modelTurnItems.js'
 
 export function buildRemotePermissionPayload(
   request: SDKControlPermissionRequest,
@@ -22,15 +18,10 @@ export function buildRemotePermissionPayload(
   }
 }
 
-export function buildRemotePermissionAssistantMessage(
-  request: SDKControlPermissionRequest,
+export function applyRemotePermissionAssistantFields(
+  message: AssistantMessage,
   requestId: string,
 ): AssistantMessage {
-  const message = createAssistantMessageFromSyntheticPayload(
-    buildRemotePermissionPayload(request),
-  )
-  message.uuid = randomUUID()
-  message.timestamp = new Date().toISOString()
   message.message.id = `remote-${requestId}`
   message.message.model = ''
   message.message.stop_reason = null

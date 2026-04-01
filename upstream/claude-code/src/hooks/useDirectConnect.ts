@@ -2,9 +2,11 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ToolUseConfirm } from '../components/permissions/PermissionRequest.js'
 import type { RemotePermissionResponse } from '../remote/RemoteSessionManager.js'
 import {
-  createRemotePermissionAssistantMessage,
+  applyRemotePermissionAssistantFields,
+  createRemotePermissionPayload,
   createToolStub,
 } from '../remote/remotePermissionBridge.js'
+import { createAssistantMessageFromSyntheticPayload } from '../services/api/modelTurnItems.js'
 import {
   convertSDKMessage,
   isSessionEndMessage,
@@ -93,8 +95,10 @@ export function useDirectConnect({
           findToolByName(toolsRef.current, request.tool_name) ??
           createToolStub(request.tool_name)
 
-        const syntheticMessage = createRemotePermissionAssistantMessage(
-          request,
+        const syntheticMessage = applyRemotePermissionAssistantFields(
+          createAssistantMessageFromSyntheticPayload(
+            createRemotePermissionPayload(request),
+          ),
           requestId,
         )
 

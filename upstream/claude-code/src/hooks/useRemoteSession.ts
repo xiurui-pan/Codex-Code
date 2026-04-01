@@ -8,9 +8,11 @@ import {
   RemoteSessionManager,
 } from '../remote/RemoteSessionManager.js'
 import {
-  createRemotePermissionAssistantMessage,
+  applyRemotePermissionAssistantFields,
+  createRemotePermissionPayload,
   createToolStub,
 } from '../remote/remotePermissionBridge.js'
+import { createAssistantMessageFromSyntheticPayload } from '../services/api/modelTurnItems.js'
 import {
   convertSDKMessage,
   isSessionEndMessage,
@@ -337,8 +339,10 @@ export function useRemoteSession({
           findToolByName(toolsRef.current, request.tool_name) ??
           createToolStub(request.tool_name)
 
-        const syntheticMessage = createRemotePermissionAssistantMessage(
-          request,
+        const syntheticMessage = applyRemotePermissionAssistantFields(
+          createAssistantMessageFromSyntheticPayload(
+            createRemotePermissionPayload(request),
+          ),
           requestId,
         )
 

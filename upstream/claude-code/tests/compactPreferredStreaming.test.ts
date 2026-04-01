@@ -2,9 +2,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   accumulatePreferredStreamingEvent,
+  finalizePreferredStreamingAggregationPayload,
   finalizePreferredStreamingAggregation,
 } from '../src/services/compact/preferredStreaming.js'
-import { preferredTurnResultToAssistantMessage } from '../src/services/api/preferredAssistantResponse.js'
+import { preferredTurnResultToPayload } from '../src/services/api/preferredAssistantResponse.js'
 import type { ModelTurnItem } from '../src/services/api/modelTurnItems.js'
 
 test('compact preferred streaming aggregation merges multiple preferred chunks into one final assistant message', () => {
@@ -28,7 +29,7 @@ test('compact preferred streaming aggregation merges multiple preferred chunks i
 
   assert.equal(first.hasStartedStreaming, true)
   assert.equal(first.responseLengthDelta, 'first part'.length)
-  assert.equal(first.immediateResponse, null)
+  assert.equal(first.immediatePayload, null)
   aggregatedItems = first.aggregatedItems
 
   const second = accumulatePreferredStreamingEvent(aggregatedItems, {
@@ -59,17 +60,28 @@ test('compact preferred streaming aggregation turns api_error into assistant api
     kind: 'api_error',
     errorMessage: 'compact failed',
   })
-  const expected = preferredTurnResultToAssistantMessage({
+  const expected = preferredTurnResultToPayload({
     kind: 'api_error',
     errorMessage: 'compact failed',
   })
 
   assert.equal(result.hasStartedStreaming, false)
   assert.equal(result.responseLengthDelta, 0)
-  assert.equal(result.immediateResponse?.type, 'assistant')
-  assert.equal(result.immediateResponse?.isApiErrorMessage, true)
-  assert.equal(result.immediateResponse?.apiError, expected.apiError)
-  assert.deepEqual(result.immediateResponse?.error, expected.error)
-  assert.equal(result.immediateResponse?.message.content[0]?.type, 'text')
-  assert.equal(result.immediateResponse?.message.content[0]?.text, 'compact failed')
+  assert.deepEqual(result.immediatePayload, expected)
+  assert.equal(result.immediatePayload?.kind, 'api_error')
+})
+
+test('compact preferred streaming finalization can stop at payload before assistant shell wrapping', () => {
+  const payload = finalizePreferredStreamingAggregationPayload([
+    {
+      kind: 'final_answer',
+      provider: 'custom',
+      text: 'payload result',
+      source: 'message_output',
+    },
+  ])
+
+  assert.equal(payload?.kind, 'synthetic_payload')
+  assert.equal(payload?.payload.content[0]?.type, 'text')
+  assert.equal(payload?.payload.content[0]?.text, 'payload result')
 })
