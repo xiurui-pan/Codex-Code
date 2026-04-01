@@ -1530,6 +1530,24 @@ export const SDKCompactBoundaryMessageSchema = lazySchema(() =>
   }),
 )
 
+export const SDKModelTurnItemMessageSchema = lazySchema(() =>
+  z.object({
+    type: z.literal('system'),
+    subtype: z.literal('model_turn_item'),
+    item_kind: z.enum([
+      'local_shell_call',
+      'permission_request',
+      'permission_decision',
+      'tool_output',
+      'execution_result',
+    ]),
+    item: z.record(z.string(), z.unknown()),
+    parent_tool_use_id: z.string().nullable(),
+    uuid: UUIDPlaceholder(),
+    session_id: z.string(),
+  }),
+)
+
 export const SDKStatusMessageSchema = lazySchema(() =>
   z.object({
     type: z.literal('system'),
@@ -1860,6 +1878,7 @@ export const SDKMessageSchema = lazySchema(() =>
     SDKSystemMessageSchema(),
     SDKPartialAssistantMessageSchema(),
     SDKCompactBoundaryMessageSchema(),
+    SDKModelTurnItemMessageSchema(),
     SDKStatusMessageSchema(),
     SDKAPIRetryMessageSchema(),
     SDKLocalCommandOutputMessageSchema(),

@@ -105,6 +105,13 @@
 
 ## 当前进行中
 
+## 本轮新增进展
+
+- 已把 Codex Responses 这一段从“伪 streaming”改成真实增量收包：`callModelWithStreaming` 不再等完整 `response.text()`，而是按 SSE `response.output_item.done` 逐项进入主链。
+- 已把新的执行对象继续往上接：`QueryEngine` 现在会把 `local_shell_call / permission_request / permission_decision / tool_output / execution_result` 直接发成 `system:model_turn_item`，不再只在内部生成却不上送。
+- 已继续收紧 `codexTurnItems.ts` 的文本 fallback：只有以显式工具标记起始的文本才会进入这条临时降级路径，并且会标出 fallback 警告，不再作为默认可执行侧通道。
+- 已补一组更贴近行为的本地验证材料：除了现有单元测试，还新增 `upstream/claude-code/tests/headlessStreaming.smoke.mjs`，专门用本地假 Responses 服务和真实 headless CLI 去验证 request shape、SSE 增量进入主链、以及执行对象输出。
+
 ## 当前新增判断
 
 - 这一轮已经明确：Claude Code 的 harness 本身适合继续复用，真正不适合直接沿用的是默认按 Claude 表示回合、工具、审批和结果的中间结构。

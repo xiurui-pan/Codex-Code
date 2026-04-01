@@ -13,10 +13,14 @@ import { GREP_TOOL_NAME } from '../../tools/GrepTool/prompt.js'
 import type { Message } from '../../types/message.js'
 import { getCodexConfiguredModel } from '../../utils/codexConfig.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
-import { createAssistantAPIErrorMessage } from '../../utils/messages.js'
+import {
+  createAssistantAPIErrorMessage,
+  createAssistantMessage,
+} from '../../utils/messages.js'
 import { zodToJsonSchema } from '../../utils/zodToJsonSchema.js'
 import {
   buildAssistantMessageFromTurnItems,
+  getRenderableModelTurnItems,
   type ModelTurnItem,
 } from './modelTurnItems.js'
 import {
@@ -332,7 +336,7 @@ function parseEffortValue(
   return undefined
 }
 
-async function buildResponsesBody({
+export async function buildResponsesBody({
   messages,
   systemPrompt,
   options,
@@ -372,65 +376,100 @@ async function buildResponsesBody({
   return body
 }
 
-function parseSsePayload(rawText: string): {
-  responseId: string | null
-  items: ResponsesOutputItem[]
-  errorMessage: string | null
-  turnItems: ModelTurnItem[]
-} {
-  const items: ResponsesOutputItem[] = []
-  let responseId: string | null = null
-  let errorMessage: string | null = null
+function extractPayloadTextFromSseBlock(block: string): string | null {
+  const payloadText = block
+    .split('\n')
+    .filter(line => line.startsWith('data: '))
+    .map(line => line.slice('data: '.length))
+    .join('\n')
+    .trim()
 
-  for (const block of rawText.split('\n\n')) {
-    if (!block.trim()) {
-      continue
+  if (!payloadText || payloadText === '[DONE]') {
+    return null
+  }
+
+  return payloadText
+}
+
+export function parseResponsesSseEvent(
+  block: string,
+): ResponsesStreamEvent | null {
+  if (!block.trim()) {
+    return null
+  }
+
+  const payloadText = extractPayloadTextFromSseBlock(block)
+  if (!payloadText) {
+    return null
+  }
+
+  return JSON.parse(payloadText) as ResponsesStreamEvent
+}
+
+function buildAssistantMessageFromIncrementalTurnItems(
+  turnItems: ModelTurnItem[],
+) {
+  const renderableItems = getRenderableModelTurnItems(turnItems)
+  if (renderableItems.length === 0) {
+    return null
+  }
+
+  const assistantMessage = buildAssistantMessageFromTurnItems(renderableItems)
+  if (
+    assistantMessage.message.content.length === 0 &&
+    renderableItems.some(item => item.kind !== 'ui_message')
+  ) {
+    return createAssistantMessage({
+      content: '',
+      modelTurnItems: renderableItems,
+    })
+  }
+
+  return assistantMessage
+}
+
+async function* iterateResponsesSseEvents(
+  response: Response,
+): AsyncGenerator<ResponsesStreamEvent, void, unknown> {
+  if (!response.body) {
+    return
+  }
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    buffer += decoder.decode(value ?? new Uint8Array(), {
+      stream: !done,
+    })
+
+    let separatorIndex = buffer.indexOf('\n\n')
+    while (separatorIndex !== -1) {
+      const block = buffer.slice(0, separatorIndex)
+      buffer = buffer.slice(separatorIndex + 2)
+      const payload = parseResponsesSseEvent(block)
+      if (payload) {
+        yield payload
+      }
+      separatorIndex = buffer.indexOf('\n\n')
     }
 
-    const payloadText = block
-      .split('\n')
-      .filter(line => line.startsWith('data: '))
-      .map(line => line.slice('data: '.length))
-      .join('\n')
-      .trim()
-
-    if (!payloadText || payloadText === '[DONE]') {
-      continue
-    }
-
-    const payload = JSON.parse(payloadText) as ResponsesStreamEvent
-    if (payload.type === 'response.output_item.done' && payload.item) {
-      items.push(payload.item)
-      continue
-    }
-
-    if (payload.type === 'response.completed') {
-      responseId = payload.response?.id ?? responseId
-      continue
-    }
-
-    if (payload.type === 'response.failed' || payload.type === 'error') {
-      errorMessage =
-        payload.error?.message ??
-        payload.detail ??
-        payload.message ??
-        'custom Codex provider request failed'
+    if (done) {
+      break
     }
   }
 
-  return {
-    responseId,
-    items,
-    errorMessage,
-    turnItems: normalizeResponsesOutputToTurnItems(items),
+  if (buffer.trim()) {
+    const payload = parseResponsesSseEvent(buffer)
+    if (payload) {
+      yield payload
+    }
   }
 }
 
-export function shouldUseCodexResponsesAdapter(): boolean {
-  return true
-}
-
-export async function queryCodexResponses({
+export async function* queryCodexResponsesStream({
   messages,
   systemPrompt,
   options,
@@ -458,7 +497,7 @@ export async function queryCodexResponses({
 
   if (!response.ok) {
     const errorText = await response.text()
-    return createAssistantAPIErrorMessage({
+    yield createAssistantAPIErrorMessage({
       content: `Custom Codex provider request failed: ${response.status} ${errorText}`,
       apiError: 'api_error',
       error: {
@@ -466,21 +505,61 @@ export async function queryCodexResponses({
         message: errorText,
       },
     })
+    return
   }
 
-  const payload = parseSsePayload(await response.text())
-  if (payload.errorMessage) {
-    return createAssistantAPIErrorMessage({
-      content: payload.errorMessage,
-      apiError: 'api_error',
-      error: {
-        type: 'api_error',
-        message: payload.errorMessage,
-      },
-    })
+  for await (const event of iterateResponsesSseEvents(response)) {
+    if (event.type === 'response.output_item.done' && event.item) {
+      const turnItems = normalizeResponsesOutputToTurnItems([event.item])
+      const assistantMessage =
+        buildAssistantMessageFromIncrementalTurnItems(turnItems)
+      if (assistantMessage) {
+        yield assistantMessage
+      }
+      continue
+    }
+
+    if (event.type === 'response.failed' || event.type === 'error') {
+      const errorMessage =
+        event.error?.message ??
+        event.detail ??
+        event.message ??
+        'custom Codex provider request failed'
+      yield createAssistantAPIErrorMessage({
+        content: errorMessage,
+        apiError: 'api_error',
+        error: {
+          type: 'api_error',
+          message: errorMessage,
+        },
+      })
+      return
+    }
+  }
+}
+
+export function shouldUseCodexResponsesAdapter(): boolean {
+  return true
+}
+
+export async function queryCodexResponses({
+  messages,
+  systemPrompt,
+  options,
+  signal,
+}: CodexStreamingArgs) {
+  let lastAssistantMessage = createAssistantMessage({ content: '' })
+
+  for await (const assistantMessage of queryCodexResponsesStream({
+    messages,
+    systemPrompt,
+    options,
+    signal,
+  })) {
+    lastAssistantMessage = assistantMessage
   }
 
-  return buildAssistantMessageFromTurnItems(payload.turnItems)
+  return lastAssistantMessage
 }
 
 export { normalizeTextContent }

@@ -213,7 +213,11 @@ function extractShellCommandFromInlineCommand(
 }
 
 function extractTextFallbackToolCall(text: string): ParsedToolCall | null {
-  if (!text.includes('to=shell') && !text.includes('code:')) {
+  const trimmedText = text.trimStart()
+  if (
+    !trimmedText.startsWith('to=shell') &&
+    !trimmedText.startsWith('code:')
+  ) {
     return null
   }
 

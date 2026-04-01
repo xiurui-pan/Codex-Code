@@ -2,6 +2,7 @@ import type {
   ContentBlock,
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/index.mjs'
+import { randomUUID } from 'crypto'
 import type { AssistantMessage, SystemMessage } from '../../types/message.js'
 import { createAssistantMessage } from '../../utils/messages.js'
 
@@ -55,6 +56,50 @@ export function createSystemMessageFromModelTurnItem(
     default:
       return null
   }
+}
+
+export function buildSDKExecutionItemMessages(
+  items: readonly ModelTurnItem[] | undefined,
+  sessionId: string,
+): Array<{
+  type: 'system'
+  subtype: 'model_turn_item'
+  item_kind:
+    | 'local_shell_call'
+    | 'permission_request'
+    | 'permission_decision'
+    | 'tool_output'
+    | 'execution_result'
+  item: ModelTurnItem
+  parent_tool_use_id: string | null
+  session_id: string
+  uuid: string
+}> {
+  const output = []
+
+  for (const item of items ?? []) {
+    if (
+      item.kind !== 'local_shell_call' &&
+      item.kind !== 'permission_request' &&
+      item.kind !== 'permission_decision' &&
+      item.kind !== 'tool_output' &&
+      item.kind !== 'execution_result'
+    ) {
+      continue
+    }
+
+    output.push({
+      type: 'system' as const,
+      subtype: 'model_turn_item' as const,
+      item_kind: item.kind,
+      item,
+      parent_tool_use_id: 'toolUseId' in item ? item.toolUseId : null,
+      session_id: sessionId,
+      uuid: randomUUID(),
+    })
+  }
+
+  return output
 }
 
 export type RawModelOutputItem = {

@@ -3,9 +3,12 @@ import type { AssistantMessage } from '../../types/message.js'
 import { getCodexConfiguredModel } from '../../utils/codexConfig.js'
 import { getModelMaxOutputTokens as getContextMaxOutputTokens } from '../../utils/context.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
-import { queryCodexResponses } from './codexResponses.js'
+import {
+  queryCodexResponses,
+  queryCodexResponsesStream,
+} from './codexResponses.js'
 
-export type StreamingModelCaller = typeof queryCodexResponses
+export type StreamingModelCaller = typeof queryCodexResponsesStream
 export type NonStreamingModelCaller = typeof queryCodexResponses
 export type SingleTurnModelCallArgs = {
   systemPrompt: SystemPrompt
@@ -58,7 +61,7 @@ function buildSingleTurnRequest(args: {
 export const callModelWithStreaming: StreamingModelCaller = async function* (
   args,
 ) {
-  yield await queryCodexResponses(args)
+  yield* queryCodexResponsesStream(args)
 }
 
 export const callModelWithoutStreaming: NonStreamingModelCaller =
