@@ -22,6 +22,8 @@ import { LIGHTNING_BOLT } from '../../constants/figures.js'
 import { isModelAllowed } from './modelAllowlist.js'
 import { type ModelAlias, isModelAlias } from './aliases.js'
 import { capitalize } from '../stringUtils.js'
+import { isCurrentPhaseCustomCodexProvider } from '../currentPhase.js'
+import { DEFAULT_CODEX_MODEL, findCodexModelCapability, resolveCodexModelInput } from './codexModels.js'
 
 const require = createRequire(import.meta.url)
 
@@ -196,6 +198,10 @@ export function getRuntimeMainLoopModel(params: {
  * @returns The default model setting to use
  */
 export function getDefaultMainLoopModelSetting(): ModelName | ModelAlias {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return DEFAULT_CODEX_MODEL
+  }
+
   // Ants default to defaultModel from flag config, or Opus 1M if not configured
   if (process.env.USER_TYPE === 'ant') {
     return (
@@ -318,6 +324,9 @@ export function getClaudeAiUserDefaultModelDescription(
 export function renderDefaultModelSetting(
   setting: ModelName | ModelAlias,
 ): string {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return renderModelName(parseUserSpecifiedModel(setting))
+  }
   if (setting === 'opusplan') {
     return 'Opus 4.6 in plan mode, else Sonnet 4.6'
   }
@@ -367,6 +376,10 @@ export function renderModelSetting(setting: ModelName | ModelAlias): string {
  * if the model is not recognized as a public model.
  */
 export function getPublicModelDisplayName(model: ModelName): string | null {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return findCodexModelCapability(model)?.displayName ?? model
+  }
+
   switch (model) {
     case getModelStrings().opus46:
       return 'Opus 4.6'
@@ -466,6 +479,10 @@ export function parseUserSpecifiedModel(
   modelInput: ModelName | ModelAlias,
 ): ModelName {
   const modelInputTrimmed = modelInput.trim()
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return resolveCodexModelInput(modelInputTrimmed)
+  }
+
   const normalizedModel = modelInputTrimmed.toLowerCase()
 
   const has1mTag = has1mContext(normalizedModel)
@@ -575,6 +592,9 @@ export function isLegacyModelRemapEnabled(): boolean {
 
 export function modelDisplayString(model: ModelSetting): string {
   if (model === null) {
+    if (isCurrentPhaseCustomCodexProvider()) {
+      return `Default (${renderDefaultModelSetting(getDefaultMainLoopModelSetting())})`
+    }
     if (process.env.USER_TYPE === 'ant') {
       return `Default for Ants (${renderDefaultModelSetting(getDefaultMainLoopModelSetting())})`
     } else if (isClaudeAISubscriber()) {
@@ -588,6 +608,10 @@ export function modelDisplayString(model: ModelSetting): string {
 
 // @[MODEL LAUNCH]: Add a marketing name mapping for the new model below.
 export function getMarketingNameForModel(modelId: string): string | undefined {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return findCodexModelCapability(modelId)?.displayName
+  }
+
   if (getAPIProvider() === 'foundry') {
     // deployment ID is user-defined in Foundry, so it may have no relation to the actual model
     return undefined

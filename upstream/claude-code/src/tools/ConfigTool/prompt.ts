@@ -6,7 +6,7 @@ import {
   SUPPORTED_SETTINGS,
 } from './supportedSettings.js'
 
-export const DESCRIPTION = 'Get or set Claude Code configuration settings.'
+export const DESCRIPTION = 'Get or set Codex Code configuration settings.'
 
 /**
  * Generate the prompt documentation from the registry
@@ -47,9 +47,9 @@ export function generatePrompt(): string {
 
   const modelSection = generateModelSection()
 
-  return `Get or set Claude Code configuration settings.
+  return `Get or set Codex Code configuration settings.
 
-  View or change Claude Code settings. Use when the user requests configuration changes, asks about current settings, or when adjusting a setting would benefit them.
+  View or change Codex Code settings. Use when the user requests configuration changes, asks about current settings, or when adjusting a setting would benefit them.
 
 
 ## Usage
@@ -71,7 +71,7 @@ ${modelSection}
 - Set dark theme: { "setting": "theme", "value": "dark" }
 - Enable vim mode: { "setting": "editorMode", "value": "vim" }
 - Enable verbose: { "setting": "verbose", "value": true }
-- Change model: { "setting": "model", "value": "opus" }
+- Change model: { "setting": "model", "value": "gpt-5.1-codex" }
 - Change permission mode: { "setting": "permissions.defaultMode", "value": "plan" }
 `
 }
@@ -88,6 +88,6 @@ function generateModelSection(): string {
 ${lines.join('\n')}`
   } catch {
     return `## Model
-- model - Override the default model (sonnet, opus, haiku, best, or full model ID)`
+- model - Override the default Codex model (gpt-5.1-codex-mini, gpt-5.1-codex, gpt-5.1-codex-max, or full model ID)`
   }
 }

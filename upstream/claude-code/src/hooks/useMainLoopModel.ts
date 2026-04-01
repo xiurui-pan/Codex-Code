@@ -3,6 +3,7 @@ import { getCodexConfiguredModel } from '../utils/codexConfig.js'
 import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js'
 import { onGrowthBookRefresh } from '../services/analytics/growthbook.js'
 import { useAppState } from '../state/AppState.js'
+import { DEFAULT_CODEX_MODEL } from '../utils/model/codexModels.js'
 import {
   getDefaultMainLoopModelSetting,
   type ModelName,
@@ -37,9 +38,9 @@ export function useMainLoopModel(): ModelName {
     const configuredModel = getCodexConfiguredModel()
     return parseUserSpecifiedModel(
       mainLoopModelForSession ??
-        mainLoopModel ??
-        configuredModel ??
-        'gpt-5.1-codex-mini',
+      mainLoopModel ??
+      configuredModel ??
+        DEFAULT_CODEX_MODEL,
     )
   }
 

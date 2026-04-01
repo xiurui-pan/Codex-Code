@@ -171,7 +171,7 @@ function ApplyEffortAndClose(t0) {
 export async function call(onDone: LocalJSXCommandOnDone, _context: unknown, args?: string): Promise<React.ReactNode> {
   args = args?.trim() || '';
   if (COMMON_HELP_ARGS.includes(args)) {
-    onDone('Usage: /effort [low|medium|high|max|auto]\n\nEffort levels:\n- low: Quick, straightforward implementation\n- medium: Balanced approach with standard testing\n- high: Comprehensive implementation with extensive testing\n- max: Maximum capability with deepest reasoning (Opus 4.6 only)\n- auto: Use the default effort level for your model');
+    onDone('Usage: /effort [low|medium|high|max|auto]\n\nReasoning levels:\n- low: Lower reasoning for quick responses\n- medium: Balanced reasoning for everyday coding work\n- high: Stronger reasoning for harder tasks\n- max: Deepest reasoning on the highest-capability Codex model\n- auto: Use the default reasoning level for your current model');
     return;
   }
   if (!args || args === 'current' || args === 'status') {

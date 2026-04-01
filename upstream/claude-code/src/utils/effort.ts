@@ -5,6 +5,8 @@ import { createRequire } from 'node:module'
 import { getAPIProvider } from './model/providers.js'
 import { get3PModelCapabilityOverride } from './model/modelSupportOverrides.js'
 import { isEnvTruthy } from './envUtils.js'
+import { isCurrentPhaseCustomCodexProvider } from './currentPhase.js'
+import { codexModelSupportsEffort, codexModelSupportsMaxEffort, getCodexDefaultEffortForModel } from './model/codexModels.js'
 import type { EffortLevel } from 'src/entrypoints/sdk/runtimeTypes.js'
 
 const require = createRequire(import.meta.url)
@@ -44,6 +46,10 @@ export type EffortValue = EffortLevel | number
 
 // @[MODEL LAUNCH]: Add the new model to the allowlist if it supports the effort parameter.
 export function modelSupportsEffort(model: string): boolean {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return codexModelSupportsEffort(model)
+  }
+
   const m = model.toLowerCase()
   if (isEnvTruthy(process.env.CLAUDE_CODE_ALWAYS_ENABLE_EFFORT)) {
     return true
@@ -74,6 +80,10 @@ export function modelSupportsEffort(model: string): boolean {
 // @[MODEL LAUNCH]: Add the new model to the allowlist if it supports 'max' effort.
 // Per API docs, 'max' is Opus 4.6 only for public models — other models return an error.
 export function modelSupportsMaxEffort(model: string): boolean {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return codexModelSupportsMaxEffort(model)
+  }
+
   const supported3P = get3PModelCapabilityOverride(model, 'max_effort')
   if (supported3P !== undefined) {
     return supported3P
@@ -247,13 +257,13 @@ export function convertEffortValueToLevel(value: EffortValue): EffortLevel {
 export function getEffortLevelDescription(level: EffortLevel): string {
   switch (level) {
     case 'low':
-      return 'Quick, straightforward implementation with minimal overhead'
+      return 'Lower reasoning for quick responses'
     case 'medium':
-      return 'Balanced approach with standard implementation and testing'
+      return 'Balanced reasoning for everyday coding work'
     case 'high':
-      return 'Comprehensive implementation with extensive testing and documentation'
+      return 'Stronger reasoning for harder tasks'
     case 'max':
-      return 'Maximum capability with deepest reasoning (Opus 4.6 only)'
+      return 'Deepest reasoning on the highest-capability Codex model'
   }
 }
 
@@ -302,6 +312,10 @@ export function getOpusDefaultEffortConfig(): OpusDefaultEffortConfig {
 export function getDefaultEffortForModel(
   model: string,
 ): EffortValue | undefined {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return getCodexDefaultEffortForModel(model)
+  }
+
   if (process.env.USER_TYPE === 'ant') {
     const config = getAntModelOverrideConfig()
     const isDefaultModel =

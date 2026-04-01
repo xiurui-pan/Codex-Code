@@ -245,11 +245,15 @@ import {
   modelDisplayString,
   parseUserSpecifiedModel,
 } from 'src/utils/model/model.js'
+import {
+  DEFAULT_CODEX_MODEL,
+  getCodexDefaultEffortForModel,
+  getCodexSupportedEffortLevels,
+} from 'src/utils/model/codexModels.js'
 import { getModelOptions } from 'src/utils/model/modelOptions.js'
 import {
   modelSupportsEffort,
   modelSupportsMaxEffort,
-  EFFORT_LEVELS,
   resolveAppliedEffort,
 } from 'src/utils/effort.js'
 import { modelSupportsAdaptiveThinking } from 'src/utils/thinking.js'
@@ -1414,46 +1418,44 @@ function runHeadlessStreaming(
   const currentPhaseResolvedModel =
     activeUserSpecifiedModel ??
     getCodexConfiguredModel() ??
-    'gpt-5.1-codex-mini'
-  const modelInfos = currentPhaseDisableLegacyHeadlessModules
-    ? [
-        {
-          value: activeUserSpecifiedModel ?? 'default',
-          displayName: currentPhaseResolvedModel,
-          description: 'Current stage custom Codex provider model',
-          ...(modelSupportsEffort(currentPhaseResolvedModel) && {
-            supportsEffort: true,
-            supportedEffortLevels: modelSupportsMaxEffort(currentPhaseResolvedModel)
-              ? [...EFFORT_LEVELS]
-              : EFFORT_LEVELS.filter(l => l !== 'max'),
-          }),
-        },
-      ]
-    : getModelOptions().map(option => {
-        const modelId = option.value === null ? 'default' : option.value
-        const resolvedModel =
-          modelId === 'default'
-            ? getDefaultMainLoopModel()
-            : parseUserSpecifiedModel(modelId)
-        const hasEffort = modelSupportsEffort(resolvedModel)
-        const hasAdaptiveThinking = modelSupportsAdaptiveThinking(resolvedModel)
-        const hasFastMode = isFastModeSupportedByModel(option.value)
-        const hasAutoMode = modelSupportsAutoMode(resolvedModel)
-        return {
-          value: modelId,
-          displayName: option.label,
-          description: option.description,
-          ...(hasEffort && {
-            supportsEffort: true,
-            supportedEffortLevels: modelSupportsMaxEffort(resolvedModel)
-              ? [...EFFORT_LEVELS]
-              : EFFORT_LEVELS.filter(l => l !== 'max'),
-          }),
-          ...(hasAdaptiveThinking && { supportsAdaptiveThinking: true }),
-          ...(hasFastMode && { supportsFastMode: true }),
-          ...(hasAutoMode && { supportsAutoMode: true }),
-        }
-      })
+    DEFAULT_CODEX_MODEL
+  const modelOptions = getModelOptions()
+  const optionsWithCurrentPhaseModel =
+    currentPhaseDisableLegacyHeadlessModules &&
+    !modelOptions.some(option => option.value === currentPhaseResolvedModel)
+      ? [
+          ...modelOptions,
+          {
+            value: currentPhaseResolvedModel,
+            label: currentPhaseResolvedModel,
+            description: 'Current configured Codex model',
+          },
+        ]
+      : modelOptions
+  const modelInfos = optionsWithCurrentPhaseModel.map(option => {
+    const modelId = option.value === null ? 'default' : option.value
+    const resolvedModel =
+      modelId === 'default'
+        ? getDefaultMainLoopModel()
+        : parseUserSpecifiedModel(modelId)
+    const hasEffort = modelSupportsEffort(resolvedModel)
+    const hasAdaptiveThinking = modelSupportsAdaptiveThinking(resolvedModel)
+    const hasFastMode = isFastModeSupportedByModel(option.value)
+    const hasAutoMode = modelSupportsAutoMode(resolvedModel)
+    return {
+      value: modelId,
+      displayName: option.label,
+      description: option.description,
+      ...(hasEffort && {
+        supportsEffort: true,
+        defaultEffortLevel: getCodexDefaultEffortForModel(resolvedModel),
+        supportedEffortLevels: [...getCodexSupportedEffortLevels(resolvedModel)],
+      }),
+      ...(hasAdaptiveThinking && { supportsAdaptiveThinking: true }),
+      ...(hasFastMode && { supportsFastMode: true }),
+      ...(hasAutoMode && { supportsAutoMode: true }),
+    }
+  })
   process.stderr.write('[HEADLESS_PROBE] runHeadlessStreaming-after-model-options\n')
 
   function injectModelSwitchBreadcrumbs(

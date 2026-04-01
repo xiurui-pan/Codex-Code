@@ -5,6 +5,11 @@ import { fileURLToPath } from 'node:url'
 import {
   createAssistantMessageFromPreferredAssistantResponsePayload,
 } from '../src/services/api/assistantEnvelope.js'
+import {
+  DEFAULT_CODEX_MODEL,
+  getCodexSupportedEffortLevels,
+  resolveCodexModelInput,
+} from '../src/utils/model/codexModels.js'
 import { preferredTurnResultToPayload } from '../src/services/api/preferredAssistantResponse.js'
 
 async function readModelSource(): Promise<string> {
@@ -72,6 +77,27 @@ test('preferred response conversion keeps api_error on the payload side until wr
   assert.equal(assistantMessage.isApiErrorMessage, true)
   assert.equal(assistantMessage.message.content[0]?.type, 'text')
   assert.equal(assistantMessage.message.content[0]?.text, 'boom')
+})
+
+
+test('codex model capability table resolves aliases and supported reasoning levels', () => {
+  assert.equal(DEFAULT_CODEX_MODEL, 'gpt-5.1-codex-mini')
+  assert.equal(resolveCodexModelInput('mini'), 'gpt-5.1-codex-mini')
+  assert.deepEqual(getCodexSupportedEffortLevels('gpt-5.1-codex-mini'), [
+    'medium',
+    'high',
+  ])
+  assert.deepEqual(getCodexSupportedEffortLevels('gpt-5.1-codex'), [
+    'low',
+    'medium',
+    'high',
+  ])
+  assert.deepEqual(getCodexSupportedEffortLevels('gpt-5.1-codex-max'), [
+    'low',
+    'medium',
+    'high',
+    'max',
+  ])
 })
 
 test('codex responses entry now returns raw turn-item chunks and leaves assistant-shell compatibility to outer layers', async () => {

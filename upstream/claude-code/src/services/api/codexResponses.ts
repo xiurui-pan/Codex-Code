@@ -12,6 +12,7 @@ import { GLOB_TOOL_NAME } from '../../tools/GlobTool/prompt.js'
 import { GREP_TOOL_NAME } from '../../tools/GrepTool/prompt.js'
 import type { Message } from '../../types/message.js'
 import { getCodexConfiguredModel } from '../../utils/codexConfig.js'
+import { DEFAULT_CODEX_MODEL } from '../../utils/model/codexModels.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import { zodToJsonSchema } from '../../utils/zodToJsonSchema.js'
 import {
@@ -354,7 +355,7 @@ export async function buildResponsesBody({
 }: Omit<CodexStreamingArgs, 'signal'>) {
   const profile = getCodexProviderProfile()
   const body: Record<string, unknown> = {
-    model: options.model ?? getCodexConfiguredModel() ?? 'gpt-5.1-codex-mini',
+    model: options.model ?? getCodexConfiguredModel() ?? DEFAULT_CODEX_MODEL,
     stream: true,
     input: buildResponsesInput(messages),
   }
