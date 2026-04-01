@@ -9,13 +9,21 @@
 
 ## 当前判断
 
-这项改造的重点不是把 Anthropic 的消息协议替换成 OpenAI 的响应协议，而是把 Claude Code 里围绕 Claude 行为写死的执行外壳，改造成更适合 Codex 的内部结构。
+这项改造的重点，不是把 Anthropic 的消息协议换个名字再接到 Responses 上，而是把 Claude Code 里那层默认按 Claude 方式表达回合、工具、审批和结果的中间结构，改造成更适合 Codex 的内部表示。
+
+先把判断说直白：
+
+- `Claude Code` 的 harness 本身不是不适合 Codex。真正值得复用的就是它已经打磨好的本地外壳：TUI、主循环、工具执行、权限申请、结果回灌、压缩和本地 shell。
+- 真正不适合直接沿用的，是中间那层默认把“模型输出是什么、工具调用长什么样、审批怎么记、结果怎么回灌”都按 Claude 的块结构写死的表示。
+- 所以只改提示词、字段名、协议名不够。这样最多只能让 Codex 暂时学着“像 Claude 一样说话”，但本地状态机、工具闭环、权限事件和回合边界还是会继续被 Claude 的旧结构牵着走。
+- 这也是为什么不能继续在 `codexResponses.ts` 里见招拆招：今天补一种 provider 输出，明天还会再补一种，最后会变成一层越来越厚的兼容脚本。
+- 下一步必须系统借鉴 `/home/pxr/workspace/CodingAgent/codex` 的做法，把回合表示、能力建模、shell / 审批 / 结果这些对象先立稳，再让 provider 适配层变薄。
 
 直接结论：
 
 - `Claude Code` 目前在很多关键使用感上确实比 `Codex CLI` 更好用，而且原因不只是界面。
 - `Codex CLI` 目前在模型能力建模、结构化工具、权限参数化、阶段化输出这些底层设计上更适合 Codex。
-- `Codex Code` 的目标不是在两者之间二选一，而是把 Claude Code 的产品外壳和 Codex 的模型适配方式接起来。
+- `Codex Code` 的目标不是在两者之间二选一，而是保住 Claude Code 这层本地外壳，再把中间结构改到更适合 Codex。
 
 ## 仓库结构
 

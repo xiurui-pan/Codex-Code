@@ -15,6 +15,9 @@
 ## 总策略
 
 - 架构基线：直接分叉 `claude-code` 源码。
+- 复用判断：明确保留 Claude Code 的本地 harness，也就是 TUI、主循环、工具执行、权限、结果回灌、压缩和本地 shell。
+- 重做重点：不再把主要精力放在提示词替换、协议改名或 `codexResponses.ts` 兼容分支堆叠上，而是优先重做中间回合表示和能力建模。
+- 借鉴来源：下一阶段系统参考 `/home/pxr/workspace/CodingAgent/codex` 的回合表示、能力表、shell / 审批 / 结果建模方式，不再沿着“看到一种 provider 输出就补一种解析”继续长。
 - 当前正式源码基线固定为 `upstream/claude-code`，不会切到 `claw-code`、`open-agent-sdk` 或其他第三方仓库。
 - 第一阶段模型范围：只做 `Codex`。
 - 第一阶段接入范围：只支持自定义 Codex provider API。
@@ -48,6 +51,8 @@
 - 把“为什么 Claude Code 更好用”明确写成单独文档。
 
 ### 阶段 1：抽内部中间层
+
+这一步现在已经不是抽象目标，而是明确要把当前仓库从“Claude 形状优先”改成“本地统一条目优先”。也就是说，后续 provider 适配层只能翻译，不再兼任回合语义中心。
 
 - 统一回合对象：
   - 用户输入

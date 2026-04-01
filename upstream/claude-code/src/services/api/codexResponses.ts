@@ -3,24 +3,26 @@ import type {
   ContentBlock,
   ContentBlockParam,
   ToolResultBlockParam,
-  ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/index.mjs'
 import type { Tool, Tools } from '../../Tool.js'
-import type {
-  AgentDefinition,
-} from '../../tools/AgentTool/loadAgentsDir.js'
+import type { AgentDefinition } from '../../tools/AgentTool/loadAgentsDir.js'
 import { BASH_TOOL_NAME } from '../../tools/BashTool/toolName.js'
 import { FILE_READ_TOOL_NAME } from '../../tools/FileReadTool/prompt.js'
 import { GLOB_TOOL_NAME } from '../../tools/GlobTool/prompt.js'
 import { GREP_TOOL_NAME } from '../../tools/GrepTool/prompt.js'
-import type { AssistantMessage, Message } from '../../types/message.js'
+import type { Message } from '../../types/message.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
-import {
-  createAssistantAPIErrorMessage,
-  createAssistantMessage,
-} from '../../utils/messages.js'
-import { getAPIProvider } from '../../utils/model/providers.js'
+import { createAssistantAPIErrorMessage } from '../../utils/messages.js'
 import { zodToJsonSchema } from '../../utils/zodToJsonSchema.js'
+import {
+  buildAssistantMessageFromTurnItems,
+  type ModelTurnItem,
+} from './modelTurnItems.js'
+import {
+  normalizeResponsesOutputToTurnItems,
+  type ResponsesOutputItem,
+} from './codexTurnItems.js'
+import { getCurrentProviderProfile } from './providerProfiles.js'
 
 type CodexRequestOptions = {
   model?: string
@@ -48,19 +50,6 @@ type ResponsesInputText = {
   text: string
 }
 
-type ResponsesMessageItem = {
-  type: 'message'
-  role?: string
-  content?: ResponsesOutputText[]
-}
-
-type ResponsesFunctionCallItem = {
-  type: 'function_call'
-  call_id?: string
-  name?: string
-  arguments?: string | Record<string, unknown>
-}
-
 type ResponsesCompletedEvent = {
   type: 'response.completed'
   response?: {
@@ -70,7 +59,7 @@ type ResponsesCompletedEvent = {
 
 type ResponsesOutputDoneEvent = {
   type: 'response.output_item.done'
-  item?: ResponsesMessageItem | ResponsesFunctionCallItem
+  item?: ResponsesOutputItem
 }
 
 type ResponsesFailureEvent = {
@@ -82,7 +71,7 @@ type ResponsesFailureEvent = {
   message?: string
 }
 
-  type ResponsesStreamEvent =
+type ResponsesStreamEvent =
   | ResponsesCompletedEvent
   | ResponsesOutputDoneEvent
   | ResponsesFailureEvent
@@ -119,22 +108,12 @@ type ResponsesFunctionTool = {
   parameters: Record<string, unknown>
 }
 
-type ParsedCodexCliToolCall = {
-  prefixText: string
-  toolName: string
-  input: Record<string, unknown>
-}
-
 const CURRENT_PHASE_TOOL_NAMES = new Set([
   BASH_TOOL_NAME,
   FILE_READ_TOOL_NAME,
   GLOB_TOOL_NAME,
   GREP_TOOL_NAME,
 ])
-
-function isCurrentPhaseCodexProvider(): boolean {
-  return getAPIProvider() === 'custom'
-}
 
 function getResponsesBaseUrl(): string {
   const baseUrl = process.env.ANTHROPIC_BASE_URL
@@ -148,7 +127,9 @@ function getResponsesApiKey(): string | null {
   return process.env.ANTHROPIC_API_KEY ?? null
 }
 
-function normalizeTextContent(content: string | ContentBlock[] | ContentBlockParam[]): string {
+function normalizeTextContent(
+  content: string | ContentBlock[] | ContentBlockParam[],
+): string {
   if (typeof content === 'string') {
     return content
   }
@@ -208,29 +189,6 @@ function pushMessageInput(
           },
     ],
   })
-}
-
-function normalizeToolArguments(
-  argumentsValue: string | Record<string, unknown> | undefined,
-): Record<string, unknown> {
-  if (!argumentsValue) {
-    return {}
-  }
-
-  if (typeof argumentsValue !== 'string') {
-    return argumentsValue
-  }
-
-  try {
-    const parsed = JSON.parse(argumentsValue) as unknown
-    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>
-    }
-  } catch {
-    return {}
-  }
-
-  return {}
 }
 
 function buildResponsesInput(messages: Message[]): ResponsesInputItem[] {
@@ -350,220 +308,12 @@ function parseEffortValue(
   return undefined
 }
 
-function extractBalancedJsonObject(
-  text: string,
-  startIndex = 0,
-): string | null {
-  const start = text.indexOf('{', startIndex)
-  if (start === -1) {
-    return null
-  }
-
-  let depth = 0
-  let inString = false
-  let escaped = false
-
-  for (let i = start; i < text.length; i += 1) {
-    const char = text[i]
-
-    if (inString) {
-      if (escaped) {
-        escaped = false
-        continue
-      }
-      if (char === '\\') {
-        escaped = true
-        continue
-      }
-      if (char === '"') {
-        inString = false
-      }
-      continue
-    }
-
-    if (char === '"') {
-      inString = true
-      continue
-    }
-
-    if (char === '{') {
-      depth += 1
-      continue
-    }
-
-    if (char !== '}') {
-      continue
-    }
-
-    depth -= 1
-    if (depth === 0) {
-      return text.slice(start, i + 1)
-    }
-  }
-
-  return null
-}
-
-function extractJsonObjectAfterMarker(
-  text: string,
-  marker: string,
-): string | null {
-  const markerIndex = text.indexOf(marker)
-  if (markerIndex === -1) {
-    return null
-  }
-
-  return extractBalancedJsonObject(text, markerIndex + marker.length)
-}
-
-function normalizeShellCommandFromPayload(
-  payload: Record<string, unknown>,
-): ParsedCodexCliToolCall | null {
-  const commandValue = payload.command ?? payload.cmd
-  let command: string | null = null
-
-  if (typeof commandValue === 'string' && commandValue.trim()) {
-    command = commandValue.trim()
-  } else if (Array.isArray(commandValue)) {
-    const commandParts = commandValue.filter(
-      part => typeof part === 'string',
-    ) as string[]
-
-    if (
-      commandParts.length >= 3 &&
-      (commandParts[0] === 'bash' || commandParts[0] === 'sh') &&
-      commandParts[1] === '-lc'
-    ) {
-      command = commandParts.slice(2).join(' ').trim()
-    } else if (commandParts.length > 0) {
-      command = commandParts.join(' ').trim()
-    }
-  }
-
-  if (!command) {
-    return null
-  }
-
-  const input: Record<string, unknown> = { command }
-  const timeoutValue = payload.timeout_ms ?? payload.timeout
-  if (typeof timeoutValue === 'number' && Number.isFinite(timeoutValue)) {
-    input.timeout = timeoutValue
-  }
-
-  return {
-    prefixText: '',
-    toolName: BASH_TOOL_NAME,
-    input,
-  }
-}
-
-function extractShellCommandFromQuotedCode(
-  text: string,
-): ParsedCodexCliToolCall | null {
-  const match = text.match(/code=(['"])([\s\S]*?)\1/)
-  const command = match?.[2]?.trim()
-  if (!command) {
-    return null
-  }
-
-  return {
-    prefixText: '',
-    toolName: BASH_TOOL_NAME,
-    input: { command },
-  }
-}
-
-function extractShellCommandFromInlineCommand(
-  text: string,
-): ParsedCodexCliToolCall | null {
-  const normalizedText = text.replaceAll('\\"', '"')
-  const match = normalizedText.match(
-    /(?:command|cmd)"?\s*:\s*(\[[\s\S]*?\]|"[\s\S]*?")/,
-  )
-  const rawValue = match?.[1]?.trim()
-  if (!rawValue) {
-    return null
-  }
-
-  try {
-    const parsed = JSON.parse(rawValue) as unknown
-    if (typeof parsed === 'string') {
-      return normalizeShellCommandFromPayload({ command: parsed })
-    }
-    if (Array.isArray(parsed)) {
-      return normalizeShellCommandFromPayload({ command: parsed })
-    }
-  } catch {
-    return null
-  }
-
-  return null
-}
-
-function extractCodexCliToolCall(
-  text: string,
-): ParsedCodexCliToolCall | null {
-  if (!text.includes('to=shell') && !text.includes('code:')) {
-    return null
-  }
-
-  const markerIndex = text.indexOf('to=shell')
-  const searchStart = markerIndex === -1 ? 0 : markerIndex
-  const payloadCandidates = [
-    extractJsonObjectAfterMarker(text, 'code:'),
-    extractBalancedJsonObject(text, searchStart),
-  ]
-
-  for (const payloadText of payloadCandidates) {
-    if (!payloadText) {
-      continue
-    }
-
-    let payload: unknown
-    try {
-      payload = JSON.parse(payloadText)
-    } catch {
-      continue
-    }
-
-    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-      continue
-    }
-
-    const normalized = normalizeShellCommandFromPayload(
-      payload as Record<string, unknown>,
-    )
-    if (!normalized) {
-      continue
-    }
-
-    normalized.prefixText =
-      markerIndex === -1 ? '' : text.slice(0, markerIndex).trim()
-    return normalized
-  }
-
-  const quotedCode = extractShellCommandFromQuotedCode(text)
-  if (quotedCode) {
-    quotedCode.prefixText =
-      markerIndex === -1 ? '' : text.slice(0, markerIndex).trim()
-    return quotedCode
-  }
-
-  const inlineCommand = extractShellCommandFromInlineCommand(text)
-  if (!inlineCommand) {
-    return null
-  }
-
-  inlineCommand.prefixText =
-    markerIndex === -1 ? '' : text.slice(0, markerIndex).trim()
-  return inlineCommand
-}
-
 async function buildResponsesBody({
   messages,
   systemPrompt,
   options,
 }: Omit<CodexStreamingArgs, 'signal'>) {
+  const profile = getCurrentProviderProfile()
   const body: Record<string, unknown> = {
     model: options.model ?? process.env.ANTHROPIC_MODEL ?? 'gpt-5.4',
     stream: true,
@@ -571,23 +321,25 @@ async function buildResponsesBody({
   }
 
   const effort = parseEffortValue(options.effortValue)
-  if (effort) {
+  if (profile.reasoningEffort && effort) {
     body.reasoning = {
       effort,
       summary: 'auto',
     }
   }
 
-  if (systemPrompt.length > 0) {
+  if (profile.instructionsField && systemPrompt.length > 0) {
     body.instructions = systemPrompt.join('\n\n')
   }
 
   if (options.tools && options.tools.length > 0) {
     body.tools = await buildResponsesTools(options.tools, options)
-    body.tool_choice = 'auto'
+    if (profile.toolChoice !== 'none') {
+      body.tool_choice = profile.toolChoice
+    }
     body.instructions = [
       body.instructions,
-      'When a tool is needed, emit a tool call and stop. Do not simulate tool execution, and do not include made-up tool output in assistant text.',
+      'When a tool is needed, emit a structured tool call and stop. Do not simulate tool execution, and do not include made-up tool output in assistant text.',
     ]
       .filter(part => typeof part === 'string' && part.length > 0)
       .join('\n\n')
@@ -598,10 +350,11 @@ async function buildResponsesBody({
 
 function parseSsePayload(rawText: string): {
   responseId: string | null
-  items: Array<ResponsesMessageItem | ResponsesFunctionCallItem>
+  items: ResponsesOutputItem[]
   errorMessage: string | null
+  turnItems: ModelTurnItem[]
 } {
-  const items: Array<ResponsesMessageItem | ResponsesFunctionCallItem> = []
+  const items: ResponsesOutputItem[] = []
   let responseId: string | null = null
   let errorMessage: string | null = null
 
@@ -645,68 +398,12 @@ function parseSsePayload(rawText: string): {
     responseId,
     items,
     errorMessage,
+    turnItems: normalizeResponsesOutputToTurnItems(items),
   }
-}
-
-function buildAssistantMessage(
-  items: Array<ResponsesMessageItem | ResponsesFunctionCallItem>,
-): AssistantMessage {
-  const content: ContentBlock[] = []
-
-  for (const item of items) {
-    if (item.type === 'message' && item.role === 'assistant') {
-      const text = (item.content ?? [])
-        .filter(
-          part => part.type === 'output_text' && typeof part.text === 'string',
-        )
-        .map(part => part.text ?? '')
-        .join('')
-
-      if (text) {
-        const parsedToolCall = extractCodexCliToolCall(text)
-        if (parsedToolCall) {
-          if (parsedToolCall.prefixText) {
-            content.push({
-              type: 'text',
-              text: parsedToolCall.prefixText,
-            })
-          }
-          content.push({
-            type: 'tool_use',
-            id: randomUUID(),
-            name: parsedToolCall.toolName,
-            input: parsedToolCall.input,
-          } as ToolUseBlock)
-          continue
-        }
-      }
-
-      if (text) {
-        content.push({
-          type: 'text',
-          text,
-        })
-      }
-      continue
-    }
-
-    if (item.type === 'function_call' && item.call_id && item.name) {
-      content.push({
-        type: 'tool_use',
-        id: item.call_id,
-        name: item.name,
-        input: normalizeToolArguments(item.arguments),
-      } as ToolUseBlock)
-    }
-  }
-
-  return createAssistantMessage({
-    content,
-  })
 }
 
 export function shouldUseCodexResponsesAdapter(): boolean {
-  return isCurrentPhaseCodexProvider()
+  return getCurrentProviderProfile().turnAdapter === 'responses-api'
 }
 
 export async function queryCodexResponses({
@@ -714,7 +411,7 @@ export async function queryCodexResponses({
   systemPrompt,
   options,
   signal,
-}: CodexStreamingArgs): Promise<AssistantMessage> {
+}: CodexStreamingArgs) {
   const response = await fetch(getResponsesBaseUrl(), {
     method: 'POST',
     headers: {
@@ -759,5 +456,7 @@ export async function queryCodexResponses({
     })
   }
 
-  return buildAssistantMessage(payload.items)
+  return buildAssistantMessageFromTurnItems(payload.turnItems)
 }
+
+export { normalizeTextContent }
