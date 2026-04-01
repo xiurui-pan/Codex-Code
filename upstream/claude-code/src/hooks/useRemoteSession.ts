@@ -8,7 +8,7 @@ import {
   RemoteSessionManager,
 } from '../remote/RemoteSessionManager.js'
 import {
-  createSyntheticAssistantMessage,
+  createRemotePermissionAssistantMessage,
   createToolStub,
 } from '../remote/remotePermissionBridge.js'
 import {
@@ -337,7 +337,7 @@ export function useRemoteSession({
           findToolByName(toolsRef.current, request.tool_name) ??
           createToolStub(request.tool_name)
 
-        const syntheticMessage = createSyntheticAssistantMessage(
+        const syntheticMessage = createRemotePermissionAssistantMessage(
           request,
           requestId,
         )

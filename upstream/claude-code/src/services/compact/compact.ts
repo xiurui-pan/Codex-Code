@@ -97,9 +97,16 @@ import {
   logEvent,
 } from '../analytics/index.js'
 import {
-  callModelWithStreaming,
+  callModelPreferredWithStreaming,
   getModelMaxOutputTokens,
 } from '../api/model.js'
+import {
+  createAssistantMessageFromSyntheticPayload,
+  createSyntheticAssistantPayloadFromPreferredContent,
+  type ModelTurnItem,
+  resolvePreferredAssistantTurnContent,
+} from '../api/modelTurnItems.js'
+import { createAssistantAPIErrorMessage } from '../../utils/messages.js'
 import { getCompactSummaryText } from './summaryText.js'
 import {
   getPromptTooLongTokenGap,
@@ -1298,7 +1305,7 @@ async function streamCompactSummary({
           )
         : [FileReadTool]
 
-      const streamingGen = callModelWithStreaming({
+      const streamingGen = callModelPreferredWithStreaming({
         messages: normalizeMessagesForAPI(
           stripImagesFromMessages(
             stripReinjectedAttachments([
@@ -1335,34 +1342,55 @@ async function streamCompactSummary({
       })
       const streamIter = streamingGen[Symbol.asyncIterator]()
       let next = await streamIter.next()
+      const aggregatedPreferredItems: ModelTurnItem[] = []
 
       while (!next.done) {
         const event = next.value
 
-        if (
-          !hasStartedStreaming &&
-          event.type === 'stream_event' &&
-          event.event.type === 'content_block_start' &&
-          event.event.content_block.type === 'text'
-        ) {
+        if (!hasStartedStreaming && event.kind === 'preferred_content') {
           hasStartedStreaming = true
           context.setStreamMode?.('responding')
         }
 
-        if (
-          event.type === 'stream_event' &&
-          event.event.type === 'content_block_delta' &&
-          event.event.delta.type === 'text_delta'
-        ) {
-          const charactersStreamed = event.event.delta.text.length
+        if (event.kind === 'preferred_content') {
+          aggregatedPreferredItems.push(...event.preferred.renderableItems)
+          const payload =
+            createSyntheticAssistantPayloadFromPreferredContent(event.preferred)
+          const charactersStreamed = payload.content.reduce((count, block) => {
+            if (block.type === 'text') {
+              return count + block.text.length
+            }
+            return count
+          }, 0)
           context.setResponseLength?.(length => length + charactersStreamed)
         }
 
-        if (event.type === 'assistant') {
-          response = event
+        if (event.kind === 'api_error') {
+          response = createAssistantAPIErrorMessage({
+            content: event.errorMessage,
+            apiError: 'api_error',
+            error: {
+              type: 'api_error',
+              message: event.errorMessage,
+            },
+          })
+          break
         }
 
         next = await streamIter.next()
+      }
+
+      if (!response) {
+        const finalPreferred = resolvePreferredAssistantTurnContent(
+          aggregatedPreferredItems,
+        )
+        if (finalPreferred.kind !== 'empty') {
+          response = createAssistantMessageFromSyntheticPayload(
+            createSyntheticAssistantPayloadFromPreferredContent(
+              finalPreferred,
+            ),
+          )
+        }
       }
 
       if (response) {

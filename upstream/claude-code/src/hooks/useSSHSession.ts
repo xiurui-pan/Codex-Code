@@ -13,7 +13,7 @@ import { randomUUID } from 'crypto'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ToolUseConfirm } from '../components/permissions/PermissionRequest.js'
 import {
-  createSyntheticAssistantMessage,
+  createRemotePermissionAssistantMessage,
   createToolStub,
 } from '../remote/remotePermissionBridge.js'
 import {
@@ -97,7 +97,7 @@ export function useSSHSession({
           findToolByName(toolsRef.current, request.tool_name) ??
           createToolStub(request.tool_name)
 
-        const syntheticMessage = createSyntheticAssistantMessage(
+        const syntheticMessage = createRemotePermissionAssistantMessage(
           request,
           requestId,
         )

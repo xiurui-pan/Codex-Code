@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { ToolUseConfirm } from '../components/permissions/PermissionRequest.js'
 import type { RemotePermissionResponse } from '../remote/RemoteSessionManager.js'
 import {
-  createSyntheticAssistantMessage,
+  createRemotePermissionAssistantMessage,
   createToolStub,
 } from '../remote/remotePermissionBridge.js'
 import {
@@ -93,7 +93,7 @@ export function useDirectConnect({
           findToolByName(toolsRef.current, request.tool_name) ??
           createToolStub(request.tool_name)
 
-        const syntheticMessage = createSyntheticAssistantMessage(
+        const syntheticMessage = createRemotePermissionAssistantMessage(
           request,
           requestId,
         )
