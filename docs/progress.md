@@ -113,6 +113,10 @@
 - 已补一组更贴近行为的本地验证材料：除了现有单元测试，还新增 `upstream/claude-code/tests/headlessStreaming.smoke.mjs`，专门用本地假 Responses 服务和真实 headless CLI 去验证 request shape、SSE 增量进入主链、以及执行对象输出。
 
 ## 当前新增判断
+- 这一轮把 shell prefix 的错误识别也收回 Codex 主路：不再把 provider 错误当成旧 `API Error` 文本前缀去猜，而是直接按 `errorMessage` 分支处理。
+- `extractFinalAnswerTextFromTurnItems()` 也补了 `separator === ''` 的边界处理：现在会保留原始块边界里的空白而不是逐块硬裁剪，避免把原本有空格的自然语言拼成一串，或把被分块的 JSON 误拼坏。
+- 又迁了一批外围旧入口：`teleport.tsx`、`Feedback.tsx`、`skillImprovement.ts`、`execPromptHook.ts`、`apiQueryHookHelper.ts` 都开始直接消费 Codex turn items。
+
 - 这一轮继续缩小旧 assistant 兼容壳的实际消费面：session title、`/rename` 名称生成、shell 前缀判断、WebFetch 二次处理这几条也开始直接消费 Codex turn items。
 - 还补了 `extractFinalAnswerTextFromTurnItems()` 的行为测试，专门卡住多段拼接、空白裁剪和无最终回答时返回空字符串这三种基础风险。
 

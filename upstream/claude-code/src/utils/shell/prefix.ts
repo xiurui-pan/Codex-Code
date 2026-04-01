@@ -16,7 +16,6 @@ import {
 } from '../../services/analytics/index.js'
 import { callSmallModelTurn } from '../../services/api/model.js'
 import { extractFinalAnswerTextFromTurnItems } from '../../services/api/modelTurnItems.js'
-import { startsWithApiErrorPrefix } from '../../services/api/errors.js'
 import { memoizeWithLRU } from '../memoize.js'
 import { jsonStringify } from '../slowOperations.js'
 import { asSystemPrompt } from '../systemPromptType.js'
@@ -246,20 +245,21 @@ async function getCommandPrefixImpl(
     clearTimeout(preflightCheckTimeoutId)
     const durationMs = Date.now() - startTime
 
-    const prefix = response.errorMessage
-      ? response.errorMessage
-      : extractFinalAnswerTextFromTurnItems(response.turnItems, '').trim() ||
-        'none'
-
-    if (startsWithApiErrorPrefix(prefix)) {
+    if (response.errorMessage) {
       logEvent(eventName, {
         success: false,
         error:
-          'API error' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+          response.errorMessage as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
         durationMs,
       })
       result = null
-    } else if (prefix === 'command_injection_detected') {
+      return result
+    }
+
+    const prefix =
+      extractFinalAnswerTextFromTurnItems(response.turnItems, '').trim() || 'none'
+
+    if (prefix === 'command_injection_detected') {
       // Haiku detected something suspicious - treat as no prefix available
       logEvent(eventName, {
         success: false,

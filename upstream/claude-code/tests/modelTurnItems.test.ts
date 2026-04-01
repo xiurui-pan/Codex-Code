@@ -51,6 +51,50 @@ test('extractFinalAnswerTextFromTurnItems drops blank final answers', () => {
   assert.equal(text, 'useful text')
 })
 
+test('extractFinalAnswerTextFromTurnItems preserves boundary whitespace when separator is empty', () => {
+  const text = extractFinalAnswerTextFromTurnItems(
+    [
+      {
+        kind: 'final_answer',
+        provider: 'custom',
+        text: 'alpha ',
+        source: 'message_output',
+      },
+      {
+        kind: 'final_answer',
+        provider: 'custom',
+        text: 'beta',
+        source: 'message_output',
+      },
+    ],
+    '',
+  )
+
+  assert.equal(text, 'alpha beta')
+})
+
+test('extractFinalAnswerTextFromTurnItems does not inject spaces into chunked json when separator is empty', () => {
+  const text = extractFinalAnswerTextFromTurnItems(
+    [
+      {
+        kind: 'final_answer',
+        provider: 'custom',
+        text: '{"na',
+        source: 'message_output',
+      },
+      {
+        kind: 'final_answer',
+        provider: 'custom',
+        text: 'me":"ok"}',
+        source: 'message_output',
+      },
+    ],
+    '',
+  )
+
+  assert.equal(text, '{"name":"ok"}')
+})
+
 test('extractFinalAnswerTextFromTurnItems returns empty string when nothing renderable exists', () => {
   const text = extractFinalAnswerTextFromTurnItems([
     {

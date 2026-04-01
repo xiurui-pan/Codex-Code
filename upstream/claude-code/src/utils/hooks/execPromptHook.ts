@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import type { HookEvent } from 'src/entrypoints/agentSdkTypes.js'
-import { callModelWithoutStreaming } from '../../services/api/model.js'
+import { callModelTurnWithoutStreaming } from '../../services/api/model.js'
+import { extractFinalAnswerTextFromTurnItems } from '../../services/api/modelTurnItems.js'
 import type { ToolUseContext } from '../../Tool.js'
 import type { Message } from '../../types/message.js'
 import { createAttachmentMessage } from '../attachments.js'
@@ -9,7 +10,7 @@ import { logForDebugging } from '../debug.js'
 import { errorMessage } from '../errors.js'
 import type { HookResult } from '../hooks.js'
 import { safeParseJSON } from '../json.js'
-import { createUserMessage, extractTextContent } from '../messages.js'
+import { createUserMessage } from '../messages.js'
 import { getSmallFastModel } from '../model/model.js'
 import type { PromptHook } from '../settings/types.js'
 import { asSystemPrompt } from '../systemPromptType.js'
@@ -59,7 +60,7 @@ export async function execPromptHook(
       createCombinedAbortSignal(signal, { timeoutMs: hookTimeoutMs })
 
     try {
-      const response = await callModelWithoutStreaming({
+      const response = await callModelTurnWithoutStreaming({
         messages: messagesToQuery,
         systemPrompt: asSystemPrompt([
           `You are evaluating a hook in Claude Code.
@@ -101,8 +102,9 @@ Your response must be a JSON object matching one of the following schemas:
 
       cleanupSignal()
 
-      // Extract text content from response
-      const content = extractTextContent(response.message.content)
+      const content = response.errorMessage
+        ? response.errorMessage
+        : extractFinalAnswerTextFromTurnItems(response.turnItems)
 
       // Update response length for spinner display
       toolUseContext.setResponseLength(length => length + content.length)

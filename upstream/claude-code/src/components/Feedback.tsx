@@ -10,8 +10,8 @@ import type { CommandResultDisplay } from '../commands.js';
 import { useTerminalSize } from '../hooks/useTerminalSize.js';
 import { Box, Text, useInput } from '../ink.js';
 import { useKeybinding } from '../keybindings/useKeybinding.js';
-import { callSmallModel } from '../services/api/model.js';
-import { startsWithApiErrorPrefix } from '../services/api/errors.js';
+import { callSmallModelTurn } from '../services/api/model.js';
+import { extractFinalAnswerTextFromTurnItems } from '../services/api/modelTurnItems.js';
 import type { Message } from '../types/message.js';
 import { checkAndRefreshOAuthTokenIfNeeded } from '../utils/auth.js';
 import { openBrowser } from '../utils/browser.js';
@@ -446,7 +446,7 @@ export function createGitHubIssueUrl(feedbackId: string, title: string, descript
 }
 async function generateTitle(description: string, abortSignal: AbortSignal): Promise<string> {
   try {
-    const response = await callSmallModel({
+    const response = await callSmallModelTurn({
       systemPrompt: asSystemPrompt(['Generate a concise, technical issue title (max 80 chars) for a public GitHub issue based on this bug report for Claude Code.', 'Claude Code is an agentic coding CLI based on the Anthropic API.', 'The title should:', '- Include the type of issue [Bug] or [Feature Request] as the first thing in the title', '- Be concise, specific and descriptive of the actual problem', '- Use technical terminology appropriate for a software issue', '- For error messages, extract the key error (e.g., "Missing Tool Result Block" rather than the full message)', '- Be direct and clear for developers to understand the problem', '- If you cannot determine a clear issue, use "Bug Report: [brief description]"', '- Any LLM API errors are from the Anthropic API, not from any other model provider', 'Your response will be directly used as the title of the Github issue, and as such should not contain any other commentary or explaination', 'Examples of good titles include: "[Bug] Auto-Compact triggers to soon", "[Bug] Anthropic API Error: Missing Tool Result Block", "[Bug] Error: Invalid Model Name for Opus"']),
       userPrompt: description,
       signal: abortSignal,
@@ -459,12 +459,12 @@ async function generateTitle(description: string, abortSignal: AbortSignal): Pro
         mcpTools: []
       }
     });
-    const title = response.message.content[0]?.type === 'text' ? response.message.content[0].text : 'Bug Report';
-
-    // Check if the title contains an API error message
-    if (startsWithApiErrorPrefix(title)) {
+    if (response.errorMessage) {
       return createFallbackTitle(description);
     }
+
+    const title = extractFinalAnswerTextFromTurnItems(response.turnItems, '').trim() || 'Bug Report';
+
     return title;
   } catch (error) {
     // If there's any error in title generation, use a fallback title

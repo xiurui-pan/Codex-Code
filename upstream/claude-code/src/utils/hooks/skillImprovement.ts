@@ -6,7 +6,8 @@ import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_PII_TAGGED,
   logEvent,
 } from '../../services/analytics/index.js'
-import { callModelWithoutStreaming } from '../../services/api/model.js'
+import { callModelTurnWithoutStreaming } from '../../services/api/model.js'
+import { extractFinalAnswerTextFromTurnItems } from '../../services/api/modelTurnItems.js'
 import { getEmptyToolPermissionContext } from '../../Tool.js'
 import type { Message } from '../../types/message.js'
 import { createAbortController } from '../abortController.js'
@@ -17,7 +18,6 @@ import { logError } from '../log.js'
 import {
   createUserMessage,
   extractTag,
-  extractTextContent,
 } from '../messages.js'
 import { getSmallFastModel } from '../model/model.js'
 import { jsonParse } from '../slowOperations.js'
@@ -209,7 +209,7 @@ export async function applySkillImprovement(
 
   const updateList = updates.map(u => `- ${u.section}: ${u.change}`).join('\n')
 
-  const response = await callModelWithoutStreaming({
+  const response = await callModelTurnWithoutStreaming({
     messages: [
       createUserMessage({
         content: `You are editing a skill definition file. Apply the following improvements to the skill.
@@ -249,7 +249,14 @@ Rules:
     },
   })
 
-  const responseText = extractTextContent(response.message.content).trim()
+  if (response.errorMessage) {
+    logError(new Error(response.errorMessage))
+    return
+  }
+
+  const responseText = extractFinalAnswerTextFromTurnItems(
+    response.turnItems,
+  ).trim()
 
   const updatedContent = extractTag(responseText, 'updated_file')
   if (!updatedContent) {

@@ -202,8 +202,19 @@ export function extractFinalAnswerTextFromTurnItems(
   items: readonly ModelTurnItem[],
   separator = '\n',
 ): string {
-  return items
-    .filter((item): item is ModelFinalAnswerItem => item.kind === 'final_answer')
+  const finalAnswers = items.filter(
+    (item): item is ModelFinalAnswerItem => item.kind === 'final_answer',
+  )
+
+  if (separator === '') {
+    return finalAnswers
+      .map(item => item.text)
+      .filter(text => text.trim().length > 0)
+      .join('')
+      .trim()
+  }
+
+  return finalAnswers
     .map(item => item.text.trim())
     .filter(text => text.length > 0)
     .join(separator)

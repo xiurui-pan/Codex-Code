@@ -1,11 +1,11 @@
 import { randomUUID } from 'crypto'
 import type { QuerySource } from '../../constants/querySource.js'
-import { callModelWithoutStreaming } from '../../services/api/model.js'
+import { callModelTurnWithoutStreaming } from '../../services/api/model.js'
+import { extractFinalAnswerTextFromTurnItems } from '../../services/api/modelTurnItems.js'
 import type { Message } from '../../types/message.js'
 import { createAbortController } from '../../utils/abortController.js'
 import { logError } from '../../utils/log.js'
 import { toError } from '../errors.js'
-import { extractTextContent } from '../messages.js'
 import { asSystemPrompt } from '../systemPromptType.js'
 import type { REPLHookContext } from './postSamplingHooks.js'
 
@@ -82,7 +82,7 @@ export function createApiQueryHook<TResult>(
       const model = config.getModel(context)
 
       // Make API call
-      const response = await callModelWithoutStreaming({
+      const response = await callModelTurnWithoutStreaming({
         messages,
         systemPrompt,
         thinkingConfig: { type: 'disabled' as const },
@@ -107,8 +107,9 @@ export function createApiQueryHook<TResult>(
         },
       })
 
-      // Parse response
-      const content = extractTextContent(response.message.content).trim()
+      const content = response.errorMessage
+        ? response.errorMessage.trim()
+        : extractFinalAnswerTextFromTurnItems(response.turnItems).trim()
 
       try {
         const result = config.parseResponse(content, context)

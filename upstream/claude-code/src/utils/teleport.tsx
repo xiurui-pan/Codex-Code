@@ -12,7 +12,8 @@ import { getOauthConfig } from '../constants/oauth.js';
 import type { SDKMessage } from '../entrypoints/agentSdkTypes.js';
 import type { Root } from '../ink.js';
 import { KeybindingSetup } from '../keybindings/KeybindingProviderSetup.js';
-import { callSmallModel } from '../services/api/model.js';
+import { callSmallModelTurn } from '../services/api/model.js';
+import { extractFinalAnswerTextFromTurnItems } from '../services/api/modelTurnItems.js';
 import { getSessionLogsViaOAuth, getTeleportEvents } from '../services/api/sessionIngress.js';
 import { getOrganizationUUID } from '../services/oauth/client.js';
 import { AppStateProvider } from '../state/AppState.js';
@@ -104,7 +105,7 @@ async function generateTitleAndBranch(description: string, signal: AbortSignal):
   const fallbackBranch = 'claude/task';
   try {
     const userPrompt = SESSION_TITLE_AND_BRANCH_PROMPT.replace('{description}', description);
-    const response = await callSmallModel({
+    const response = await callSmallModelTurn({
       systemPrompt: asSystemPrompt([]),
       userPrompt,
       outputFormat: {
@@ -133,15 +134,22 @@ async function generateTitleAndBranch(description: string, signal: AbortSignal):
       }
     });
 
-    // Extract text from the response
-    const firstBlock = response.message.content[0];
-    if (firstBlock?.type !== 'text') {
+    if (response.errorMessage) {
       return {
         title: fallbackTitle,
         branchName: fallbackBranch
       };
     }
-    const parsed = safeParseJSON(firstBlock.text.trim());
+
+    const parsedText = extractFinalAnswerTextFromTurnItems(response.turnItems, '');
+    if (!parsedText) {
+      return {
+        title: fallbackTitle,
+        branchName: fallbackBranch
+      };
+    }
+
+    const parsed = safeParseJSON(parsedText.trim());
     const parseResult = z.object({
       title: z.string(),
       branch: z.string()
