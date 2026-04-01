@@ -3,7 +3,7 @@ import assert from 'node:assert/strict'
 
 import { normalizeResponsesOutputToTurnItems } from '../src/services/api/codexTurnItems.js'
 
-test('text fallback shell call stays parseable but marked as fallback', () => {
+test('text fallback shell call is filtered out of the execution path by default', () => {
   const items = normalizeResponsesOutputToTurnItems([
     {
       type: 'message',
@@ -16,6 +16,35 @@ test('text fallback shell call stays parseable but marked as fallback', () => {
       ],
     },
   ])
+
+  assert.equal(items.some(item => item.kind === 'tool_call'), false)
+  assert.equal(items.some(item => item.kind === 'local_shell_call'), false)
+  assert.equal(
+    items.some(
+      item =>
+        item.kind === 'ui_message' &&
+        item.source === 'text_fallback_filtered',
+    ),
+    true,
+  )
+})
+
+test('text fallback can still be enabled in isolated debug mode', () => {
+  const items = normalizeResponsesOutputToTurnItems(
+    [
+      {
+        type: 'message',
+        role: 'assistant',
+        content: [
+          {
+            type: 'output_text',
+            text: 'to=shell code:{"command":["bash","-lc","pwd"]}',
+          },
+        ],
+      },
+    ],
+    { allowTextFallbackToolCall: true },
+  )
 
   assert.equal(items.some(item => item.kind === 'tool_call'), true)
   assert.equal(items.some(item => item.kind === 'local_shell_call'), true)
@@ -139,8 +168,8 @@ test('text fallback rejects markdown fenced protocol snippets', () => {
   )
 })
 
-test('text fallback still accepts exact quoted code payload', () => {
-  const items = normalizeResponsesOutputToTurnItems([
+test('exact quoted code payload only executes in isolated debug mode', () => {
+  const filteredItems = normalizeResponsesOutputToTurnItems([
     {
       type: 'message',
       role: 'assistant',
@@ -153,6 +182,32 @@ test('text fallback still accepts exact quoted code payload', () => {
     },
   ])
 
-  assert.equal(items.some(item => item.kind === 'tool_call'), true)
-  assert.equal(items.some(item => item.kind === 'local_shell_call'), true)
+  assert.equal(filteredItems.some(item => item.kind === 'tool_call'), false)
+  assert.equal(
+    filteredItems.some(
+      item =>
+        item.kind === 'ui_message' &&
+        item.source === 'text_fallback_filtered',
+    ),
+    true,
+  )
+
+  const debugItems = normalizeResponsesOutputToTurnItems(
+    [
+      {
+        type: 'message',
+        role: 'assistant',
+        content: [
+          {
+            type: 'output_text',
+            text: 'code:"pwd"',
+          },
+        ],
+      },
+    ],
+    { allowTextFallbackToolCall: true },
+  )
+
+  assert.equal(debugItems.some(item => item.kind === 'tool_call'), true)
+  assert.equal(debugItems.some(item => item.kind === 'local_shell_call'), true)
 })

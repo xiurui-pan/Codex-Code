@@ -25,6 +25,10 @@ export type ResponsesOutputItem =
   | ResponsesMessageItem
   | ResponsesFunctionCallItem
 
+type NormalizeResponsesOutputOptions = {
+  allowTextFallbackToolCall?: boolean
+}
+
 type ParsedToolCall = {
   toolName: string
   input: Record<string, unknown>
@@ -245,6 +249,7 @@ function isProtocolLeakText(text: string): boolean {
 
 export function normalizeResponsesOutputToTurnItems(
   items: ResponsesOutputItem[],
+  options: NormalizeResponsesOutputOptions = {},
 ): ModelTurnItem[] {
   const turnItems: ModelTurnItem[] = []
 
@@ -289,17 +294,23 @@ export function normalizeResponsesOutputToTurnItems(
         kind: 'ui_message',
         provider: 'custom',
         level: 'warn',
-        text: 'Provider emitted a text fallback tool call; using temporary parser.',
-        source: 'text_fallback_tool_call',
+        text: options.allowTextFallbackToolCall
+          ? 'Provider emitted a text fallback tool call; using isolated debug parser.'
+          : 'Provider emitted a text fallback tool call; filtered out of the execution path.',
+        source: options.allowTextFallbackToolCall
+          ? 'text_fallback_tool_call'
+          : 'text_fallback_filtered',
       })
-      turnItems.push(
-        ...buildToolCallItemsForLocalExecution(
-          randomUUID(),
-          fallbackToolCall.toolName,
-          fallbackToolCall.input,
-          'text_fallback',
-        ),
-      )
+      if (options.allowTextFallbackToolCall) {
+        turnItems.push(
+          ...buildToolCallItemsForLocalExecution(
+            randomUUID(),
+            fallbackToolCall.toolName,
+            fallbackToolCall.input,
+            'text_fallback',
+          ),
+        )
+      }
       continue
     }
 

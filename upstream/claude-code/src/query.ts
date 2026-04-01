@@ -95,6 +95,11 @@ import { executePostSamplingHooks } from './utils/hooks/postSamplingHooks.js'
 import { executeStopFailureHooks } from './utils/hooks.js'
 import type { QuerySource } from './constants/querySource.js'
 import { createDumpPromptsFetch } from './services/api/dumpPrompts.js'
+import type { CodexResponseChunk } from './services/api/codexResponses.js'
+import {
+  buildAssistantMessageFromTurnItems,
+  createSystemMessageFromModelTurnItem,
+} from './services/api/modelTurnItems.js'
 import { StreamingToolExecutor } from './services/tools/StreamingToolExecutor.js'
 import { queryCheckpoint } from './utils/queryProfiler.js'
 import { runTools } from './services/tools/toolOrchestration.js'
@@ -148,6 +153,14 @@ function* yieldMissingToolResultBlocks(
       })
     }
   }
+}
+
+function assistantMessageContainsRenderableText(
+  message: AssistantMessage,
+): boolean {
+  return message.message.content.some(
+    block => block.type === 'text' && typeof block.text === 'string',
+  )
 }
 
 /**
@@ -658,7 +671,7 @@ async function* queryLoop(
         try {
           let streamingFallbackOccured = false
           queryCheckpoint('query_api_streaming_start')
-          for await (const message of deps.callModel({
+          for await (const chunk of deps.callModel({
             messages: prependUserContext(messagesForQuery, userContext),
             systemPrompt: fullSystemPrompt,
             thinkingConfig: toolUseContext.options.thinkingConfig,
@@ -708,6 +721,52 @@ async function* queryLoop(
               }),
             },
           })) {
+            let message:
+              | AssistantMessage
+              | ReturnType<typeof createSystemMessageFromModelTurnItem>
+              | null = null
+            let internalAssistantMessage: AssistantMessage | null = null
+
+            if ((chunk as CodexResponseChunk).kind === 'api_error') {
+              const errorChunk = chunk as CodexResponseChunk
+              message = createAssistantAPIErrorMessage({
+                content: errorChunk.errorMessage,
+                apiError: 'api_error',
+                error: {
+                  type: 'api_error',
+                  message: errorChunk.errorMessage,
+                },
+              })
+            } else if ((chunk as CodexResponseChunk).kind === 'turn_items') {
+              const turnChunk = chunk as Extract<
+                CodexResponseChunk,
+                { kind: 'turn_items' }
+              >
+              const systemMessages = turnChunk.turnItems
+                .map(item => createSystemMessageFromModelTurnItem(item))
+                .filter(_ => _ !== null)
+
+              for (const systemMessage of systemMessages) {
+                yield systemMessage
+              }
+
+              const assistantCandidate = buildAssistantMessageFromTurnItems(
+                turnChunk.turnItems,
+              )
+              if (assistantCandidate.message.content.length > 0) {
+                internalAssistantMessage = assistantCandidate
+                if (assistantMessageContainsRenderableText(assistantCandidate)) {
+                  message = assistantCandidate
+                }
+              }
+
+              if (!message && !internalAssistantMessage) {
+                continue
+              }
+            } else {
+              continue
+            }
+
             // We won't use the tool_calls from the first attempt
             // We could.. but then we'd have to merge assistant messages
             // with different ids and double up on full the tool_results
@@ -747,7 +806,7 @@ async function* queryLoop(
             // assistantMessages.push below — it flows back to the API and
             // mutating it would break prompt caching (byte mismatch).
             let yieldMessage: typeof message = message
-            if (message.type === 'assistant') {
+            if (message?.type === 'assistant') {
               let clonedContent: typeof message.message.content | undefined
               for (let i = 0; i < message.message.content.length; i++) {
                 const block = message.message.content[i]!
@@ -798,11 +857,13 @@ async function* queryLoop(
             // feature() only works in if/ternary conditions (bun:bundle
             // tree-shaking constraint), so the collapse check is nested
             // rather than composed.
+            const assistantEnvelope =
+              message?.type === 'assistant' ? message : null
             let withheld = false
-            if (feature('CONTEXT_COLLAPSE')) {
+            if (assistantEnvelope && feature('CONTEXT_COLLAPSE')) {
               if (
                 contextCollapse?.isWithheldPromptTooLong(
-                  message,
+                  assistantEnvelope,
                   isPromptTooLongMessage,
                   querySource,
                 )
@@ -810,25 +871,29 @@ async function* queryLoop(
                 withheld = true
               }
             }
-            if (reactiveCompact?.isWithheldPromptTooLong(message)) {
-              withheld = true
-            }
             if (
-              mediaRecoveryEnabled &&
-              reactiveCompact?.isWithheldMediaSizeError(message)
+              assistantEnvelope &&
+              reactiveCompact?.isWithheldPromptTooLong(assistantEnvelope)
             ) {
               withheld = true
             }
-            if (isWithheldMaxOutputTokens(message)) {
+            if (
+              assistantEnvelope &&
+              mediaRecoveryEnabled &&
+              reactiveCompact?.isWithheldMediaSizeError(assistantEnvelope)
+            ) {
               withheld = true
             }
-            if (!withheld) {
+            if (assistantEnvelope && isWithheldMaxOutputTokens(assistantEnvelope)) {
+              withheld = true
+            }
+            if (message && !withheld) {
               yield yieldMessage
             }
-            if (message.type === 'assistant') {
-              assistantMessages.push(message)
+            if (internalAssistantMessage) {
+              assistantMessages.push(internalAssistantMessage)
 
-              const msgToolUseBlocks = message.message.content.filter(
+              const msgToolUseBlocks = internalAssistantMessage.message.content.filter(
                 content => content.type === 'tool_use',
               ) as ToolUseBlock[]
               if (msgToolUseBlocks.length > 0) {
@@ -841,7 +906,10 @@ async function* queryLoop(
                 !toolUseContext.abortController.signal.aborted
               ) {
                 for (const toolBlock of msgToolUseBlocks) {
-                  streamingToolExecutor.addTool(toolBlock, message)
+                  streamingToolExecutor.addTool(
+                    toolBlock,
+                    internalAssistantMessage,
+                  )
                 }
               }
             }

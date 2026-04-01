@@ -1,15 +1,30 @@
 import type { NonNullableUsage } from '../../entrypoints/sdk/sdkUtilityTypes.js'
 import type { AssistantMessage } from '../../types/message.js'
 import { getCodexConfiguredModel } from '../../utils/codexConfig.js'
+import {
+  createAssistantAPIErrorMessage,
+  createAssistantMessage,
+} from '../../utils/messages.js'
 import { getModelMaxOutputTokens as getContextMaxOutputTokens } from '../../utils/context.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import {
+  type CodexResponseChunk,
+  type CodexResponseResult,
   queryCodexResponses,
   queryCodexResponsesStream,
 } from './codexResponses.js'
+import {
+  buildAssistantMessageFromTurnItems,
+  getRenderableModelTurnItems,
+} from './modelTurnItems.js'
 
-export type StreamingModelCaller = typeof queryCodexResponsesStream
-export type NonStreamingModelCaller = typeof queryCodexResponses
+export type StreamingModelCaller = (
+  args: Parameters<typeof queryCodexResponsesStream>[0],
+) => AsyncGenerator<AssistantMessage, void, unknown>
+export type NonStreamingModelCaller = (
+  args: Parameters<typeof queryCodexResponses>[0],
+) => Promise<AssistantMessage>
+export type StreamingModelTurnCaller = typeof queryCodexResponsesStream
 export type SingleTurnModelCallArgs = {
   systemPrompt: SystemPrompt
   userPrompt: string
@@ -58,17 +73,69 @@ function buildSingleTurnRequest(args: {
   }
 }
 
+function codexResultToAssistantMessage(
+  result: CodexResponseResult,
+): AssistantMessage {
+  if (result.errorMessage) {
+    return createAssistantAPIErrorMessage({
+      content: result.errorMessage,
+      apiError: 'api_error',
+      error: {
+        type: 'api_error',
+        message: result.errorMessage,
+      },
+    })
+  }
+
+  const renderableItems = getRenderableModelTurnItems(result.turnItems)
+  if (renderableItems.length === 0) {
+    return createAssistantMessage({ content: '' })
+  }
+
+  return buildAssistantMessageFromTurnItems(renderableItems)
+}
+
+function codexChunkToAssistantMessage(
+  chunk: CodexResponseChunk,
+): AssistantMessage | null {
+  if (chunk.kind === 'api_error') {
+    return createAssistantAPIErrorMessage({
+      content: chunk.errorMessage,
+      apiError: 'api_error',
+      error: {
+        type: 'api_error',
+        message: chunk.errorMessage,
+      },
+    })
+  }
+
+  const renderableItems = getRenderableModelTurnItems(chunk.turnItems)
+  if (renderableItems.length === 0) {
+    return null
+  }
+
+  return buildAssistantMessageFromTurnItems(renderableItems)
+}
+
 export const callModelWithStreaming: StreamingModelCaller = async function* (
   args,
 ) {
-  yield* queryCodexResponsesStream(args)
+  for await (const chunk of queryCodexResponsesStream(args)) {
+    const assistantMessage = codexChunkToAssistantMessage(chunk)
+    if (assistantMessage) {
+      yield assistantMessage
+    }
+  }
 }
 
-export const callModelWithoutStreaming: NonStreamingModelCaller =
-  queryCodexResponses
+export const callModelTurnWithStreaming: StreamingModelTurnCaller =
+  queryCodexResponsesStream
+
+export const callModelWithoutStreaming: NonStreamingModelCaller = async args =>
+  codexResultToAssistantMessage(await queryCodexResponses(args))
 
 export const callModel: ModelCaller = async args =>
-  queryCodexResponses(
+  callModelWithoutStreaming(
     buildSingleTurnRequest({
       systemPrompt: args.systemPrompt,
       userPrompt: args.userPrompt,
@@ -78,7 +145,7 @@ export const callModel: ModelCaller = async args =>
   )
 
 export const callSmallModel: SmallModelCaller = async args =>
-  queryCodexResponses(
+  callModelWithoutStreaming(
     buildSingleTurnRequest({
       systemPrompt: args.systemPrompt,
       userPrompt: args.userPrompt,

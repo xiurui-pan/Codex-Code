@@ -32,6 +32,15 @@ I initially kept this repository as a source-exposure archive so I could study t
 
 This branch therefore takes a smaller and more honest step: it keeps that essay in view as companion reading and makes the archive's research-only framing more explicit. This repository is still a mirrored TypeScript source snapshot for analysis; it is **not** a clean-room or Python rewrite.
 
+## Current Codex-oriented implementation note
+
+This snapshot is also being used as a working base for a `Codex Code` prototype. The harness shell remains reusable, but the active implementation direction now treats Codex as the only target:
+
+- the local harness, TUI, tool execution, permission flow, and compaction loop are being kept and rewired
+- the old Claude-shaped middle layer is being narrowed out of the main path
+- Codex responses are being pushed toward explicit turn items and execution objects instead of synthetic assistant wrappers
+- text fallback tool calls are being reduced to isolated debug-only paths rather than normal execution paths
+
 ## Built with `oh-my-codex`
 
 The README/essay archival work on this branch was AI-assisted and orchestrated with Yeachan Heo's [oh-my-codex (OmX)](https://github.com/Yeachan-Heo/oh-my-codex), a workflow layer built around Codex.

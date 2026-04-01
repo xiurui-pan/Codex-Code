@@ -150,11 +150,8 @@ async function runQuery() {
         })
 
         return {
-          turnItemKinds:
-            assistantMessage.modelTurnItems?.map(item => item.kind) ?? [],
-          content: assistantMessage.message.content.map(part =>
-            part.type === 'text' ? part.text : part.type,
-          ),
+          turnItemKinds: assistantMessage.turnItems.map(item => item.kind),
+          errorMessage: assistantMessage.errorMessage ?? null,
         }
       },
     )

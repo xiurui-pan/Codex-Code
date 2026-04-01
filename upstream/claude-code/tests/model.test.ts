@@ -33,9 +33,10 @@ test('model entry keeps codex-only local usage and token helpers', async () => {
   assert.equal(source.includes('getCodexConfiguredModel'), true)
 })
 
-test('non-streaming codex path aggregates streamed turn items instead of only keeping the last message', async () => {
+test('codex responses entry no longer folds raw turn items back into a synthetic assistant shell', async () => {
   const source = await readCodexResponsesSource()
 
-  assert.equal(source.includes('mergeStreamedAssistantMessages'), true)
-  assert.equal(source.includes('lastAssistantMessage = assistantMessage'), false)
+  assert.equal(source.includes("kind: 'turn_items'"), true)
+  assert.equal(source.includes('mergeStreamedAssistantMessages'), false)
+  assert.equal(source.includes('codex-synthetic'), false)
 })

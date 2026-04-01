@@ -998,6 +998,9 @@ export class QueryEngine {
               uuid: message.uuid,
             }
           }
+          if (message.modelTurnItem) {
+            yield* this.emitExecutionItemMessages([message.modelTurnItem])
+          }
           // Don't yield other system messages in headless mode
           break
         }

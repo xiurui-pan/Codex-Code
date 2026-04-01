@@ -54,10 +54,22 @@ test('mergeStreamedAssistantMessages preserves intermediate turn items', async (
 test('queryCodexResponses aggregates streamed items instead of only returning the last assistant message', async () => {
   const result = await runBehavior('query')
 
-  assert.deepEqual(result.turnItemKinds, [
+  assert.deepEqual(
+    result.turnItemKinds.filter(kind => kind !== 'raw_model_output'),
+    [
+      'tool_call',
+      'local_shell_call',
+      'final_answer',
+    ],
+  )
+  assert.equal(
+    result.turnItemKinds.filter(kind => kind === 'raw_model_output').length,
+    2,
+  )
+  assert.notDeepEqual(result.turnItemKinds, [
     'tool_call',
     'local_shell_call',
     'final_answer',
   ])
-  assert.deepEqual(result.content, ['tool_use', 'done'])
+  assert.equal(result.errorMessage, null)
 })

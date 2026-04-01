@@ -277,7 +277,7 @@ async function runStreamingAssertions() {
     ],
   })
 
-  assert.equal(result.code, 0)
+  assert.equal(result.code, 0, result.stderr)
   assert.equal(result.requestBodies[0]?.model, 'gpt-5.1-codex-mini')
   assert.equal(result.requestBodies[0]?.stream, true)
   assert.equal('tool_choice' in (result.requestBodies[0] ?? {}), false)
@@ -321,6 +321,15 @@ async function runStreamingAssertions() {
     ),
     true,
   )
+  assert.equal(
+    result.messages.some(
+      message =>
+        message.type === 'assistant' &&
+        Array.isArray(message.message?.content) &&
+        message.message.content.some(part => part.type === 'tool_use'),
+    ),
+    false,
+  )
 }
 
 async function runSameResponseIncrementalAssertions() {
@@ -352,7 +361,7 @@ async function runSameResponseIncrementalAssertions() {
     ],
   })
 
-  assert.equal(result.code, 0)
+  assert.equal(result.code, 0, result.stderr)
   assert.notEqual(result.seenAt.assistantTexts['phase one'], undefined)
   assert.notEqual(result.seenAt.assistantTexts['phase two'], undefined)
   assert.notEqual(result.sentAt['same-response-second'], undefined)
@@ -414,11 +423,13 @@ async function runPermissionAssertions() {
     ],
   })
 
-  assert.equal(result.code, 0)
+  assert.equal(result.code, 0, result.stderr)
   const itemKinds = result.messages
     .filter(message => message.type === 'system' && message.subtype === 'model_turn_item')
     .map(message => message.item_kind)
+  assert.equal(itemKinds.includes('local_shell_call'), true)
   assert.equal(itemKinds.includes('execution_result'), true)
+  assert.equal(itemKinds.includes('tool_output'), true)
   assert.equal(
     result.messages.some(
       message =>

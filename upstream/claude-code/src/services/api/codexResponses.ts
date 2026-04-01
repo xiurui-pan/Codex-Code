@@ -11,15 +11,10 @@ import { FILE_READ_TOOL_NAME } from '../../tools/FileReadTool/prompt.js'
 import { GLOB_TOOL_NAME } from '../../tools/GlobTool/prompt.js'
 import { GREP_TOOL_NAME } from '../../tools/GrepTool/prompt.js'
 import type { Message } from '../../types/message.js'
-import type { AssistantMessage } from '../../types/message.js'
 import { getCodexConfiguredModel } from '../../utils/codexConfig.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
-import { NO_CONTENT_MESSAGE } from '../../constants/messages.js'
 import { zodToJsonSchema } from '../../utils/zodToJsonSchema.js'
 import {
-  buildAssistantMessageFromTurnItems,
-  getRenderableModelTurnItems,
-  mergeStreamedAssistantMessages,
   type ModelTurnItem,
 } from './modelTurnItems.js'
 import {
@@ -47,6 +42,23 @@ type CodexStreamingArgs = {
   systemPrompt: SystemPrompt
   options: CodexRequestOptions
   signal: AbortSignal
+}
+
+export type CodexTurnItemChunk = {
+  kind: 'turn_items'
+  turnItems: ModelTurnItem[]
+}
+
+export type CodexApiErrorChunk = {
+  kind: 'api_error'
+  errorMessage: string
+}
+
+export type CodexResponseChunk = CodexTurnItemChunk | CodexApiErrorChunk
+
+export type CodexResponseResult = {
+  turnItems: ModelTurnItem[]
+  errorMessage?: string
 }
 
 type ResponsesOutputText = {
@@ -405,27 +417,6 @@ export function parseResponsesSseEvent(
   return JSON.parse(payloadText) as ResponsesStreamEvent
 }
 
-function buildAssistantMessageFromIncrementalTurnItems(
-  turnItems: ModelTurnItem[],
-) {
-  const renderableItems = getRenderableModelTurnItems(turnItems)
-  if (renderableItems.length === 0) {
-    return null
-  }
-
-  const assistantMessage = buildAssistantMessageFromTurnItems(renderableItems)
-  if (
-    assistantMessage.message.content.length === 0 &&
-    renderableItems.some(item => item.kind !== 'ui_message')
-  ) {
-    const emptyMessage = createSyntheticAssistantMessage('')
-    emptyMessage.modelTurnItems = renderableItems
-    return emptyMessage
-  }
-
-  return assistantMessage
-}
-
 async function* iterateResponsesSseEvents(
   response: Response,
 ): AsyncGenerator<ResponsesStreamEvent, void, unknown> {
@@ -472,7 +463,7 @@ export async function* queryCodexResponsesStream({
   systemPrompt,
   options,
   signal,
-}: CodexStreamingArgs) {
+}: CodexStreamingArgs): AsyncGenerator<CodexResponseChunk, void, unknown> {
   const response = await fetch(getResponsesBaseUrl(), {
     method: 'POST',
     headers: {
@@ -494,21 +485,22 @@ export async function* queryCodexResponsesStream({
   })
 
   if (!response.ok) {
-      const errorText = await response.text()
-    yield createSyntheticAssistantApiErrorMessage(
-      `Custom Codex provider request failed: ${response.status} ${errorText}`,
-      errorText,
-    )
+    const errorText = await response.text()
+    yield {
+      kind: 'api_error',
+      errorMessage: `Custom Codex provider request failed: ${response.status} ${errorText}`,
+    }
     return
   }
 
   for await (const event of iterateResponsesSseEvents(response)) {
     if (event.type === 'response.output_item.done' && event.item) {
       const turnItems = normalizeResponsesOutputToTurnItems([event.item])
-      const assistantMessage =
-        buildAssistantMessageFromIncrementalTurnItems(turnItems)
-      if (assistantMessage) {
-        yield assistantMessage
+      if (turnItems.length > 0) {
+        yield {
+          kind: 'turn_items',
+          turnItems,
+        }
       }
       continue
     }
@@ -519,10 +511,10 @@ export async function* queryCodexResponsesStream({
         event.detail ??
         event.message ??
         'custom Codex provider request failed'
-      yield createSyntheticAssistantApiErrorMessage(
+      yield {
+        kind: 'api_error',
         errorMessage,
-        errorMessage,
-      )
+      }
       return
     }
   }
@@ -537,78 +529,26 @@ export async function queryCodexResponses({
   systemPrompt,
   options,
   signal,
-}: CodexStreamingArgs) {
-  const streamedMessages = []
+}: CodexStreamingArgs): Promise<CodexResponseResult> {
+  const turnItems: ModelTurnItem[] = []
 
-  for await (const assistantMessage of queryCodexResponsesStream({
+  for await (const chunk of queryCodexResponsesStream({
     messages,
     systemPrompt,
     options,
     signal,
   })) {
-    streamedMessages.push(assistantMessage)
+    if (chunk.kind === 'api_error') {
+      return {
+        turnItems,
+        errorMessage: chunk.errorMessage,
+      }
+    }
+
+    turnItems.push(...chunk.turnItems)
   }
 
-  return (
-    mergeStreamedAssistantMessages(streamedMessages) ??
-    createSyntheticAssistantMessage('')
-  )
+  return { turnItems }
 }
 
 export { normalizeTextContent }
-
-function createSyntheticAssistantMessage(
-  content: string,
-): AssistantMessage {
-  return {
-    type: 'assistant',
-    uuid: randomUUID(),
-    timestamp: new Date().toISOString(),
-    message: {
-      id: randomUUID(),
-      container: null,
-      model: 'codex-synthetic',
-      role: 'assistant',
-      stop_reason: 'stop_sequence',
-      stop_sequence: '',
-      type: 'message',
-      usage: {
-        input_tokens: 0,
-        output_tokens: 0,
-        cache_creation_input_tokens: 0,
-        cache_read_input_tokens: 0,
-        server_tool_use: { web_search_requests: 0, web_fetch_requests: 0 },
-        service_tier: null,
-        cache_creation: {
-          ephemeral_1h_input_tokens: 0,
-          ephemeral_5m_input_tokens: 0,
-        },
-        inference_geo: null,
-        iterations: null,
-        speed: null,
-      },
-      content: [
-        {
-          type: 'text',
-          text: content === '' ? NO_CONTENT_MESSAGE : content,
-        },
-      ],
-      context_management: null,
-    },
-  }
-}
-
-function createSyntheticAssistantApiErrorMessage(
-  content: string,
-  errorMessage: string,
-): AssistantMessage {
-  return {
-    ...createSyntheticAssistantMessage(content),
-    apiError: 'api_error',
-    error: {
-      type: 'api_error',
-      message: errorMessage,
-    },
-    isApiErrorMessage: true,
-  }
-}
