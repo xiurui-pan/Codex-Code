@@ -324,6 +324,99 @@ test('web search response parsing keeps multiple search result citations on thei
   ])
 })
 
+test('web search response parsing keeps multi-citation first search separate from a later cited search in one assistant message', () => {
+  const result = collectCodexWebSearchResponse(
+    [
+      {
+        kind: 'raw_model_output',
+        provider: 'custom',
+        itemType: 'web_search_call',
+        payload: {
+          type: 'web_search_call',
+          id: 'ws-1',
+          status: 'completed',
+          action: { type: 'search', query: 'first grouped query' },
+        },
+      },
+      {
+        kind: 'raw_model_output',
+        provider: 'custom',
+        itemType: 'web_search_call',
+        payload: {
+          type: 'web_search_call',
+          id: 'ws-2',
+          status: 'completed',
+          action: { type: 'search', query: 'second grouped query' },
+        },
+      },
+      {
+        kind: 'raw_model_output',
+        provider: 'custom',
+        itemType: 'message',
+        payload: {
+          type: 'message',
+          role: 'assistant',
+          content: [
+            {
+              type: 'output_text',
+              text: 'First search link one.',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  title: 'First Link One',
+                  url: 'https://example.com/first-one',
+                },
+              ],
+            },
+            {
+              type: 'output_text',
+              text: 'First search link two.',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  title: 'First Link Two',
+                  url: 'https://example.com/first-two',
+                },
+              ],
+            },
+            {
+              type: 'output_text',
+              text: 'Second search link.',
+              annotations: [
+                {
+                  type: 'url_citation',
+                  title: 'Second Link',
+                  url: 'https://example.com/second',
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+    'fallback query',
+  )
+
+  const searchResults = result.blocks.filter(block => block.type === 'search_result')
+  assert.deepEqual(searchResults, [
+    {
+      type: 'search_result',
+      toolUseId: 'ws-1',
+      query: 'first grouped query',
+      hits: [
+        { title: 'First Link One', url: 'https://example.com/first-one' },
+        { title: 'First Link Two', url: 'https://example.com/first-two' },
+      ],
+    },
+    {
+      type: 'search_result',
+      toolUseId: 'ws-2',
+      query: 'second grouped query',
+      hits: [{ title: 'Second Link', url: 'https://example.com/second' }],
+    },
+  ])
+})
+
 test('web search response parsing falls back to the requested query when action details are missing', () => {
   const result = collectCodexWebSearchResponse(
     [

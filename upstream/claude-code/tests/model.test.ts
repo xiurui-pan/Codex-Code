@@ -31,7 +31,10 @@ test('model entry keeps codex-only local usage and token helpers', async () => {
   assert.equal(source.includes('export const updateModelUsage'), true)
   assert.equal(source.includes('export const accumulateModelUsage'), true)
   assert.equal(source.includes('getCodexConfiguredModel'), true)
+  assert.equal(source.includes('export const callModelPreferredWithStreaming'), true)
+  assert.equal(source.includes('export const callModelPreferredWithoutStreaming'), true)
   assert.equal(source.includes('export const callModelTurnWithoutStreaming'), true)
+  assert.equal(source.includes('export const callSmallModelPreferred'), true)
   assert.equal(source.includes('export const callSmallModelTurn'), true)
 })
 

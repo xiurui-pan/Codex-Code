@@ -170,41 +170,41 @@ function flushCitationGroups(
     return
   }
 
-  const leadingContexts = pendingContexts.slice(0, -1)
-  for (let index = 0; index < leadingContexts.length; index += 1) {
-    const context = leadingContexts[index]
-    const group = groups[index]
-    if (group.text.trim()) {
+  const groupCounts = pendingContexts.map(() => 1)
+  let extraGroups = groups.length - pendingContexts.length
+  let distributionIndex = 0
+  while (extraGroups > 0) {
+    groupCounts[distributionIndex] += 1
+    distributionIndex = (distributionIndex + 1) % pendingContexts.length
+    extraGroups -= 1
+  }
+
+  let groupIndex = 0
+  for (let contextIndex = 0; contextIndex < pendingContexts.length; contextIndex += 1) {
+    const context = pendingContexts[contextIndex]
+    const assignedGroups = groups.slice(
+      groupIndex,
+      groupIndex + groupCounts[contextIndex],
+    )
+    groupIndex += groupCounts[contextIndex]
+
+    const mergedText = assignedGroups
+      .map(group => group.text)
+      .filter(text => text.trim())
+      .join('\n')
+    if (mergedText.trim()) {
       blocks.push({
         type: 'text',
-        text: group.text,
+        text: mergedText,
       })
     }
-    pushSearchResult(blocks, progressEvents, context, group.hits)
+    pushSearchResult(
+      blocks,
+      progressEvents,
+      context,
+      assignedGroups.flatMap(group => group.hits),
+    )
   }
-
-  const trailingContext = pendingContexts.at(-1)
-  if (!trailingContext) {
-    return
-  }
-
-  const trailingGroups = groups.slice(leadingContexts.length)
-  const mergedText = trailingGroups
-    .map(group => group.text)
-    .filter(text => text.trim())
-    .join('\n')
-  if (mergedText.trim()) {
-    blocks.push({
-      type: 'text',
-      text: mergedText,
-    })
-  }
-  pushSearchResult(
-    blocks,
-    progressEvents,
-    trailingContext,
-    trailingGroups.flatMap(group => group.hits),
-  )
 }
 
 function normalizeCitationHits(annotations: ResponsesUrlCitation[] | undefined): SearchResponseHit[] {

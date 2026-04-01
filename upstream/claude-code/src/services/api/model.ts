@@ -16,6 +16,7 @@ import {
 import {
   buildAssistantMessageFromPreferredContent,
   getRenderableModelTurnItems,
+  type PreferredAssistantTurnContent,
   resolvePreferredAssistantTurnContent,
 } from './modelTurnItems.js'
 
@@ -42,6 +43,27 @@ export type SmallModelCaller = (
 export type SmallModelTurnCaller = (
   args: SingleTurnModelCallArgs,
 ) => Promise<CodexResponseResult>
+export type SmallPreferredModelCaller = (
+  args: SingleTurnModelCallArgs,
+) => Promise<PreferredAssistantTurnResult>
+export type PreferredAssistantTurnResult =
+  | {
+      kind: 'api_error'
+      errorMessage: string
+    }
+  | {
+      kind: 'preferred_content'
+      preferred: PreferredAssistantTurnContent
+    }
+  | {
+      kind: 'empty'
+    }
+export type StreamingPreferredModelCaller = (
+  args: Parameters<typeof queryCodexResponsesStream>[0],
+) => AsyncGenerator<PreferredAssistantTurnResult, void, unknown>
+export type NonStreamingPreferredModelCaller = (
+  args: Parameters<typeof queryCodexResponses>[0],
+) => Promise<PreferredAssistantTurnResult>
 export type ModelAccessVerifier = (
   apiKey?: string | null,
   throwOnError?: boolean,
@@ -78,10 +100,62 @@ function buildSingleTurnRequest(args: {
   }
 }
 
-function codexResultToAssistantMessage(
+function codexResultToPreferredAssistantTurnResult(
   result: CodexResponseResult,
-): AssistantMessage {
+): PreferredAssistantTurnResult {
   if (result.errorMessage) {
+    return {
+      kind: 'api_error',
+      errorMessage: result.errorMessage,
+    }
+  }
+
+  const renderableItems = getRenderableModelTurnItems(result.turnItems)
+  if (renderableItems.length === 0) {
+    return { kind: 'empty' }
+  }
+
+  const preferredAssistant = resolvePreferredAssistantTurnContent(renderableItems)
+  if (preferredAssistant.kind === 'empty') {
+    return { kind: 'empty' }
+  }
+
+  return {
+    kind: 'preferred_content',
+    preferred: preferredAssistant,
+  }
+}
+
+function codexChunkToPreferredAssistantTurnResult(
+  chunk: CodexResponseChunk,
+): PreferredAssistantTurnResult {
+  if (chunk.kind === 'api_error') {
+    return {
+      kind: 'api_error',
+      errorMessage: chunk.errorMessage,
+    }
+  }
+
+  const renderableItems = getRenderableModelTurnItems(chunk.turnItems)
+  if (renderableItems.length === 0) {
+    return { kind: 'empty' }
+  }
+
+  const preferredAssistant = resolvePreferredAssistantTurnContent(renderableItems)
+  if (preferredAssistant.kind === 'empty') {
+    return { kind: 'empty' }
+  }
+
+  return {
+    kind: 'preferred_content',
+    preferred: preferredAssistant,
+  }
+}
+
+function preferredTurnResultToAssistantMessage(
+  result: PreferredAssistantTurnResult,
+): AssistantMessage | null {
+  if (result.kind === 'api_error') {
     return createAssistantAPIErrorMessage({
       content: result.errorMessage,
       apiError: 'api_error',
@@ -92,51 +166,25 @@ function codexResultToAssistantMessage(
     })
   }
 
-  const renderableItems = getRenderableModelTurnItems(result.turnItems)
-  if (renderableItems.length === 0) {
-    return createAssistantMessage({ content: '' })
-  }
-
-  const preferredAssistant = resolvePreferredAssistantTurnContent(renderableItems)
-  if (preferredAssistant.kind === 'empty') {
-    return createAssistantMessage({ content: '' })
-  }
-
-  return buildAssistantMessageFromPreferredContent(preferredAssistant)
-}
-
-function codexChunkToAssistantMessage(
-  chunk: CodexResponseChunk,
-): AssistantMessage | null {
-  if (chunk.kind === 'api_error') {
-    return createAssistantAPIErrorMessage({
-      content: chunk.errorMessage,
-      apiError: 'api_error',
-      error: {
-        type: 'api_error',
-        message: chunk.errorMessage,
-      },
-    })
-  }
-
-  const renderableItems = getRenderableModelTurnItems(chunk.turnItems)
-  if (renderableItems.length === 0) {
+  if (result.kind === 'empty') {
     return null
   }
 
-  const preferredAssistant = resolvePreferredAssistantTurnContent(renderableItems)
-  if (preferredAssistant.kind === 'empty') {
-    return null
-  }
-
-  return buildAssistantMessageFromPreferredContent(preferredAssistant)
+  return buildAssistantMessageFromPreferredContent(result.preferred)
 }
+
+export const callModelPreferredWithStreaming: StreamingPreferredModelCaller =
+  async function* (args) {
+    for await (const chunk of queryCodexResponsesStream(args)) {
+      yield codexChunkToPreferredAssistantTurnResult(chunk)
+    }
+  }
 
 export const callModelWithStreaming: StreamingModelCaller = async function* (
   args,
 ) {
-  for await (const chunk of queryCodexResponsesStream(args)) {
-    const assistantMessage = codexChunkToAssistantMessage(chunk)
+  for await (const result of callModelPreferredWithStreaming(args)) {
+    const assistantMessage = preferredTurnResultToAssistantMessage(result)
     if (assistantMessage) {
       yield assistantMessage
     }
@@ -149,8 +197,16 @@ export const callModelTurnWithStreaming: StreamingModelTurnCaller =
 export const callModelTurnWithoutStreaming: NonStreamingModelTurnCaller =
   queryCodexResponses
 
+export const callModelPreferredWithoutStreaming: NonStreamingPreferredModelCaller =
+  async args =>
+    codexResultToPreferredAssistantTurnResult(
+      await callModelTurnWithoutStreaming(args),
+    )
+
 export const callModelWithoutStreaming: NonStreamingModelCaller = async args =>
-  codexResultToAssistantMessage(await callModelTurnWithoutStreaming(args))
+  preferredTurnResultToAssistantMessage(
+    await callModelPreferredWithoutStreaming(args),
+  ) ?? createAssistantMessage({ content: '' })
 
 export const callModel: ModelCaller = async args =>
   callModelWithoutStreaming(
@@ -175,8 +231,12 @@ export const callSmallModelTurn: SmallModelTurnCaller = async args =>
     }),
   )
 
+export const callSmallModelPreferred: SmallPreferredModelCaller = async args =>
+  codexResultToPreferredAssistantTurnResult(await callSmallModelTurn(args))
+
 export const callSmallModel: SmallModelCaller = async args =>
-  codexResultToAssistantMessage(await callSmallModelTurn(args))
+  preferredTurnResultToAssistantMessage(await callSmallModelPreferred(args)) ??
+  createAssistantMessage({ content: '' })
 
 export const verifyModelAccess: ModelAccessVerifier = async (
   apiKey,
