@@ -14,7 +14,8 @@ import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
 } from '../../services/analytics/index.js'
-import { callSmallModel } from '../../services/api/model.js'
+import { callSmallModelTurn } from '../../services/api/model.js'
+import { extractFinalAnswerTextFromTurnItems } from '../../services/api/modelTurnItems.js'
 import { startsWithApiErrorPrefix } from '../../services/api/errors.js'
 import { memoizeWithLRU } from '../memoize.js'
 import { jsonStringify } from '../slowOperations.js'
@@ -217,7 +218,7 @@ async function getCommandPrefixImpl(
       false,
     )
 
-    const response = await callSmallModel({
+    const response = await callSmallModelTurn({
       systemPrompt: asSystemPrompt(
         useSystemPromptPolicySpec
           ? [
@@ -245,13 +246,10 @@ async function getCommandPrefixImpl(
     clearTimeout(preflightCheckTimeoutId)
     const durationMs = Date.now() - startTime
 
-    const prefix =
-      typeof response.message.content === 'string'
-        ? response.message.content
-        : Array.isArray(response.message.content)
-          ? (response.message.content.find(_ => _.type === 'text')?.text ??
-            'none')
-          : 'none'
+    const prefix = response.errorMessage
+      ? response.errorMessage
+      : extractFinalAnswerTextFromTurnItems(response.turnItems, '').trim() ||
+        'none'
 
     if (startsWithApiErrorPrefix(prefix)) {
       logEvent(eventName, {

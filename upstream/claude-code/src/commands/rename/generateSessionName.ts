@@ -1,9 +1,9 @@
-import { callSmallModel } from '../../services/api/model.js'
+import { callSmallModelTurn } from '../../services/api/model.js'
+import { extractFinalAnswerTextFromTurnItems } from '../../services/api/modelTurnItems.js'
 import type { Message } from '../../types/message.js'
 import { logForDebugging } from '../../utils/debug.js'
 import { errorMessage } from '../../utils/errors.js'
 import { safeParseJSON } from '../../utils/json.js'
-import { extractTextContent } from '../../utils/messages.js'
 import { extractConversationText } from '../../utils/sessionTitle.js'
 import { asSystemPrompt } from '../../utils/systemPromptType.js'
 
@@ -17,7 +17,7 @@ export async function generateSessionName(
   }
 
   try {
-    const result = await callSmallModel({
+    const result = await callSmallModelTurn({
       systemPrompt: asSystemPrompt([
         'Generate a short kebab-case name (2-4 words) that captures the main topic of this conversation. Use lowercase words separated by hyphens. Examples: "fix-login-bug", "add-auth-feature", "refactor-api-client", "debug-test-failures". Return JSON with a "name" field.',
       ]),
@@ -43,7 +43,11 @@ export async function generateSessionName(
       },
     })
 
-    const content = extractTextContent(result.message.content)
+    if (result.errorMessage) {
+      return null
+    }
+
+    const content = extractFinalAnswerTextFromTurnItems(result.turnItems)
 
     const response = safeParseJSON(content)
     if (

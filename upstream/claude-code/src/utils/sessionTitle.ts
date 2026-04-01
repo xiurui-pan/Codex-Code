@@ -15,12 +15,12 @@
 import { z } from 'zod/v4'
 import { getIsNonInteractiveSession } from '../bootstrap/state.js'
 import { logEvent } from '../services/analytics/index.js'
-import { callSmallModel } from '../services/api/model.js'
+import { callSmallModelTurn } from '../services/api/model.js'
+import { extractFinalAnswerTextFromTurnItems } from '../services/api/modelTurnItems.js'
 import type { Message } from '../types/message.js'
 import { logForDebugging } from './debug.js'
 import { safeParseJSON } from './json.js'
 import { lazySchema } from './lazySchema.js'
-import { extractTextContent } from './messages.js'
 import { asSystemPrompt } from './systemPromptType.js'
 
 const MAX_CONVERSATION_TEXT = 1000
@@ -84,7 +84,7 @@ export async function generateSessionTitle(
   if (!trimmed) return null
 
   try {
-    const result = await callSmallModel({
+    const result = await callSmallModelTurn({
       systemPrompt: asSystemPrompt([SESSION_TITLE_PROMPT]),
       userPrompt: trimmed,
       outputFormat: {
@@ -111,7 +111,12 @@ export async function generateSessionTitle(
       },
     })
 
-    const text = extractTextContent(result.message.content)
+    if (result.errorMessage) {
+      logEvent('tengu_session_title_generated', { success: false })
+      return null
+    }
+
+    const text = extractFinalAnswerTextFromTurnItems(result.turnItems)
 
     const parsed = titleSchema().safeParse(safeParseJSON(text))
     const title = parsed.success ? parsed.data.title.trim() || null : null

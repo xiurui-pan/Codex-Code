@@ -113,6 +113,9 @@
 - 已补一组更贴近行为的本地验证材料：除了现有单元测试，还新增 `upstream/claude-code/tests/headlessStreaming.smoke.mjs`，专门用本地假 Responses 服务和真实 headless CLI 去验证 request shape、SSE 增量进入主链、以及执行对象输出。
 
 ## 当前新增判断
+- 这一轮继续缩小旧 assistant 兼容壳的实际消费面：session title、`/rename` 名称生成、shell 前缀判断、WebFetch 二次处理这几条也开始直接消费 Codex turn items。
+- 还补了 `extractFinalAnswerTextFromTurnItems()` 的行为测试，专门卡住多段拼接、空白裁剪和无最终回答时返回空字符串这三种基础风险。
+
 - 这一轮继续把非流式文本消费者从旧 assistant 壳上往外挪：`awaySummary`、agent 生成、tool use summary、自然语言时间解析这几条已开始直接消费 Codex turn items，不再先投影回 synthetic assistant 再取文本。
 - 权限对象链的测试也补到 allow 分支了：现在 headless smoke 会同时验证 deny 和 allow 两条分支都按 `permission_request -> permission_decision -> tool_output -> execution_result` 顺序上送，并检查关键 `details` 字段。
 

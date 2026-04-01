@@ -4,7 +4,8 @@ import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
 } from '../../services/analytics/index.js'
-import { callSmallModel } from '../../services/api/model.js'
+import { callSmallModelTurn } from '../../services/api/model.js'
+import { extractFinalAnswerTextFromTurnItems } from '../../services/api/modelTurnItems.js'
 import { AbortError } from '../../utils/errors.js'
 import { getWebFetchUserAgent } from '../../utils/http.js'
 import { logError } from '../../utils/log.js'
@@ -500,7 +501,7 @@ export async function applyPromptToMarkdown(
     prompt,
     isPreapprovedDomain,
   )
-  const assistantMessage = await callSmallModel({
+  const response = await callSmallModelTurn({
     systemPrompt: asSystemPrompt([]),
     userPrompt: modelPrompt,
     signal,
@@ -519,12 +520,10 @@ export async function applyPromptToMarkdown(
     throw new AbortError()
   }
 
-  const { content } = assistantMessage.message
-  if (content.length > 0) {
-    const contentBlock = content[0]
-    if ('text' in contentBlock!) {
-      return contentBlock.text
-    }
+  if (response.errorMessage) {
+    return response.errorMessage
   }
-  return 'No response from model'
+
+  const text = extractFinalAnswerTextFromTurnItems(response.turnItems).trim()
+  return text || 'No response from model'
 }
