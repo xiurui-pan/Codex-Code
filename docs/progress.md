@@ -123,14 +123,14 @@
     - `/permissions` 打开权限界面、`Esc` 关闭、无 provider 流量
     - `/memory` 打开记忆选择器、选择项目 `CLAUDE.md`、成功创建并返回、无 provider 流量
   - 这一块的运行时风险也顺手收了一层：`MemoryFileSelector.tsx` 里裸 `require(...)` 已改成 `createRequire(import.meta.url)`，避免当前 ESM 运行环境下 `/memory` 入口不稳。
-- 键盘交互验收已经起步，但还没收口：
+- 键盘交互最小闭环已收口：
   - 新增 `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs`
   - 当前已覆盖：
     - `Ctrl+L`
     - 历史上下浏览
     - `Ctrl+R`
     - vim mode 下 `Esc` 退插入、`Enter` 提交
-  - 这条线还在继续收稳，当前更宽的串行联合验收里，`Ctrl+R` 历史搜索还存在超时问题，暂时不能算完成。
+  - 与 `upstream/claude-code/tests/modelEffortTuiAcceptance.test.mjs` 一起联跑，当前已经是 6/6 全通过。
 - 当前这批 PTY/TUI 验收文件在更大范围联跑时，会被现有 `dist/cli.js` 的双 loader 启动链放大出不稳定问题。
   - 现象包括：
     - 直接并发联跑时出现 `ERR_MODULE_NOT_FOUND` / `ENOENT`

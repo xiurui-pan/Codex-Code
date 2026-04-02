@@ -86,7 +86,7 @@
 
 ### 部分已验
 
-- 键盘交互：`Ctrl+L`、历史上下、`Ctrl+R`、vim 下 `Esc/Enter` 已有真实 TTY 用例，但更宽联合验收里还没完全收稳。
+- 键盘交互：`Ctrl+L`、历史上下、`Ctrl+R`、vim 下 `Esc/Enter` 的最小闭环已验通；下一步是更宽联合场景（长会话、视图切换、滚动焦点）矩阵。
 - `/memory`：已经覆盖 project memory、user memory、imported memory 三条真实 TTY 路径；但 memory 专项整体还没收完，`CLAUDE.md` 主查询注入、`@import` 更宽交互、team / agent memory 还没统一收口。
 - `/clear`：当前已有行为验收，但现阶段主要证据还是 headless，不应先记成完整 TTY 已验。
 - `/compact`：已经补上 `--resume <transcriptPath>` 的真实 TTY 验收，但更宽 TTY 场景还没补齐。
@@ -110,9 +110,8 @@
 
 - `/compact` 的真实 TTY 验收：打开、执行、状态变化、结果回显。
 - plan mode 的完整交互：进入、重复进入、取消、退出、已有 plan 状态。
-- 键盘交互稳定化：尤其 `Ctrl+R`、历史浏览、transcript 进出后的焦点恢复。
+- 键盘交互扩大矩阵：长会话、transcript 进出、滚动与焦点恢复。
 - TUI 显示专项：乱码、错位、滚动、焦点、窄终端、重绘。
-- 第二批命令开始补证据：`/add-dir`、`/branch`、`/files`、`/hooks`、`/keybindings`、`/mcp`、`/rewind`、`/skills`、`/tasks`。
 - 第二批命令补证据已完成：`/add-dir`、`/branch`、`/files`、`/hooks`、`/keybindings`、`/mcp`、`/rewind`、`/skills`、`/tasks`。
 
 ### 明确不放进这份清单
