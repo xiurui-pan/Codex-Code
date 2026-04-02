@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
+import { readFile } from 'node:fs/promises'
 import test from 'node:test'
 
 const cwd = '/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code'
@@ -17,12 +18,14 @@ async function readProviderState(envOverrides) {
         import {
           getAPIProvider,
           isFirstPartyAnthropicBaseUrl,
+          shouldUseAnthropicFirstPartyApiFeatures,
         } from './src/utils/model/providers.ts'
 
         process.stdout.write(
           JSON.stringify({
             provider: getAPIProvider(),
             firstPartyBaseUrl: isFirstPartyAnthropicBaseUrl(),
+            firstPartyFeatures: shouldUseAnthropicFirstPartyApiFeatures(),
           }),
         )
       `,
@@ -64,6 +67,7 @@ test('Codex-only flag wins over legacy provider flags and disables first-party f
 
   assert.equal(result.provider, 'custom')
   assert.equal(result.firstPartyBaseUrl, false)
+  assert.equal(result.firstPartyFeatures, false)
 })
 
 test('without Codex-only flag, first-party default behavior stays unchanged', async () => {
@@ -77,4 +81,33 @@ test('without Codex-only flag, first-party default behavior stays unchanged', as
 
   assert.equal(result.provider, 'firstParty')
   assert.equal(result.firstPartyBaseUrl, true)
+  assert.equal(result.firstPartyFeatures, true)
+})
+
+test('request preflight and params builder use the narrowed first-party helper', async () => {
+  const [preflightSource, paramsBuilderSource] = await Promise.all([
+    readFile(
+      `${cwd}/src/services/api/requestPreflightState.ts`,
+      'utf8',
+    ),
+    readFile(
+      `${cwd}/src/services/api/requestParamsBuilder.ts`,
+      'utf8',
+    ),
+  ])
+
+  assert.match(
+    preflightSource,
+    /shouldUseAnthropicFirstPartyApiFeatures\(\)/,
+  )
+  assert.doesNotMatch(preflightSource, /getAPIProvider\(\) === 'firstParty'/)
+
+  assert.match(
+    paramsBuilderSource,
+    /shouldUseAnthropicFirstPartyApiFeatures\(\)/,
+  )
+  assert.doesNotMatch(
+    paramsBuilderSource,
+    /getAPIProvider\(\) === 'firstParty'/,
+  )
 })

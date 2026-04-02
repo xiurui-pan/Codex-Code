@@ -19,7 +19,7 @@ import {
   isFastModeEnabled,
   isFastModeSupportedByModel,
 } from 'src/utils/fastMode.js'
-import { getAPIProvider } from 'src/utils/model/providers.js'
+import { shouldUseAnthropicFirstPartyApiFeatures } from 'src/utils/model/providers.js'
 import { jsonStringify } from 'src/utils/slowOperations.js'
 import {
   isBetaTracingEnabled,
@@ -111,7 +111,7 @@ export function buildRequestPreflightState(
     if (
       !cacheEditingHeaderLatched &&
       context.cachedMCEnabled &&
-      getAPIProvider() === 'firstParty' &&
+      shouldUseAnthropicFirstPartyApiFeatures() &&
       context.options.querySource === 'repl_main_thread'
     ) {
       cacheEditingHeaderLatched = true

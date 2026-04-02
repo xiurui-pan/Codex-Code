@@ -30,7 +30,10 @@ import {
 } from 'src/utils/thinking.js'
 import type { RetryContext } from './withRetry.js'
 import { normalizeModelStringForAPI } from '../../utils/model/model.js'
-import { getAPIProvider } from '../../utils/model/providers.js'
+import {
+  getAPIProvider,
+  shouldUseAnthropicFirstPartyApiFeatures,
+} from '../../utils/model/providers.js'
 import { getSonnet1mExpTreatmentEnabled } from '../../utils/context.js'
 import { modelSupportsStructuredOutputs, shouldIncludeFirstPartyOnlyBetas } from '../../utils/betas.js'
 import { getModelMaxOutputTokens } from './model.js'
@@ -240,11 +243,11 @@ export function buildRequestParamsFromContext(
 
   const useCachedMC =
     context.cachedMCEnabled &&
-    getAPIProvider() === 'firstParty' &&
+    shouldUseAnthropicFirstPartyApiFeatures() &&
     context.options.querySource === 'repl_main_thread'
   if (
     context.cacheEditingHeaderLatched &&
-    getAPIProvider() === 'firstParty' &&
+    shouldUseAnthropicFirstPartyApiFeatures() &&
     context.options.querySource === 'repl_main_thread' &&
     !betasParams.includes(context.cacheEditingBetaHeader)
   ) {
