@@ -7,6 +7,7 @@ import type {
 import { randomUUID } from 'crypto'
 import type { QuerySource } from 'src/constants/querySource.js'
 import { logEvent } from 'src/services/analytics/index.js'
+import { getCurrentSessionMemoryContextMessages } from 'src/services/SessionMemory/sessionMemoryContext.js'
 import { getContentText } from 'src/utils/messages.js'
 import {
   findCommand,
@@ -512,6 +513,10 @@ async function processUserInputBase(
       )
     : []
   queryCheckpoint('query_attachment_loading_end')
+  const sessionMemoryContextMessages =
+    shouldExtractAttachments && mode === 'prompt'
+      ? await getCurrentSessionMemoryContextMessages(querySource)
+      : []
 
   // Bash commands
   if (inputString !== null && mode === 'bash') {
@@ -547,6 +552,7 @@ async function processUserInputBase(
       isAlreadyProcessing,
       canUseTool,
     )
+    slashResult.messages.push(...sessionMemoryContextMessages)
     return addImageMetadataMessage(slashResult, imageMetadataTexts)
   }
 
@@ -574,8 +580,7 @@ async function processUserInputBase(
   }
 
   // Regular user prompt
-  return addImageMetadataMessage(
-    processTextPrompt(
+  const promptResult = processTextPrompt(
       normalizedInput,
       imageContentBlocks,
       imagePasteIds,
@@ -583,9 +588,11 @@ async function processUserInputBase(
       uuid,
       permissionMode,
       isMeta,
-    ),
-    imageMetadataTexts,
-  )
+    )
+  if (sessionMemoryContextMessages.length > 0) {
+    promptResult.messages.push(...sessionMemoryContextMessages)
+  }
+  return addImageMetadataMessage(promptResult, imageMetadataTexts)
 }
 
 // Adds image metadata texts as isMeta message to result

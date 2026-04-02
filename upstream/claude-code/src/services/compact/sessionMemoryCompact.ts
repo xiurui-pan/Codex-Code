@@ -2,6 +2,7 @@
  * EXPERIMENT: Session memory compaction
  */
 
+import { join } from 'path'
 import type { AgentId } from '../../types/ids.js'
 import type { HookResultMessage, Message } from '../../types/message.js'
 import { logForDebugging } from '../../utils/debug.js'
@@ -15,6 +16,9 @@ import {
 } from '../../utils/messages.js'
 import { getMainLoopModel } from '../../utils/model/model.js'
 import { getSessionMemoryPath } from '../../utils/permissions/filesystem.js'
+import { getCwd } from '../../utils/cwd.js'
+import { getFsImplementation } from '../../utils/fsOperations.js'
+import { getProjectDir } from '../../utils/sessionStorage.js'
 import { processSessionStartHooks } from '../../utils/sessionStart.js'
 import { getTranscriptPath } from '../../utils/sessionStorage.js'
 import { tokenCountFromLastAPIResponse } from '../../utils/tokens.js'
@@ -532,7 +536,7 @@ export async function trySessionMemoryCompaction(
   await waitForSessionMemoryExtraction()
 
   const lastSummarizedMessageId = getLastSummarizedMessageId()
-  const sessionMemory = await getSessionMemoryContent()
+  const sessionMemory = await getCompactionSessionMemoryContent()
 
   // No session memory file exists at all
   if (!sessionMemory) {
@@ -632,4 +636,50 @@ export async function trySessionMemoryCompaction(
     }
     return null
   }
+}
+
+async function getCompactionSessionMemoryContent(): Promise<string | null> {
+  const fs = getFsImplementation()
+  const candidatePaths = new Set([getSessionMemoryPath()])
+
+  if (isCodexSessionMemoryEnabled()) {
+    const projectDir = getProjectDir(getCwd())
+    try {
+      const entries = await fs.readdir(projectDir)
+      for (const entry of entries) {
+        const entryName = entry.name
+        if (!/^[0-9a-f-]{36}$/i.test(entryName)) {
+          continue
+        }
+        candidatePaths.add(
+          join(projectDir, entryName, 'session-memory', 'summary.md'),
+        )
+      }
+    } catch {}
+  }
+
+  let latestProjectSummary:
+    | {
+        content: string
+        mtimeMs: number
+      }
+    | undefined
+
+  for (const candidatePath of candidatePaths) {
+    try {
+      const content = await fs.readFile(candidatePath, { encoding: 'utf-8' })
+      if (!content || (await isSessionMemoryEmpty(content))) {
+        continue
+      }
+      const stats = await fs.stat(candidatePath)
+      if (!latestProjectSummary || stats.mtimeMs > latestProjectSummary.mtimeMs) {
+        latestProjectSummary = {
+          content,
+          mtimeMs: stats.mtimeMs,
+        }
+      }
+    } catch {}
+  }
+
+  return latestProjectSummary?.content ?? null
 }

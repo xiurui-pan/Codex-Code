@@ -106,6 +106,10 @@ import {
   createAssistantMessageFromApiErrorText,
   preferredTurnResultToPayload,
 } from './services/api/preferredAssistantResponse.js'
+import {
+  getCurrentSessionMemoryContextMessages,
+  isCurrentSessionMemoryContextMessage,
+} from './services/SessionMemory/sessionMemoryContext.js'
 import { StreamingToolExecutor } from './services/tools/StreamingToolExecutor.js'
 import { queryCheckpoint } from './utils/queryProfiler.js'
 import { runTools } from './services/tools/toolOrchestration.js'
@@ -384,6 +388,11 @@ async function* queryLoop(
     }
 
     let messagesForQuery = [...getMessagesAfterCompactBoundary(messages)]
+    if (!messagesForQuery.some(isCurrentSessionMemoryContextMessage)) {
+      messagesForQuery.push(
+        ...(await getCurrentSessionMemoryContextMessages(querySource)),
+      )
+    }
 
     let tracking = autoCompactTracking
 
@@ -1664,6 +1673,12 @@ async function* queryLoop(
     )) {
       yield attachment
       toolResults.push(attachment)
+    }
+
+    for (const sessionMemoryMessage of await getCurrentSessionMemoryContextMessages(
+      querySource,
+    )) {
+      toolResults.push(sessionMemoryMessage)
     }
 
     // Memory prefetch consume: only if settled and not already consumed on

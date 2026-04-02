@@ -86,13 +86,6 @@ import uniqBy from 'lodash-es/uniqBy.js'
 import { getProjectRoot } from '../bootstrap/state.js'
 import { formatCommandsWithinBudget } from '../tools/SkillTool/prompt.js'
 import { getContextWindowForModel } from './context.js'
-import { isSessionMemoryEmpty } from '../services/SessionMemory/prompts.js'
-import { getSessionMemoryContent } from '../services/SessionMemory/sessionMemoryUtils.js'
-import {
-  createCurrentSessionMemoryAttachment,
-  shouldIncludeCurrentSessionMemory,
-} from '../services/SessionMemory/sessionMemoryContext.js'
-import { getSessionMemoryPath } from './permissions/filesystem.js'
 import type { DiscoverySignal } from '../services/skillSearch/signals.js'
 // Conditional require for DCE. All skill-search string literals that would
 // otherwise leak into external builds live inside these modules. The only
@@ -668,12 +661,6 @@ export type Attachment =
       turnCount: number
     }
   | {
-      type: 'current_session_memory'
-      content: string
-      path: string
-      tokenCount: number
-    }
-  | {
       type: 'teammate_shutdown_batch'
       count: number
     }
@@ -879,9 +866,6 @@ export async function getAttachments(
       : []),
     maybe('changed_files', () => getChangedFiles(context)),
     maybe('nested_memory', () => getNestedMemoryAttachments(context)),
-    maybe('current_session_memory', () =>
-      getCurrentSessionMemoryAttachment(querySource),
-    ),
     // relevant_memories moved to async prefetch (startRelevantMemoryPrefetch)
     maybe('dynamic_skill', () => getDynamicSkillAttachments(context)),
     maybe('skill_listing', () => getSkillListingAttachments(context)),
@@ -2556,25 +2540,6 @@ export function filterDuplicateMemoryAttachments(
  * Processes skill directories that were discovered during file operations.
  * Uses dynamicSkillDirTriggers field from ToolUseContext
  */
-
-export async function getCurrentSessionMemoryAttachment(
-  querySource: QuerySource | undefined,
-): Promise<Attachment[]> {
-  if (!shouldIncludeCurrentSessionMemory(querySource)) {
-    return []
-  }
-
-  const content = await getSessionMemoryContent()
-  if (!content || (await isSessionMemoryEmpty(content))) {
-    return []
-  }
-
-  const attachment = createCurrentSessionMemoryAttachment({
-    content,
-    path: getSessionMemoryPath(),
-  })
-  return attachment ? [attachment] : []
-}
 
 async function getDynamicSkillAttachments(
   toolUseContext: ToolUseContext,
