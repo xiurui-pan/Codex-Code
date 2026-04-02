@@ -27,6 +27,7 @@ Rule:
 | Slash commands | `/ide` local TUI acceptance | done | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | covers local acceptance and no provider traffic |
 | Slash commands | `/files` and `/plan` local TUI acceptance | done | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | covers minimal local feedback paths without provider traffic |
 | TUI stability | interrupt 后 `/exit` 仍可正常退出 | done | `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs` | fixed by `9afabd4`; new regression covers the post-interrupt `/exit` path |
+| TUI stability | 多轮稳定性：round1 成功 + round2 中断 + `/exit` 退出 | done | `upstream/claude-code/tests/tuiMultiTurnStabilityAcceptance.test.mjs` | fixed by `b21ff65`; current evidence stops at interrupt then exit, not third-round auto coverage |
 | TUI stability | `/help` Esc dismiss restores footer state | done | `upstream/claude-code/tests/helpDismissTuiAcceptance.test.mjs` | fixed by `fbc85e3` |
 | TUI stability | auto-update fallback message when package URL is missing | done | `upstream/claude-code/tests/autoUpdaterMessages.test.ts` | fixed by `ca7b9d3` |
 | Provider chain | silent stream timeout gives explicit error (no silent hang) | done | `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs` | fixed by `c7e97ed` |
@@ -49,4 +50,5 @@ Rule:
 ## Next Acceptance Commands
 
 - `cd upstream/claude-code && node --test tests/tuiKeyboardInputAcceptance.test.mjs`
+- `cd upstream/claude-code && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`

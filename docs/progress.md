@@ -23,6 +23,7 @@ What this means in practice:
 Found and addressed:
 
 - interrupt 后 `/exit` 不退出的问题已经修复。
+- 多轮稳定性当前已有自动化证据：round1 成功、round2 中断，然后 `/exit` 正常退出。
 - auto-update undefined package URL produced unstable recovery guidance.
 - `/help` + `Esc` could leave footer hint in wrong state.
 - provider SSE stream could stay silent and block output without clear feedback.
@@ -31,6 +32,7 @@ Found and addressed:
 Current behavior:
 
 - interrupt 之后再次执行 `/exit`，现在会正常退出；对应回归用例已加到 `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs`。
+- 多轮真实 TUI 稳定性当前以 `upstream/claude-code/tests/tuiMultiTurnStabilityAcceptance.test.mjs` 留证；覆盖范围明确是“round1 成功 + round2 中断 + `/exit` 退出”，不是第三轮再提问已自动化覆盖。
 - provider unreachable / silent stream / request-stage timeout now returns explicit provider error text instead of silent waiting.
 
 ## Done (Scope and Direction)
@@ -88,6 +90,7 @@ Next command set:
 本轮已复验通过：
 
 - `cd upstream/claude-code && node --test tests/tuiKeyboardInputAcceptance.test.mjs`
+- `cd upstream/claude-code && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`
 
 ## Long-Term Track Added
