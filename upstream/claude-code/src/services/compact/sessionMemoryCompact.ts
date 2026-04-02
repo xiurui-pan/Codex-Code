@@ -2,7 +2,7 @@
  * EXPERIMENT: Session memory compaction
  */
 
-import { basename, join } from 'path'
+import { dirname, join } from 'path'
 import type { AgentId } from '../../types/ids.js'
 import type { HookResultMessage, Message } from '../../types/message.js'
 import { logForDebugging } from '../../utils/debug.js'
@@ -16,9 +16,7 @@ import {
 } from '../../utils/messages.js'
 import { getMainLoopModel } from '../../utils/model/model.js'
 import { getSessionMemoryPath } from '../../utils/permissions/filesystem.js'
-import { getCwd } from '../../utils/cwd.js'
 import { getFsImplementation } from '../../utils/fsOperations.js'
-import { getProjectDir } from '../../utils/sessionStorage.js'
 import { processSessionStartHooks } from '../../utils/sessionStart.js'
 import { getTranscriptPath } from '../../utils/sessionStorage.js'
 import { tokenCountFromLastAPIResponse } from '../../utils/tokens.js'
@@ -641,10 +639,11 @@ export async function trySessionMemoryCompaction(
 
 async function getCompactionSessionMemoryContent(): Promise<string | null> {
   const fs = getFsImplementation()
+  const transcriptPath = getTranscriptPath()
   const currentSessionMemoryPath = getSessionMemoryPath()
+  const transcriptProjectDir = dirname(transcriptPath)
   const transcriptSessionMemoryPath = join(
-    getProjectDir(getCwd()),
-    basename(getTranscriptPath(), '.jsonl'),
+    transcriptProjectDir,
     'session-memory',
     'summary.md',
   )
@@ -654,7 +653,7 @@ async function getCompactionSessionMemoryContent(): Promise<string | null> {
 
   return findSessionMemorySummaryContent({
     fs,
-    projectDir: getProjectDir(getCwd()),
+    transcriptProjectDir,
     currentSessionMemoryPath,
     transcriptSessionMemoryPath,
     isEmpty: isSessionMemoryEmpty,

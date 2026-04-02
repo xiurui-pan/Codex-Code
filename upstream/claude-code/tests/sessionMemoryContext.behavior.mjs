@@ -519,7 +519,7 @@ test('resume-like compact prefers the current resumed session summary over newer
         readdir: async path => readdir(path, { withFileTypes: true }),
         stat,
       },
-      projectDir,
+      transcriptProjectDir: projectDir,
       currentSessionMemoryPath: join(
         projectDir,
         basename(transcriptPath, '.jsonl'),
@@ -545,6 +545,94 @@ test('resume-like compact prefers the current resumed session summary over newer
     } else {
       process.env.CLAUDE_CODE_USE_CODEX_PROVIDER = originalCodexProvider
     }
+    await rm(tempHome, { recursive: true, force: true })
+  }
+})
+
+test('cross-project resume compact prefers the resumed transcript project summary over current cwd project summaries', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'codex-session-memory-cross-project-'))
+
+  try {
+    const currentProjectDir = join(
+      tempHome,
+      '.claude',
+      'projects',
+      sanitizePath('/tmp/current-cwd-project'),
+    )
+    const resumedTranscriptProjectDir = join(
+      tempHome,
+      '.claude',
+      'projects',
+      sanitizePath('/tmp/resumed-worktree-project'),
+    )
+    await mkdir(currentProjectDir, { recursive: true })
+    await mkdir(resumedTranscriptProjectDir, { recursive: true })
+
+    const resumedSessionId = randomUUID()
+    const resumedTranscriptPath = join(
+      resumedTranscriptProjectDir,
+      `${resumedSessionId}.jsonl`,
+    )
+    await writeFile(resumedTranscriptPath, '', 'utf8')
+
+    const resumedSummaryPath = join(
+      resumedTranscriptProjectDir,
+      resumedSessionId,
+      'session-memory',
+      'summary.md',
+    )
+    await mkdir(join(resumedSummaryPath, '..'), { recursive: true })
+    await writeFile(
+      resumedSummaryPath,
+      '# Current State\nPrefer the resumed worktree summary\n',
+      'utf8',
+    )
+
+    await new Promise(resolve => setTimeout(resolve, 20))
+    const wrongCurrentProjectSummaryPath = join(
+      currentProjectDir,
+      randomUUID(),
+      'session-memory',
+      'summary.md',
+    )
+    await mkdir(join(wrongCurrentProjectSummaryPath, '..'), { recursive: true })
+    await writeFile(
+      wrongCurrentProjectSummaryPath,
+      '# Current State\nWrong current cwd project summary\n',
+      'utf8',
+    )
+
+    const { findSessionMemorySummaryContent } = await import(
+      '../src/services/compact/sessionMemorySelection.ts'
+    )
+
+    const selectedSummary = await findSessionMemorySummaryContent({
+      fs: {
+        readFile,
+        readdir: async path => readdir(path, { withFileTypes: true }),
+        stat,
+      },
+      transcriptProjectDir: resumedTranscriptProjectDir,
+      currentSessionMemoryPath: join(
+        currentProjectDir,
+        resumedSessionId,
+        'session-memory',
+        'summary.md',
+      ),
+      transcriptSessionMemoryPath: join(
+        resumedTranscriptProjectDir,
+        basename(resumedTranscriptPath, '.jsonl'),
+        'session-memory',
+        'summary.md',
+      ),
+      isEmpty: async content => content.trim().length === 0,
+    })
+
+    assert.equal(
+      selectedSummary,
+      '# Current State\nPrefer the resumed worktree summary\n',
+    )
+  } finally {
     await rm(tempHome, { recursive: true, force: true })
   }
 })

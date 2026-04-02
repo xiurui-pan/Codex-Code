@@ -199,3 +199,5 @@
 - 同时把 `current_session_memory` 继续往对象层推进：当前主查询的注入点已不再主要依赖 attachment -> hidden user meta 这条旧链，而是通过单独的 session-memory context 规则接到 `processUserInput` / `query` 主路上；这轮也补齐了三条行为测试，覆盖主查询注入、resume 后第一次 `/compact` 复用摘要、以及 session memory writer 不递归注入自己。
 - 这一轮继续把 session memory 的边界收稳：resume `/compact` 的 summary 选择不再靠“项目内最新”猜测，而是先明确优先“当前恢复会话对应 transcript 的 summary”，只有这条路径和当前会话路径都不可用时才退回项目内其他 summary。为此新增了独立的 `sessionMemorySelection` 选择层，并把 `sessionMemoryContext` 的继承规则拆到了无副作用模块里，避免主查询注入链和 writer 防递归规则继续绑在旧消息包装入口上。
 - 行为测试这轮也补到了真正要验的两条：一条直接卡住“恢复会话 transcript 路径优先于项目里其他更新 summary”，另一条直接卡住 `querySource === 'session_memory'` 时不会把当前 session memory 再注回自己的写入路径；完整构建、行为测试、headless smoke 和真实 headless Codex 回归都已重新跑通。
+- 这一轮继续把恢复路径从 `getCwd()` 猜测彻底收紧到 transcript 主路：`getSessionMemoryPath()` 现在会跟随当前会话的 `sessionProjectDir`，`/compact` 的 summary 选择也直接以 `getTranscriptPath()` 所在目录为恢复来源，不再去当前 cwd 项目里猜。
+- 新增了一条跨项目 / worktree resume 的真实行为测试，专门验证“当前 cwd 项目里就算有更新的其他 summary，也不会抢走恢复会话 transcript 对应的 summary”；当前 resume `/compact` 的优先级已经明确成“当前会话路径 -> 恢复 transcript 路径 -> 同目录其他 summary 兜底”。

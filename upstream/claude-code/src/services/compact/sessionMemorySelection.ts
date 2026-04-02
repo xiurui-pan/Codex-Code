@@ -8,13 +8,13 @@ type SummaryFs = {
 
 export async function findSessionMemorySummaryContent({
   fs,
-  projectDir,
+  transcriptProjectDir,
   currentSessionMemoryPath,
   transcriptSessionMemoryPath,
   isEmpty,
 }: {
   fs: SummaryFs
-  projectDir: string
+  transcriptProjectDir: string
   currentSessionMemoryPath: string
   transcriptSessionMemoryPath: string
   isEmpty(content: string): Promise<boolean>
@@ -22,14 +22,14 @@ export async function findSessionMemorySummaryContent({
   const fallbackCandidatePaths = new Set<string>()
 
   try {
-    const entries = await fs.readdir(projectDir)
+    const entries = await fs.readdir(transcriptProjectDir)
     for (const entry of entries) {
       const entryName = entry.name
       if (!/^[0-9a-f-]{36}$/i.test(entryName)) {
         continue
       }
       const candidatePath = join(
-        projectDir,
+        transcriptProjectDir,
         entryName,
         'session-memory',
         'summary.md',
