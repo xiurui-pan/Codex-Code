@@ -7,6 +7,19 @@
 - 把“哪些必须自动化留证据、哪些必须人工盯界面”分清楚。
 - 把正式验收矩阵里要纳入的本地交互和本地反斜杠命令先收成一份统一清单。
 
+## 最近已收口问题（2026-04-03）
+
+- auto-update 文案：`packageUrl` 缺失时恢复命令已固定到可执行兜底，不再出现 undefined 路径提示。
+- `/help` + `Esc`：帮助弹层关闭后，底部提示已恢复到正常快捷键状态。
+- provider silent stream：Responses SSE 长时间无事件时，已返回明确超时错误，不再静默卡住。
+- request-stage timeout：请求阶段新增显式超时，等待响应过久会给出错误反馈。
+
+对应证据：
+
+- `upstream/claude-code/tests/autoUpdaterMessages.test.ts`
+- `upstream/claude-code/tests/helpDismissTuiAcceptance.test.mjs`
+- `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs`
+
 ## 自动化 smoke 与人工验收的边界
 
 ### 适合自动化 smoke 的范围
@@ -113,6 +126,13 @@
 - TUI 显示专项：乱码、错位、滚动、焦点、窄终端、重绘。
 - 第二批命令补证据已完成：`/add-dir`、`/branch`、`/files`、`/hooks`、`/keybindings`、`/mcp`、`/rewind`、`/skills`、`/tasks`。
 - 第三批当前优先：`/plugin`、`/reload-plugins`、`/agents`（`/ide` 受外部环境影响，后放）。
+- 多轮真实 TUI 稳定性回归：至少覆盖“两轮提问 + 超时错误可见 + 退出”。
+
+下一步建议命令：
+
+- `cd upstream/claude-code && pnpm build`
+- `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs`
+- `cd upstream/claude-code && node --test tests/codexResponsesTimeoutProvider.test.mjs`
 
 ### 明确不放进这份清单
 

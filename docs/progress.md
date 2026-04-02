@@ -10,6 +10,26 @@ What this means in practice:
 - Mainline migration goal is no longer "make Claude-shaped output look usable".
 - Mainline goal is "make Codex-shaped runtime objects first-class".
 
+## Recent 4 Commits (ca7b9d3, fbc85e3, c7e97ed, bf0555e)
+
+- `ca7b9d3`: fixed auto-update failure hint fallback when package URL is undefined; recovery command is now stable and explicit.
+- `fbc85e3`: fixed `/help` dismiss flow so `Esc` closes help and footer state returns to normal shortcut hint.
+- `c7e97ed`: fixed silent provider stream hang by adding fail-fast path in Codex responses stream handling.
+- `bf0555e`: added request-stage timeout in Codex responses request chain, so waiting-for-response hang now returns explicit error.
+
+## Real TUI Issue Status
+
+Found and addressed:
+
+- auto-update undefined package URL produced unstable recovery guidance.
+- `/help` + `Esc` could leave footer hint in wrong state.
+- provider SSE stream could stay silent and block output without clear feedback.
+- request stage could wait too long without explicit timeout feedback.
+
+Current behavior:
+
+- provider unreachable / silent stream / request-stage timeout now returns explicit provider error text instead of silent waiting.
+
 ## Done (Scope and Direction)
 
 - Confirmed project target: Codex-only client, custom Codex provider first.
@@ -52,6 +72,20 @@ From now on, capability acceptance must be tracked row by row against the offici
 - canonical board: `docs/capability-acceptance-matrix.md`
 - supporting evidence: acceptance tests and checklist docs
 - pass condition: reproducible evidence, not narrative-only status
+
+## Still Pending and Next Acceptance Commands
+
+Still pending:
+
+- broader multi-round real TUI soak for repeated prompt cycles under unstable network.
+- wider slash-command matrix completion in the same run (utility commands already split into dedicated tests).
+
+Next command set:
+
+- `cd upstream/claude-code && pnpm build`
+- `cd upstream/claude-code && node --test tests/autoUpdaterMessages.test.ts`
+- `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs`
+- `cd upstream/claude-code && node --test tests/codexResponsesTimeoutProvider.test.mjs`
 
 ## Long-Term Track Added
 
