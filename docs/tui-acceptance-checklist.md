@@ -70,6 +70,9 @@
 - `/context`：打开本地上下文使用情况，不额外打 provider 请求。
 - `/rename` + `/status`：重命名会话后，`/status` 能显示最新状态，`Esc` 可关闭。
 - `/resume`：支持列表选择、`Enter` 确认、`Esc` 取消、按会话标题恢复。
+- `/add-dir`：打开添加目录流程、`Esc` 取消、返回主输入，不打 provider 请求。
+- `/branch`：在 resume 会话上本地分支并继续，不打 provider 请求。
+- `/files`：触发命令并返回本地结果，不打 provider 请求。
 - `/theme`：打开选择器、切换主题、写入全局配置。
 - `/vim`：切换编辑模式、写入全局配置；vim 模式下 `Esc` 退插入、`Enter` 提交。
 - `/permissions`：打开权限界面、`Esc` 关闭；权限提示支持允许、拒绝、取消。
@@ -87,9 +90,6 @@
 ### 未验
 
 - 第二批待纳入的命令：
-  - `/add-dir`
-  - `/branch`
-  - `/files`
   - `/hooks`
   - `/keybindings`
   - `/mcp`
@@ -112,6 +112,7 @@
 - 键盘交互稳定化：尤其 `Ctrl+R`、历史浏览、transcript 进出后的焦点恢复。
 - TUI 显示专项：乱码、错位、滚动、焦点、窄终端、重绘。
 - 第二批命令开始补证据：`/add-dir`、`/branch`、`/files`、`/hooks`、`/keybindings`、`/mcp`、`/rewind`、`/skills`、`/tasks`。
+- 第二批命令继续补证据：`/hooks`、`/keybindings`、`/mcp`、`/rewind`、`/skills`、`/tasks`。
 
 ### 明确不放进这份清单
 

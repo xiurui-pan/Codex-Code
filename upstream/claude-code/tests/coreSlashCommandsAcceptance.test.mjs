@@ -117,7 +117,7 @@ async function writeCodexConfig(homeDir, port) {
   )
 }
 
-async function runTuiFlow({ tempHome, actions, extraArgs = [] }) {
+async function runTuiFlow({ tempHome, actions, extraArgs = [], extraEnv = {} }) {
   const pythonScript = String.raw`
 import json
 import os
@@ -129,8 +129,9 @@ import subprocess
 import sys
 import time
 
-cli_path, cwd, temp_home, actions_json, extra_args_json = sys.argv[1:6]
+cli_path, cwd, temp_home, actions_json, extra_args_json, extra_env_json = sys.argv[1:7]
 actions = json.loads(actions_json)
+extra_env = json.loads(extra_env_json)
 master, slave = pty.openpty()
 env = os.environ.copy()
 env["HOME"] = temp_home
@@ -139,6 +140,7 @@ env["TERM"] = "xterm-256color"
 env["CLAUDE_CODE_DISABLE_TERMINAL_TITLE"] = "1"
 env["FORCE_COLOR"] = "0"
 env["DISABLE_AUTOUPDATER"] = "1"
+env.update(extra_env)
 proc = subprocess.Popen(
     ["node", cli_path, "--bare", *json.loads(extra_args_json)],
     cwd=cwd,
@@ -218,6 +220,7 @@ print(json.dumps({
       tempHome,
       JSON.stringify(actions),
       JSON.stringify(extraArgs),
+      JSON.stringify(extraEnv),
     ],
     {
       cwd: CLI_CWD,
@@ -681,6 +684,106 @@ test('/doctor TUI: opens diagnostics and Esc closes it without provider traffic'
       assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
       assert.deepEqual(result.sent, ['open-doctor', 'dismiss-doctor'])
       assert.match(result.normalizedTranscript, /\/doctor/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/add-dir TUI: opens add-directory flow, Esc cancels, and stays local-only', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-add-dir-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'open-add-dir', waitFor: ['❯'], send: '/add-dir\r' },
+          {
+            name: 'cancel-add-dir',
+            waitFor: ['Enter the path to the directory:'],
+            send: '\u001b',
+          },
+          {
+            name: 'exit',
+            waitFor: ['Did not add a working directory.'],
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['open-add-dir', 'cancel-add-dir', 'exit'])
+      assert.match(result.normalizedTranscript, /\/add-dir/)
+      assert.match(result.normalizedTranscript, /Didnotaddaworkingdirectory\./)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/branch TUI: branches a resumed local transcript without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-branch-tui-'))
+    const resumedCwd = join(CLI_CWD, '..')
+    try {
+      await writeCodexConfig(tempHome, port)
+      const { transcriptPath } = await seedResumedSession({
+        homeDir: tempHome,
+        resumedCwd,
+        currentCwd: CLI_CWD,
+      })
+
+      const result = await runTuiFlow({
+        tempHome,
+        extraArgs: ['--resume', transcriptPath],
+        actions: [
+          { name: 'run-branch', waitFor: ['❯'], send: '/branch\r' },
+          {
+            name: 'exit',
+            waitFor: ['You are now in the branch.'],
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['run-branch', 'exit'])
+      assert.match(result.normalizedTranscript, /Branchedconversation/)
+      assert.match(result.normalizedTranscript, /Youarenowinthebranch\./)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/files TUI: accepts the slash command input and exits without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-files-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'run-files', waitFor: ['❯'], send: '/files\r' },
+          {
+            name: 'exit',
+            waitFor: ['/files'],
+            preDelayMs: 700,
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['run-files', 'exit'])
+      assert.match(result.normalizedTranscript, /\/files/)
       assert.equal(requestBodies.length, 0)
     } finally {
       await rm(tempHome, { recursive: true, force: true })
