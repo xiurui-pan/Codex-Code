@@ -10,8 +10,9 @@ What this means in practice:
 - Mainline migration goal is no longer "make Claude-shaped output look usable".
 - Mainline goal is "make Codex-shaped runtime objects first-class".
 
-## Recent 4 Commits (ca7b9d3, fbc85e3, c7e97ed, bf0555e)
+## Recent 5 Commits (9afabd4, ca7b9d3, fbc85e3, c7e97ed, bf0555e)
 
+- `9afabd4`: fixed the real TUI case where `/exit` could fail to exit after an interrupt; regression is covered by the new case in `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs`.
 - `ca7b9d3`: fixed auto-update failure hint fallback when package URL is undefined; recovery command is now stable and explicit.
 - `fbc85e3`: fixed `/help` dismiss flow so `Esc` closes help and footer state returns to normal shortcut hint.
 - `c7e97ed`: fixed silent provider stream hang by adding fail-fast path in Codex responses stream handling.
@@ -21,6 +22,7 @@ What this means in practice:
 
 Found and addressed:
 
+- interrupt 后 `/exit` 不退出的问题已经修复。
 - auto-update undefined package URL produced unstable recovery guidance.
 - `/help` + `Esc` could leave footer hint in wrong state.
 - provider SSE stream could stay silent and block output without clear feedback.
@@ -28,6 +30,7 @@ Found and addressed:
 
 Current behavior:
 
+- interrupt 之后再次执行 `/exit`，现在会正常退出；对应回归用例已加到 `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs`。
 - provider unreachable / silent stream / request-stage timeout now returns explicit provider error text instead of silent waiting.
 
 ## Done (Scope and Direction)
@@ -82,10 +85,10 @@ Still pending:
 
 Next command set:
 
-- `cd upstream/claude-code && pnpm build`
-- `cd upstream/claude-code && node --test tests/autoUpdaterMessages.test.ts`
-- `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs`
-- `cd upstream/claude-code && node --test tests/codexResponsesTimeoutProvider.test.mjs`
+本轮已复验通过：
+
+- `cd upstream/claude-code && node --test tests/tuiKeyboardInputAcceptance.test.mjs`
+- `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`
 
 ## Long-Term Track Added
 

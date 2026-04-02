@@ -10,15 +10,22 @@
 ## 最近已收口问题（2026-04-03）
 
 - auto-update 文案：`packageUrl` 缺失时恢复命令已固定到可执行兜底，不再出现 undefined 路径提示。
+- 中断后 `/exit`：先打断再退出的真实 TUI 路径已修复，不再出现“中断后 /exit 不退出”。
 - `/help` + `Esc`：帮助弹层关闭后，底部提示已恢复到正常快捷键状态。
 - provider silent stream：Responses SSE 长时间无事件时，已返回明确超时错误，不再静默卡住。
 - request-stage timeout：请求阶段新增显式超时，等待响应过久会给出错误反馈。
 
 对应证据：
 
+- `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs`（含 `/exit` 中断后退出回归用例，修复提交 `9afabd4`）
 - `upstream/claude-code/tests/autoUpdaterMessages.test.ts`
 - `upstream/claude-code/tests/helpDismissTuiAcceptance.test.mjs`
 - `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs`
+
+本轮复验命令：
+
+- `cd upstream/claude-code && node --test tests/tuiKeyboardInputAcceptance.test.mjs`
+- `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`
 
 ## 自动化 smoke 与人工验收的边界
 
