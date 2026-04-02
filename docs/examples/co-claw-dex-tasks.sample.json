@@ -1,0 +1,16 @@
+[
+  {
+    "task_id": "quick-pass",
+    "category": "smoke",
+    "prompt": "sample pass task",
+    "command": "node -e \"console.log('ok')\"",
+    "timeout_ms": 8000
+  },
+  {
+    "task_id": "quick-timeout",
+    "category": "smoke",
+    "prompt": "sample timeout task",
+    "command": "node -e \"setTimeout(() => {}, 60000)\"",
+    "timeout_ms": 500
+  }
+]

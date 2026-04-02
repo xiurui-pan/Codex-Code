@@ -65,3 +65,48 @@ Stage 6 baseline is considered in place when:
 - the 8-task minimal dataset is defined and usable
 - README/roadmap links to this plan and the script entry
 
+## 6) Minimal Usage (No SDK)
+
+Run with built-in smoke tasks:
+
+```bash
+node scripts/benchmark-co-claw-dex-baseline.mjs --runner codex-code --model gpt-5.4
+```
+
+Run with a custom task list:
+
+```bash
+node scripts/benchmark-co-claw-dex-baseline.mjs \
+  --runner codex-code \
+  --model gpt-5.4 \
+  --tasks ./docs/examples/co-claw-dex-tasks.sample.json \
+  --out ./artifacts/baseline-codex-code.json
+```
+
+Task list schema (JSON array, simple and local-run friendly):
+
+```json
+[
+  {
+    "task_id": "quick-pass",
+    "category": "smoke",
+    "prompt": "sample pass task",
+    "command": "node -e \"console.log('ok')\"",
+    "timeout_ms": 8000
+  },
+  {
+    "task_id": "quick-timeout",
+    "category": "smoke",
+    "prompt": "sample timeout task",
+    "command": "node -e \"setTimeout(() => {}, 60000)\"",
+    "timeout_ms": 500
+  }
+]
+```
+
+Per-task output now includes:
+
+- `status`: `success` | `fail` | `timeout`
+- `duration_ms`
+- `exit_code` / `signal`
+- `latency.task_done_ms` placeholder (set to `duration_ms` in this stage)
