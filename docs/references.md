@@ -78,6 +78,28 @@
 
 它可以帮助我们了解社区如何围绕 Claude Code 做二次整理或改造，但它不是当前项目的源码基线，也不是当前实现目标。
 
+### `InDreamer/co-claw-dex`
+
+- 仓库地址：<https://github.com/InDreamer/co-claw-dex>
+- 定位：高价值社区参考，但不是替代路线
+
+这个仓库的参考价值很高，原因主要有三点：
+
+- 它已经证明：保留 Claude Code 风格 CLI、工具链和权限循环，同时把模型后端接到 OpenAI/Codex 兼容 Responses，是可以做成一个真实可跑 fork 的。
+- 它把 `~/.codex/config.toml`、`~/.codex/auth.json`、`OPENAI_API_KEY` 这些本地配置来源接得比较完整。
+- 它对 Responses 流式事件、函数调用和请求身份信息做了较完整的边界适配，适合用来观察社区里“如何快速跑通一条可用主链”。
+
+但它的边界也要写清楚：
+
+- 它本质上是边界翻译型 fork，主思路是把 OpenAI/Responses 再翻回 Claude Code 既有内部流和消息形状。
+- 它保留了大量旧的 Claude 兼容投影、旧模型别名和旧能力字段。
+- 它不是当前 `Codex-Code` 这条 `Codex-only` 内部收口路线的替代方案。
+
+因此，对当前项目最合适的用法是：
+
+- 借它的外围经验，例如 `.codex` 配置接法、请求身份元信息、快速落地方式。
+- 不照搬它“长期维持边界翻译层和旧内部形状”的总体路线。
+
 ### `shipany-ai/open-agent-sdk`
 
 - 仓库地址：<https://github.com/shipany-ai/open-agent-sdk>

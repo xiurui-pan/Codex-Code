@@ -24,6 +24,11 @@ Codex Code tries to combine those strengths:
 - Codex-oriented execution and turn modeling
 - a narrower, simpler `Codex-only` direction
 
+We have also reviewed community forks that swap the backend at the provider boundary, including `co-claw-dex`.
+Those projects are useful proof that a Claude Code-style CLI can run on a Codex-compatible Responses backend.
+They are not our end state.
+Codex Code still chooses the harder path: keep the good local harness, but keep shrinking Claude-shaped compatibility layers instead of building the whole runtime around them.
+
 ## What Is Working Today
 
 Already validated in the real `upstream/claude-code` tree:
@@ -58,6 +63,9 @@ Later:
 
 - systematic rename from `Claude Code` to `Codex Code` across product text and naming
 - capability-by-capability acceptance against the official Claude Code docs, excluding Anthropic-specific features
+
+That final acceptance line is important, not decorative.
+Once the current main path is stable, we will use the official Claude Code capability list as a standing checklist and verify every non-Anthropic-specific capability one by one.
 
 ## Repository Layout
 

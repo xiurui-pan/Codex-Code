@@ -18,6 +18,7 @@
 - 复用判断：明确保留 Claude Code 的本地 harness，也就是 TUI、主循环、工具执行、权限、结果回灌、压缩和本地 shell。
 - 重做重点：不再把主要精力放在提示词替换、协议改名或 `codexResponses.ts` 兼容分支堆叠上，而是优先重做中间回合表示和能力建模。
 - 借鉴来源：下一阶段系统参考 `/home/pxr/workspace/CodingAgent/codex` 的回合表示、能力表、shell / 审批 / 结果建模方式，不再沿着“看到一种 provider 输出就补一种解析”继续长。
+- 社区对照：已经审阅过 `InDreamer/co-claw-dex` 这类社区路径。它证明“在 provider 边界做 Responses 翻译”可以较快做出可用 fork，但它本质上仍是边界翻译型 fork，不是当前 `Codex-Code` 这条 `Codex-only` 内部收口路线的替代。
 - 当前正式源码基线固定为 `upstream/claude-code`，不会切到 `claw-code`、`open-agent-sdk` 或其他第三方仓库。
 - 第一阶段模型范围：只做 `Codex`。
 - 第一阶段接入范围：只支持自定义 Codex provider API。
@@ -42,6 +43,7 @@
 - 工具提示词适配线：后续需要系统梳理 Claude Code 的工具提示词、工具描述、权限文案、调用约束和用户可见说明，再按 Codex 的工具能力与行为习惯做适配。这项属于正式计划的一部分，但排在当前阶段主线之后。
 - 隐藏功能研究线：后续会专门研究 Claude Code 里不直接露出的行为开关、灰度能力、实验逻辑和隐藏功能点，做一次筛选，判断哪些值得迁移、哪些应直接放弃。这条线属于后续研究与筛选范围，不进入当前阶段优先级。
 - `claw-code` 和 `open-agent-sdk` 只作为辅助参考，不进入源码基线，也不进入当前阶段实现目标；其中 `open-agent-sdk` 已明确不走 SDK 方向。
+- 正式验收矩阵：后续要把“对照 Claude Code 官方文档能力列表逐项验收”提升成显式工作线。凡不是 Anthropic / Claude 特化的能力，都要按清单逐项验证，而不是只靠零散 smoke 判断“差不多能用”。
 
 ## 分阶段路线
 
@@ -163,4 +165,5 @@
 ## 后续已记录但不抢当前优先级
 
 - 后续要把项目名、UI 文案和残留的 `Claude Code` 命名系统性改成 `Codex Code`。
-- 后续要对照 Claude Code 官方文档的能力列表，凡是不是 Anthropic/Claude 特化的能力，都逐项测试和验收。
+- 后续要对照 Claude Code 官方文档的能力列表，凡是不是 Anthropic/Claude 特化的能力，都逐项测试和验收；这是一条正式验收主线，不是附带检查项。
+- 后续要和 `co-claw-dex` 做性能与效果对比评估，不只看功能是否对齐，也要看真实体验与实现代价。
