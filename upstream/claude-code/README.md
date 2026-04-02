@@ -42,6 +42,7 @@ This snapshot is also being used as a working base for a `Codex Code` prototype.
 - text fallback tool calls are being reduced to isolated debug-only paths rather than normal execution paths
 - headless execution events are being normalized around one-shot system execution objects so permission and execution state is not duplicated on the wire
 - permission flow is being completed on that same object chain so hosts can understand request → decision → result without scraping assistant text
+- memory is kept in a Codex-only split mode: `MEMORY.md` context injection and `session memory + /resume + /compact` are on the main path, while broad legacy auto-memory branches (extract/auto-dream/team/agent memory) stay out of the default Codex path
 
 ## Built with `oh-my-codex`
 

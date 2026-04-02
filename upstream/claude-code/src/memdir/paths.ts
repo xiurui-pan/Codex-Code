@@ -19,8 +19,10 @@ import {
 } from '../utils/settings/settings.js'
 
 const require = createRequire(import.meta.url)
-const currentStageDisableBroadAutoMemory =
-  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+
+function isCodexOnlyMemoryMode(): boolean {
+  return process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+}
 /**
  * Whether auto-memory features are enabled (memdir, agent memory, past session search).
  * Enabled by default. Priority chain (first defined wins):
@@ -31,7 +33,7 @@ const currentStageDisableBroadAutoMemory =
  *   5. Default: enabled
  */
 export function isAutoMemoryEnabled(): boolean {
-  if (currentStageDisableBroadAutoMemory) {
+  if (isCodexOnlyMemoryMode()) {
     return false
   }
   return isAutoMemoryContextEnabled()
