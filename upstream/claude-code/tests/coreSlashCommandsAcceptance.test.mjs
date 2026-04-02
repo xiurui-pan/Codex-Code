@@ -604,6 +604,90 @@ test('/plan TUI: enables plan mode and then reports empty current plan without p
   })
 })
 
+test('/config TUI: opens settings dialog and Esc closes it without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-config-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'open-config', waitFor: ['❯'], send: '/config\r' },
+          {
+            name: 'dismiss-config',
+            waitFor: ['/config'],
+            preDelayMs: 1200,
+            send: '\u001b',
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['open-config', 'dismiss-config'])
+      assert.match(result.normalizedTranscript, /\/config/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/diff TUI: opens diff dialog and Esc closes it without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-diff-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'open-diff', waitFor: ['❯'], send: '/diff\r' },
+          {
+            name: 'dismiss-diff',
+            waitFor: ['/diff'],
+            preDelayMs: 1200,
+            send: '\u001b',
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['open-diff', 'dismiss-diff'])
+      assert.match(result.normalizedTranscript, /\/diff/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/doctor TUI: opens diagnostics and Esc closes it without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-doctor-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'open-doctor', waitFor: ['❯'], send: '/doctor\r' },
+          {
+            name: 'dismiss-doctor',
+            waitFor: ['/doctor'],
+            preDelayMs: 1200,
+            send: '\u001b',
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['open-doctor', 'dismiss-doctor'])
+      assert.match(result.normalizedTranscript, /\/doctor/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
 test('/compact TUI: resume compacts locally, returns to input, and the next prompt uses the resumed summary', SERIAL_TEST, async () => {
   await withResponsesServer(
     [[

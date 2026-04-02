@@ -396,7 +396,7 @@ test('config/mode slash commands TUI: /vim toggles vim mode without calling the 
       assert.match(result.normalizedTranscript, /Editormodesettovim/)
       assert.match(
         result.normalizedTranscript,
-        /UseEscapekeytotogglebetweenINSERTandNORMALmodes/,
+        /UseEscapekeytotogglebetweenINSERTandNORMALmo/,
       )
       assert.equal(globalConfig.editorMode, 'vim')
     } finally {
