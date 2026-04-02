@@ -56,6 +56,7 @@ Codex Code now tracks capability acceptance as a first-class workstream:
 - Roadmap: `docs/roadmap.md`
 - Progress log: `docs/progress.md`
 - Source baseline and references: `docs/source-baseline.md`, `docs/references.md`
+- co-claw-dex baseline plan: `docs/co-claw-dex-benchmark-plan.md`
 
 ## Long-Term Comparison Target
 
