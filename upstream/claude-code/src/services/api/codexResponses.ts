@@ -16,6 +16,7 @@ import {
   getCodexConfiguredModel,
   getCodexConfiguredResponseStorage,
 } from '../../utils/codexConfig.js'
+import { errorMessage } from '../../utils/errors.js'
 import { DEFAULT_CODEX_MODEL } from '../../utils/model/codexModels.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import { zodToJsonSchema } from '../../utils/zodToJsonSchema.js'
@@ -418,6 +419,58 @@ function extractPayloadTextFromSseBlock(block: string): string | null {
   return payloadText
 }
 
+const DEFAULT_FIRST_EVENT_TIMEOUT_MS = 30_000
+const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 30_000
+
+function parseTimeoutMs(
+  raw: string | undefined,
+  fallbackMs: number,
+): number {
+  if (!raw) return fallbackMs
+  const parsed = Number(raw)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackMs
+}
+
+function getFirstEventTimeoutMs(): number {
+  return parseTimeoutMs(
+    process.env.CODEX_RESPONSES_FIRST_EVENT_TIMEOUT_MS,
+    DEFAULT_FIRST_EVENT_TIMEOUT_MS,
+  )
+}
+
+function getStreamIdleTimeoutMs(): number {
+  return parseTimeoutMs(
+    process.env.CODEX_RESPONSES_STREAM_IDLE_TIMEOUT_MS,
+    DEFAULT_STREAM_IDLE_TIMEOUT_MS,
+  )
+}
+
+async function readWithTimeout(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+  timeoutMs: number,
+  timeoutLabel: string,
+): Promise<ReadableStreamReadResult<Uint8Array>> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([
+      reader.read(),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          reject(
+            new Error(
+              `Custom Codex provider stream timed out (${timeoutLabel}) after ${timeoutMs}ms`,
+            ),
+          )
+        }, timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) {
+      clearTimeout(timer)
+    }
+  }
+}
+
 export function parseResponsesSseEvent(
   block: string,
 ): ResponsesStreamEvent | null {
@@ -443,9 +496,16 @@ async function* iterateResponsesSseEvents(
   const reader = response.body.getReader()
   const decoder = new TextDecoder()
   let buffer = ''
+  let seenEvent = false
 
   while (true) {
-    const { done, value } = await reader.read()
+    const timeoutMs = seenEvent
+      ? getStreamIdleTimeoutMs()
+      : getFirstEventTimeoutMs()
+    const timeoutLabel = seenEvent
+      ? 'waiting for next event'
+      : 'waiting for first event'
+    const { done, value } = await readWithTimeout(reader, timeoutMs, timeoutLabel)
     buffer += decoder.decode(value ?? new Uint8Array(), {
       stream: !done,
     })
@@ -456,6 +516,7 @@ async function* iterateResponsesSseEvents(
       buffer = buffer.slice(separatorIndex + 2)
       const payload = parseResponsesSseEvent(block)
       if (payload) {
+        seenEvent = true
         yield payload
       }
       separatorIndex = buffer.indexOf('\n\n')
@@ -469,6 +530,7 @@ async function* iterateResponsesSseEvents(
   if (buffer.trim()) {
     const payload = parseResponsesSseEvent(buffer)
     if (payload) {
+      seenEvent = true
       yield payload
     }
   }
@@ -480,59 +542,71 @@ export async function* queryCodexResponsesStream({
   options,
   signal,
 }: CodexStreamingArgs): AsyncGenerator<CodexResponseChunk, void, unknown> {
-  const requestIdentity = buildCodexRequestIdentity()
-  const response = await fetch(getResponsesBaseUrl(), {
-    method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      ...(getResponsesApiKey()
-        ? { authorization: `Bearer ${getResponsesApiKey()}` }
-        : {}),
-      'x-app': 'cli',
-      ...requestIdentity.headers,
-    },
-    body: JSON.stringify(
-      await buildResponsesBody({
-        messages,
-        systemPrompt,
-        options,
-      }),
-    ),
-    signal,
-  })
+  try {
+    const requestIdentity = buildCodexRequestIdentity()
+    const response = await fetch(getResponsesBaseUrl(), {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(getResponsesApiKey()
+          ? { authorization: `Bearer ${getResponsesApiKey()}` }
+          : {}),
+        'x-app': 'cli',
+        ...requestIdentity.headers,
+      },
+      body: JSON.stringify(
+        await buildResponsesBody({
+          messages,
+          systemPrompt,
+          options,
+        }),
+      ),
+      signal,
+    })
 
-  if (!response.ok) {
-    const errorText = await response.text()
-    yield {
-      kind: 'api_error',
-      errorMessage: `Custom Codex provider request failed: ${response.status} ${errorText}`,
-    }
-    return
-  }
-
-  for await (const event of iterateResponsesSseEvents(response)) {
-    if (event.type === 'response.output_item.done' && event.item) {
-      const turnItems = normalizeResponsesOutputToTurnItems([event.item])
-      if (turnItems.length > 0) {
-        yield {
-          kind: 'turn_items',
-          turnItems,
-        }
-      }
-      continue
-    }
-
-    if (event.type === 'response.failed' || event.type === 'error') {
-      const errorMessage =
-        event.error?.message ??
-        event.detail ??
-        event.message ??
-        'custom Codex provider request failed'
+    if (!response.ok) {
+      const errorText = await response.text()
       yield {
         kind: 'api_error',
-        errorMessage,
+        errorMessage: `Custom Codex provider request failed: ${response.status} ${errorText}`,
       }
       return
+    }
+
+    for await (const event of iterateResponsesSseEvents(response)) {
+      if (event.type === 'response.output_item.done' && event.item) {
+        const turnItems = normalizeResponsesOutputToTurnItems([event.item])
+        if (turnItems.length > 0) {
+          yield {
+            kind: 'turn_items',
+            turnItems,
+          }
+        }
+        continue
+      }
+
+      if (event.type === 'response.failed' || event.type === 'error') {
+        const errorMessage =
+          event.error?.message ??
+          event.detail ??
+          event.message ??
+          'custom Codex provider request failed'
+        yield {
+          kind: 'api_error',
+          errorMessage,
+        }
+        return
+      }
+    }
+  } catch (error) {
+    // User-triggered cancellation should not be surfaced as provider failure.
+    if (signal.aborted) {
+      return
+    }
+
+    yield {
+      kind: 'api_error',
+      errorMessage: `Custom Codex provider request failed: ${errorMessage(error)}`,
     }
   }
 }
