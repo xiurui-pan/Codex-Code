@@ -8,15 +8,20 @@ export type APIProvider =
   | 'foundry'
   | 'custom'
 
+export function isCodexOnlyProviderEnabled(): boolean {
+  return isEnvTruthy(process.env.CLAUDE_CODE_USE_CODEX_PROVIDER)
+}
+
 export function getAPIProvider(): APIProvider {
-  return isEnvTruthy(process.env.CLAUDE_CODE_USE_BEDROCK)
+  return isCodexOnlyProviderEnabled()
+    ? 'custom'
+    : isEnvTruthy(process.env.CLAUDE_CODE_USE_BEDROCK)
     ? 'bedrock'
     : isEnvTruthy(process.env.CLAUDE_CODE_USE_VERTEX)
       ? 'vertex'
       : isEnvTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
         ? 'foundry'
-        : isEnvTruthy(process.env.CLAUDE_CODE_USE_CODEX_PROVIDER) ||
-            process.env.ANTHROPIC_BASE_URL
+        : process.env.ANTHROPIC_BASE_URL
           ? 'custom'
           : 'firstParty'
 }
@@ -31,6 +36,10 @@ export function getAPIProviderForStatsig(): AnalyticsMetadata_I_VERIFIED_THIS_IS
  * (or api-staging.anthropic.com for ant users).
  */
 export function isFirstPartyAnthropicBaseUrl(): boolean {
+  if (isCodexOnlyProviderEnabled()) {
+    return false
+  }
+
   const baseUrl = process.env.ANTHROPIC_BASE_URL
   if (!baseUrl) {
     return true
