@@ -8,6 +8,7 @@ import { join } from 'node:path'
 
 async function runHeadlessSession(options) {
   const seenRequestBodies = []
+  const seenRequestHeaders = []
   const sockets = new Set()
   const sentAt = {}
   const seenAt = {
@@ -33,6 +34,7 @@ async function runHeadlessSession(options) {
       body += chunk.toString()
     })
     req.on('end', async () => {
+      seenRequestHeaders.push(req.headers)
       seenRequestBodies.push(JSON.parse(body))
       res.writeHead(200, {
         'content-type': 'text/event-stream',
@@ -72,6 +74,7 @@ async function runHeadlessSession(options) {
       'model_provider = "test-provider"',
       'model = "gpt-5.1-codex-mini"',
       'model_reasoning_effort = "medium"',
+      'response_storage = false',
       '',
       '[model_providers.test-provider]',
       `base_url = "http://127.0.0.1:${address.port}"`,
@@ -85,6 +88,7 @@ async function runHeadlessSession(options) {
     [
       'dist/cli.js',
       '-p',
+      '--bare',
       '--input-format',
       'stream-json',
       '--output-format',
@@ -100,6 +104,7 @@ async function runHeadlessSession(options) {
         ...process.env,
         HOME: tempHome,
         ANTHROPIC_API_KEY: 'test-key',
+        ...options.envOverrides,
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     },
@@ -230,6 +235,7 @@ async function runHeadlessSession(options) {
   return {
     code,
     requestBodies: seenRequestBodies,
+    requestHeaders: seenRequestHeaders,
     messages: stdoutLines.map(line => JSON.parse(line)),
     stderr: stderrChunks.join(''),
     sentAt,
@@ -282,10 +288,19 @@ async function runStreamingAssertions() {
   assert.equal(result.requestBodies[0]?.stream, true)
   assert.equal('tool_choice' in (result.requestBodies[0] ?? {}), false)
   assert.equal(result.requestBodies[0]?.reasoning?.effort, 'medium')
+  assert.equal(result.requestBodies[0]?.store, false)
+  assert.equal('metadata' in (result.requestBodies[0] ?? {}), false)
   assert.equal(Array.isArray(result.requestBodies[0]?.input), true)
   assert.equal(
     result.requestBodies[0]?.input?.[0]?.content?.[0]?.text,
     '请处理这个测试请求。',
+  )
+  assert.equal(result.requestHeaders[0]?.authorization, 'Bearer test-key')
+  assert.equal(result.requestHeaders[0]?.['x-app'], 'cli')
+  assert.match(result.requestHeaders[0]?.['user-agent'] ?? '', /^claude-code\//)
+  assert.equal(
+    'x-claude-code-session-id' in (result.requestHeaders[0] ?? {}),
+    false,
   )
 
   const itemKinds = result.messages
@@ -481,11 +496,83 @@ async function runPermissionAssertions(permissionDecision) {
   )
 }
 
+async function runIdentityEnabledAssertions() {
+  const result = await runHeadlessSession({
+    prompt: '请处理带请求身份信息的测试请求。',
+    envOverrides: {
+      CLAUDE_CODE_CODEX_SEND_REQUEST_IDENTITY: '1',
+    },
+    responseBatches: [
+      [
+        {
+          label: 'identity-shell-call',
+          block:
+            'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"function_call","call_id":"tool-id-1","name":"Bash","arguments":"{\\"command\\":\\"pwd\\"}"}}\n\n',
+        },
+        {
+          label: 'identity-call-completed',
+          block:
+            'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp-id-1"}}\n\n',
+        },
+        {
+          label: 'identity-call-done',
+          block: 'data: [DONE]\n\n',
+        },
+      ],
+      [
+        {
+          label: 'identity-final-message',
+          block:
+            'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"identity enabled"}]}}\n\n',
+        },
+        {
+          label: 'identity-final-completed',
+          block:
+            'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp-id-2"}}\n\n',
+        },
+        {
+          label: 'identity-final-done',
+          block: 'data: [DONE]\n\n',
+        },
+      ],
+    ],
+  })
+
+  assert.equal(result.code, 0, result.stderr)
+  assert.equal(result.requestBodies.length >= 2, true)
+  assert.equal(
+    result.requestHeaders[0]?.['x-claude-code-session-id'],
+    result.requestBodies[0]?.metadata?.session_id,
+  )
+  assert.equal(
+    result.requestHeaders[0]?.['x-claude-code-session-id'],
+    result.requestHeaders[1]?.['x-claude-code-session-id'],
+  )
+  assert.equal(
+    result.requestBodies[0]?.metadata?.session_id,
+    result.requestBodies[1]?.metadata?.session_id,
+  )
+  assert.equal(result.requestBodies[0]?.metadata?.originator, 'claude-code')
+  assert.equal(
+    result.requestBodies[0]?.metadata?.workspace,
+    '/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code',
+  )
+  assert.match(
+    result.requestBodies[0]?.metadata?.user_agent ?? '',
+    /^claude-code\//,
+  )
+  assert.match(
+    result.requestHeaders[0]?.['user-agent'] ?? '',
+    /^claude-code\//,
+  )
+}
+
 async function main() {
   await runStreamingAssertions()
   await runSameResponseIncrementalAssertions()
   await runPermissionAssertions('deny')
   await runPermissionAssertions('allow')
+  await runIdentityEnabledAssertions()
 }
 
 main()

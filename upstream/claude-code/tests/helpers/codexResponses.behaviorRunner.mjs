@@ -3,6 +3,10 @@ import { once } from 'node:events'
 
 const mode = process.argv[2]
 
+globalThis.MACRO ??= {
+  VERSION: '0.0.0-test',
+}
+
 function withEnv(overrides, fn) {
   const previous = new Map()
   for (const [key, value] of Object.entries(overrides)) {
@@ -160,5 +164,84 @@ async function runQuery() {
   }
 }
 
-const result = mode === 'merge' ? await runMerge() : await runQuery()
+async function runIdentity(sendIdentity) {
+  const { buildCodexRequestIdentity } = await import(
+    '../../src/services/api/codexRequestIdentity.ts'
+  )
+  const { buildResponsesBody } = await import(
+    '../../src/services/api/codexResponses.ts'
+  )
+
+  return withEnv(
+    {
+      ANTHROPIC_MODEL: 'gpt-5.1-codex-mini',
+      CLAUDE_CODE_CODEX_SEND_REQUEST_IDENTITY: sendIdentity ? '1' : undefined,
+    },
+    async () => {
+      const identity = buildCodexRequestIdentity()
+      const body = await buildResponsesBody({
+        messages: [
+          {
+            type: 'user',
+            uuid: 'user-1',
+            message: { content: 'test' },
+          },
+        ],
+        systemPrompt: [],
+        options: {},
+      })
+
+      return {
+        headers: identity.headers,
+        metadata: identity.metadata ?? null,
+        bodyMetadata: body.metadata ?? null,
+      }
+    },
+  )
+}
+
+async function runMissingBaseUrl() {
+  const { queryCodexResponses } = await import(
+    '../../src/services/api/codexResponses.ts'
+  )
+
+  return withEnv(
+    {
+      ANTHROPIC_BASE_URL: undefined,
+      ANTHROPIC_MODEL: 'gpt-5.1-codex-mini',
+    },
+    async () => {
+      try {
+        await queryCodexResponses({
+          messages: [
+            {
+              type: 'user',
+              uuid: 'user-1',
+              message: { content: 'test' },
+            },
+          ],
+          systemPrompt: [],
+          options: {},
+          signal: new AbortController().signal,
+        })
+        return { errorMessage: null }
+      } catch (error) {
+        return {
+          errorMessage: error instanceof Error ? error.message : String(error),
+        }
+      }
+    },
+  )
+}
+
+const result =
+  mode === 'merge'
+    ? await runMerge()
+    : mode === 'query'
+      ? await runQuery()
+      : mode === 'identity-default'
+        ? await runIdentity(false)
+        : mode === 'identity-enabled'
+          ? await runIdentity(true)
+          : await runMissingBaseUrl()
 process.stdout.write(JSON.stringify(result))

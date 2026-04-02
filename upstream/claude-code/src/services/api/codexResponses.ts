@@ -1,4 +1,3 @@
-import { randomUUID } from 'crypto'
 import type {
   ContentBlock,
   ContentBlockParam,
@@ -11,7 +10,12 @@ import { FILE_READ_TOOL_NAME } from '../../tools/FileReadTool/prompt.js'
 import { GLOB_TOOL_NAME } from '../../tools/GlobTool/prompt.js'
 import { GREP_TOOL_NAME } from '../../tools/GrepTool/prompt.js'
 import type { Message } from '../../types/message.js'
-import { getCodexConfiguredModel } from '../../utils/codexConfig.js'
+import {
+  getCodexConfiguredApiKey,
+  getCodexConfiguredBaseUrl,
+  getCodexConfiguredModel,
+  getCodexConfiguredResponseStorage,
+} from '../../utils/codexConfig.js'
 import { DEFAULT_CODEX_MODEL } from '../../utils/model/codexModels.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import { zodToJsonSchema } from '../../utils/zodToJsonSchema.js'
@@ -27,6 +31,7 @@ import {
   normalizeResponsesOutputToTurnItems,
   type ResponsesOutputItem,
 } from './codexTurnItems.js'
+import { buildCodexRequestIdentity } from './codexRequestIdentity.js'
 import { getCodexProviderProfile } from './providerProfiles.js'
 
 type CodexRequestOptions = {
@@ -138,15 +143,17 @@ const CURRENT_PHASE_TOOL_NAMES = new Set([
 ])
 
 function getResponsesBaseUrl(): string {
-  const baseUrl = process.env.ANTHROPIC_BASE_URL
+  const baseUrl = getCodexConfiguredBaseUrl()
   if (!baseUrl) {
-    throw new Error('custom Codex provider missing ANTHROPIC_BASE_URL')
+    throw new Error(
+      'Codex Responses adapter missing configured base URL (.codex model_providers.<id>.base_url / ANTHROPIC_BASE_URL)',
+    )
   }
   return `${baseUrl.replace(/\/$/, '')}/responses`
 }
 
 function getResponsesApiKey(): string | null {
-  return process.env.ANTHROPIC_API_KEY ?? null
+  return getCodexConfiguredApiKey() ?? null
 }
 
 function normalizeTextContent(
@@ -354,10 +361,18 @@ export async function buildResponsesBody({
   options,
 }: Omit<CodexStreamingArgs, 'signal'>) {
   const profile = getCodexProviderProfile()
+  const requestIdentity = buildCodexRequestIdentity()
   const body: Record<string, unknown> = {
     model: options.model ?? getCodexConfiguredModel() ?? DEFAULT_CODEX_MODEL,
     stream: true,
     input: buildResponsesInput(messages),
+  }
+  if (requestIdentity.metadata) {
+    body.metadata = requestIdentity.metadata
+  }
+  const responseStorage = getCodexConfiguredResponseStorage()
+  if (typeof responseStorage === 'boolean') {
+    body.store = responseStorage
   }
 
   const effort = parseEffortValue(options.effortValue)
@@ -465,6 +480,7 @@ export async function* queryCodexResponsesStream({
   options,
   signal,
 }: CodexStreamingArgs): AsyncGenerator<CodexResponseChunk, void, unknown> {
+  const requestIdentity = buildCodexRequestIdentity()
   const response = await fetch(getResponsesBaseUrl(), {
     method: 'POST',
     headers: {
@@ -473,7 +489,7 @@ export async function* queryCodexResponsesStream({
         ? { authorization: `Bearer ${getResponsesApiKey()}` }
         : {}),
       'x-app': 'cli',
-      'x-claude-code-session-id': randomUUID(),
+      ...requestIdentity.headers,
     },
     body: JSON.stringify(
       await buildResponsesBody({

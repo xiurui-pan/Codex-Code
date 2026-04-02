@@ -73,3 +73,27 @@ test('queryCodexResponses aggregates streamed items instead of only returning th
   ])
   assert.equal(result.errorMessage, null)
 })
+
+test('request identity metadata and custom session header stay opt-in', async () => {
+  const defaultResult = await runBehavior('identity-default')
+
+  assert.equal('x-claude-code-session-id' in defaultResult.headers, false)
+  assert.equal(defaultResult.metadata, null)
+  assert.equal(defaultResult.bodyMetadata, null)
+  assert.match(defaultResult.headers['user-agent'] ?? '', /^claude-code\//)
+
+  const enabledResult = await runBehavior('identity-enabled')
+
+  assert.match(enabledResult.headers['x-claude-code-session-id'] ?? '', /.+/)
+  assert.equal(enabledResult.metadata?.originator, 'claude-code')
+  assert.equal(enabledResult.bodyMetadata?.originator, 'claude-code')
+})
+
+test('missing base URL error points to configured Codex base URL sources', async () => {
+  const result = await runBehavior('missing-base-url')
+
+  assert.match(
+    result.errorMessage ?? '',
+    /configured base URL \(\.codex model_providers\.<id>\.base_url \/ ANTHROPIC_BASE_URL\)/,
+  )
+})

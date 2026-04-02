@@ -11,8 +11,12 @@ export type LoadedCodexConfig = {
   configPath: string
   providerId: string
   provider: MinimalCodexProvider
+  baseUrl?: string
   model?: string
   reasoningEffort?: string
+  responseStorage?: boolean
+  apiKeyEnvName?: string
+  apiKey?: string
 }
 
 function stripInlineComment(line: string): string {
@@ -64,16 +68,34 @@ function parseValue(rawValue: string): string | boolean | number {
   return value
 }
 
+function parseBooleanEnvValue(
+  value: string | undefined,
+): boolean | undefined {
+  if (value === '1' || value === 'true') {
+    return true
+  }
+
+  if (value === '0' || value === 'false') {
+    return false
+  }
+
+  return undefined
+}
+
 function parseMinimalToml(source: string): {
   model_provider?: string
   model?: string
   model_reasoning_effort?: string
+  response_storage?: boolean
+  disable_response_storage?: boolean
   model_providers: Record<string, MinimalCodexProvider>
 } {
   const root: {
     model_provider?: string
     model?: string
     model_reasoning_effort?: string
+    response_storage?: boolean
+    disable_response_storage?: boolean
     model_providers: Record<string, MinimalCodexProvider>
   } = {
     model_providers: {},
@@ -115,6 +137,13 @@ function parseMinimalToml(source: string): {
         root.model = String(value)
       } else if (key === 'model_reasoning_effort') {
         root.model_reasoning_effort = String(value)
+      } else if (key === 'response_storage' && typeof value === 'boolean') {
+        root.response_storage = value
+      } else if (
+        key === 'disable_response_storage' &&
+        typeof value === 'boolean'
+      ) {
+        root.disable_response_storage = value
       }
     }
   }
@@ -144,12 +173,23 @@ export async function loadCodexConfig(
     )
   }
 
+  const responseStorage =
+    typeof parsed.response_storage === 'boolean'
+      ? parsed.response_storage
+      : parsed.disable_response_storage === true
+        ? false
+        : undefined
+
   return {
     configPath,
     providerId,
     provider,
+    baseUrl: provider.base_url,
     model: parsed.model,
     reasoningEffort: parsed.model_reasoning_effort,
+    responseStorage,
+    apiKeyEnvName: provider.env_key,
+    apiKey: provider.env_key ? process.env[provider.env_key] : undefined,
   }
 }
 
@@ -182,13 +222,23 @@ export function applyCodexConfigToEnv(config: LoadedCodexConfig): void {
     process.env.CLAUDE_CODE_EFFORT_LEVEL = config.reasoningEffort
   }
 
+  if (typeof config.responseStorage === 'boolean') {
+    process.env.CLAUDE_CODE_CODEX_RESPONSE_STORAGE = config.responseStorage
+      ? '1'
+      : '0'
+  }
+
   if (config.provider.env_key) {
     process.env.CLAUDE_CODE_CODEX_ENV_KEY = config.provider.env_key
-    const apiKey = process.env[config.provider.env_key]
+    const apiKey = config.apiKey ?? process.env[config.provider.env_key]
     if (apiKey) {
       process.env.ANTHROPIC_API_KEY = apiKey
     }
   }
+}
+
+export function getCodexConfiguredBaseUrl(): string | undefined {
+  return process.env.ANTHROPIC_BASE_URL
 }
 
 export function getCodexConfiguredModel(): string | undefined {
@@ -197,6 +247,24 @@ export function getCodexConfiguredModel(): string | undefined {
 
 export function getCodexConfiguredReasoningEffort(): string | undefined {
   return process.env.CLAUDE_CODE_EFFORT_LEVEL
+}
+
+export function getCodexConfiguredResponseStorage(): boolean | undefined {
+  return parseBooleanEnvValue(process.env.CLAUDE_CODE_CODEX_RESPONSE_STORAGE)
+}
+
+export function getCodexConfiguredAuthEnvKey(): string | undefined {
+  return process.env.CLAUDE_CODE_CODEX_ENV_KEY
+}
+
+export function getCodexConfiguredApiKey(): string | undefined {
+  return process.env.ANTHROPIC_API_KEY
+}
+
+export function shouldSendCodexRequestIdentity(): boolean {
+  return parseBooleanEnvValue(
+    process.env.CLAUDE_CODE_CODEX_SEND_REQUEST_IDENTITY,
+  ) === true
 }
 
 export function hasCodexConfigInEnv(): boolean {
