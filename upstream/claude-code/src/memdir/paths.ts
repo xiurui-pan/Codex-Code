@@ -19,6 +19,8 @@ import {
 } from '../utils/settings/settings.js'
 
 const require = createRequire(import.meta.url)
+const currentStageDisableBroadAutoMemory =
+  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
 /**
  * Whether auto-memory features are enabled (memdir, agent memory, past session search).
  * Enabled by default. Priority chain (first defined wins):
@@ -29,6 +31,22 @@ const require = createRequire(import.meta.url)
  *   5. Default: enabled
  */
 export function isAutoMemoryEnabled(): boolean {
+  if (currentStageDisableBroadAutoMemory) {
+    return false
+  }
+  return isAutoMemoryContextEnabled()
+}
+
+/**
+ * Whether auto-memory context injection is enabled for the current session.
+ *
+ * Codex-only 主链当前只恢复“把 MEMORY.md 带进上下文”这条能力，不顺带恢复
+ * extract / autoDream / team memory / agent memory 这些更宽旧分支。
+ * 因此：
+ * - isAutoMemoryEnabled(): 仍作为“更宽 auto-memory 能力”总开关，Codex 下保持关闭
+ * - isAutoMemoryContextEnabled(): 只用于 prompt / context 注入
+ */
+export function isAutoMemoryContextEnabled(): boolean {
   const envVal = process.env.CLAUDE_CODE_DISABLE_AUTO_MEMORY
   if (isEnvTruthy(envVal)) {
     return false

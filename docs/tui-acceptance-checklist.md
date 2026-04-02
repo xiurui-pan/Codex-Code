@@ -56,80 +56,63 @@
 - 中文、英文、代码块、路径、表格混排时，是否还保持可读，不出现行宽计算错误。
 - 失败链路要可用：命令不存在、上下文入口失效、引用文件不存在、取消提交、取消选择，都要给出清楚提示。
 
-## 与 Claude/Anthropic 业务无关的反斜杠命令验收范围
+## 阶段 5C 验收矩阵草案
 
-正式验收矩阵里，凡是当前代码里有本地入口、且不依赖 Claude/Anthropic 产品态的反斜杠命令，都应逐项纳入。当前先按下面这组收口。
+这份矩阵只覆盖当前代码里已有本地入口、且不依赖 Anthropic 账号、Claude 产品态或外部 App 接力的能力。这里先按 `已验 / 部分已验 / 未验` 三类整理，避免把“已有一点证据”和“已经正式收口”混在一起。
 
-### 第一批必须纳入
+### 已验
 
-- `/help`
-- `/clear`
-- `/compact`
-- `/config`
-- `/context`
-- `/diff`
-- `/doctor`
-- `/model`
-- `/effort`
-- `/plan`
-- `/resume`
-- `/rename`
-- `/status`
-- `/theme`
-- `/vim`
+- 最小真实 TTY 主链：启动、出现 prompt、一轮真实问答、正常退出。
+- `/help`：打开帮助、看到核心内容、`Esc` 关闭。
+- `/context`：打开本地上下文使用情况，不额外打 provider 请求。
+- `/rename` + `/status`：重命名会话后，`/status` 能显示最新状态，`Esc` 可关闭。
+- `/resume`：支持列表选择、`Enter` 确认、`Esc` 取消、按会话标题恢复。
+- `/theme`：打开选择器、切换主题、写入全局配置。
+- `/vim`：切换编辑模式、写入全局配置；vim 模式下 `Esc` 退插入、`Enter` 提交。
+- `/permissions`：打开权限界面、`Esc` 关闭；权限提示支持允许、拒绝、取消。
+- `/model` + reasoning effort：模型选择、左右切换 effort、确认、取消、状态回显。
 
-当前已经有真实 TTY 自动化留证据的包括：
+### 部分已验
 
-- `/help`
-- `/clear`
-- `/compact`
-- `/context`
-- `/effort`
-- `/model`
-- `/plan`
-- `/rename`
-- `/resume`
-- `/status`
-- `/theme`
-- `/vim`
-- `/permissions`
-- `/memory`
+- 键盘交互：`Ctrl+L`、历史上下、`Ctrl+R`、vim 下 `Esc/Enter` 已有真实 TTY 用例，但更宽联合验收里还没完全收稳。
+- `/memory`：已经覆盖 project memory、user memory、imported memory 三条真实 TTY 路径；但 memory 专项整体还没收完，`CLAUDE.md` 主查询注入、`@import` 更宽交互、team / agent memory 还没统一收口。
+- `/clear`：当前已有行为验收，但现阶段主要证据还是 headless，不应先记成完整 TTY 已验。
+- `/compact`：当前已有摘要选择和 resume 复用的行为验收，但还缺真正的 TTY 交互验收。
+- plan mode：已覆盖“进入 plan mode、再次查看当前为空”的最小链路，但还缺更完整的退出、取消、已有 plan 状态回显。
+- TUI 显示：目前只覆盖了少量 dialog、picker、transcript 的出现与关闭，还没有形成乱码、错位、滚动、焦点、窄终端的专项矩阵。
 
-`/memory` 当前已经进一步细化到 3 条真实验收路径：
+### 未验
 
-- project memory
-- user memory
-- imported memory
+- 第一批里还没有明确测试证据的命令：
+  - `/config`
+  - `/diff`
+  - `/doctor`
+- 第二批待纳入的命令：
+  - `/add-dir`
+  - `/branch`
+  - `/files`
+  - `/hooks`
+  - `/keybindings`
+  - `/mcp`
+  - `/rewind`
+  - `/skills`
+  - `/tasks`
+- 第三批在本地入口稳定后纳入的命令：
+  - `/agents`
+  - `/ide`
+  - `/plugin`
+  - `/reload-plugins`
+  - `/session`
+  - `/summary`
+  - `/terminal-setup`
 
-### 第二批应纳入
+### 下一批最该补
 
-- `/add-dir`
-- `/branch`
-- `/files`
-- `/hooks`
-- `/keybindings`
-- `/mcp`
-- `/memory`
-- `/permissions`
-- `/rewind`
-- `/skills`
-- `/tasks`
-
-说明：
-
-- `/permissions` 和 `/memory` 现在已经有真实 TTY 自动化覆盖；其中 `/memory` 已经补到 project / user / imported 三条真实用例。
-- 但 memory 专项整体还没收完，所以这里仍保留在第二批清单里，等 `CLAUDE.md`、`@import`、team/agent memory 等更宽链路也纳入正式验收后，再整体上移。
-- 当前这一批 PTY/TUI 联合验收，更适合用串行方式执行；原因不是这几条命令本身缺入口，而是现有 CLI 启动链在并发 PTY 场景下仍有不稳定点，后续会单独继续收。
-
-### 第三批在本地入口稳定后纳入
-
-- `/agents`
-- `/ide`
-- `/plugin`
-- `/reload-plugins`
-- `/session`
-- `/summary`
-- `/terminal-setup`
+- `/compact` 的真实 TTY 验收：打开、执行、状态变化、结果回显。
+- plan mode 的完整交互：进入、重复进入、取消、退出、已有 plan 状态。
+- 键盘交互稳定化：尤其 `Ctrl+R`、历史浏览、transcript 进出后的焦点恢复。
+- TUI 显示专项：乱码、错位、滚动、焦点、窄终端、重绘。
+- 第一批里尚未补证据的命令：`/config`、`/diff`、`/doctor`。
 
 ### 明确不放进这份清单
 

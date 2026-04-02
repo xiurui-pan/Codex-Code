@@ -46,7 +46,11 @@ import {
   getOriginalCwd,
 } from '../bootstrap/state.js'
 import { truncateEntrypointContent } from '../memdir/memdir.js'
-import { getAutoMemEntrypoint, isAutoMemoryEnabled } from '../memdir/paths.js'
+import {
+  getAutoMemEntrypoint,
+  isAutoMemoryContextEnabled,
+  isAutoMemoryEnabled,
+} from '../memdir/paths.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../services/analytics/growthbook.js'
 import {
   getCurrentProjectConfig,
@@ -977,7 +981,7 @@ export const getMemoryFiles = memoize(
     }
 
     // Memdir entrypoint (memory.md) - only if feature is on and file exists
-    if (isAutoMemoryEnabled()) {
+    if (isAutoMemoryContextEnabled()) {
       const { info: memdirEntry } = await safelyReadMemoryFileAsync(
         getAutoMemEntrypoint(),
         'AutoMem',

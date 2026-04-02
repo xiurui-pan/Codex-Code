@@ -2416,8 +2416,8 @@ async function run(): Promise<CommanderCommand> {
     }
 
     if (currentPhaseBareLocalMode && !isNonInteractiveSession) {
-      if (options.continue || options.resume || teleport || remote !== null || (feature('DIRECT_CONNECT') && _pendingConnect?.url) || (feature('SSH_REMOTE') && _pendingSSH?.host) || (feature('KAIROS') && _pendingAssistantChat && (_pendingAssistantChat.sessionId || _pendingAssistantChat.discover))) {
-        await exitWithError(root, '当前阶段的自定义 Codex provider 只支持本地新会话，不支持 continue、resume、teleport、remote、connect、ssh 或 assistant。', () => gracefulShutdown(1));
+      if (teleport || remote !== null || (feature('DIRECT_CONNECT') && _pendingConnect?.url) || (feature('SSH_REMOTE') && _pendingSSH?.host) || (feature('KAIROS') && _pendingAssistantChat && (_pendingAssistantChat.sessionId || _pendingAssistantChat.discover))) {
+        await exitWithError(root, '当前阶段的自定义 Codex provider 支持本地新会话与本地 resume/continue，不支持 teleport、remote、connect、ssh 或 assistant。', () => gracefulShutdown(1));
       }
 
       const currentPhaseInitialNotifications: Array<{
@@ -2603,16 +2603,18 @@ async function run(): Promise<CommanderCommand> {
         thinkingConfig: currentPhaseThinkingConfig
       };
 
-      logForDebugging('[STARTUP] current-phase interactive repl shortcut start');
-      writeStartupProbe('action:before-launchRepl');
-      await launchRepl(root, {
-        getFpsMetrics,
-        stats,
-        initialState: currentPhaseInitialState
-      }, currentPhaseSessionConfig, renderAndRun);
-      writeStartupProbe('action:after-launchRepl');
-      logForDebugging('[STARTUP] current-phase interactive repl shortcut done');
-      return;
+      if (!options.continue && !options.resume && !options.fromPr) {
+        logForDebugging('[STARTUP] current-phase interactive repl shortcut start');
+        writeStartupProbe('action:before-launchRepl');
+        await launchRepl(root, {
+          getFpsMetrics,
+          stats,
+          initialState: currentPhaseInitialState
+        }, currentPhaseSessionConfig, renderAndRun);
+        writeStartupProbe('action:after-launchRepl');
+        logForDebugging('[STARTUP] current-phase interactive repl shortcut done');
+        return;
+      }
     }
 
     // Initialize LSP manager AFTER trust is established (or in non-interactive mode
@@ -4117,8 +4119,8 @@ async function run(): Promise<CommanderCommand> {
           }
         }
       }
-      if ("external" === 'ant') {
-        if (options.resume && typeof options.resume === 'string' && !maybeSessionId) {
+      if (options.resume && typeof options.resume === 'string' && !maybeSessionId) {
+        if ("external" === 'ant') {
           // Check for ccshare URL (e.g. https://go/ccshare/boris-20260311-211036)
           const {
             parseCcshareId,
@@ -4157,48 +4159,51 @@ async function run(): Promise<CommanderCommand> {
               logError(error);
               await exitWithError(root, `Unable to resume from ccshare: ${errorMessage(error)}`, () => gracefulShutdown(1));
             }
-          } else {
-            const resolvedPath = resolve(options.resume);
+          }
+        }
+
+        if (!processedResume) {
+          const resolvedPath = resolve(options.resume);
+          try {
+            const resumeStart = performance.now();
+            let logOption;
             try {
-              const resumeStart = performance.now();
-              let logOption;
-              try {
-                // Attempt to load as a transcript file; ENOENT falls through to session-ID handling
-                logOption = await loadTranscriptFromFile(resolvedPath);
-              } catch (error) {
-                if (!isENOENT(error)) throw error;
-                // ENOENT: not a file path — fall through to session-ID handling
-              }
-              if (logOption) {
-                const result = await loadConversationForResume(logOption, undefined /* sourceFile */);
-                if (result) {
-                  processedResume = await processResumedConversation(result, {
-                    forkSession: !!options.forkSession,
-                    transcriptPath: result.fullPath
-                  }, resumeContext);
-                  if (processedResume.restoredAgentDef) {
-                    mainThreadAgentDefinition = processedResume.restoredAgentDef;
-                  }
-                  logEvent('tengu_session_resumed', {
-                    entrypoint: 'file' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-                    success: true,
-                    resume_duration_ms: Math.round(performance.now() - resumeStart)
-                  });
-                } else {
-                  logEvent('tengu_session_resumed', {
-                    entrypoint: 'file' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-                    success: false
-                  });
-                }
-              }
+              // Allow local transcript-path resume in Codex-only mode too.
+              // Session-ID resume still uses the current-project lookup below.
+              logOption = await loadTranscriptFromFile(resolvedPath);
             } catch (error) {
-              logEvent('tengu_session_resumed', {
-                entrypoint: 'file' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-                success: false
-              });
-              logError(error);
-              await exitWithError(root, `Unable to load transcript from file: ${options.resume}`, () => gracefulShutdown(1));
+              if (!isENOENT(error)) throw error;
+              // ENOENT: not a file path — fall through to session-ID handling
             }
+            if (logOption) {
+              const result = await loadConversationForResume(logOption, undefined /* sourceFile */);
+              if (result) {
+                processedResume = await processResumedConversation(result, {
+                  forkSession: !!options.forkSession,
+                  transcriptPath: result.fullPath
+                }, resumeContext);
+                if (processedResume.restoredAgentDef) {
+                  mainThreadAgentDefinition = processedResume.restoredAgentDef;
+                }
+                logEvent('tengu_session_resumed', {
+                  entrypoint: 'file' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+                  success: true,
+                  resume_duration_ms: Math.round(performance.now() - resumeStart)
+                });
+              } else {
+                logEvent('tengu_session_resumed', {
+                  entrypoint: 'file' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+                  success: false
+                });
+              }
+            }
+          } catch (error) {
+            logEvent('tengu_session_resumed', {
+              entrypoint: 'file' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+              success: false
+            });
+            logError(error);
+            await exitWithError(root, `Unable to load transcript from file: ${options.resume}`, () => gracefulShutdown(1));
           }
         }
       }

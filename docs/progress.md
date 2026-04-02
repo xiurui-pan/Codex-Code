@@ -248,13 +248,15 @@
 - Codex headless 下的长期记忆注入已经重新进入真实请求：
   - `MEMORY.md` / auto memory 现在会进入发给 provider 的真实 `/responses` 请求体
   - override 路径优先级也已补验
+  - `CLAUDE.md` 与 `@import` 也已在真实 Codex headless 请求链下补齐正式验收
+  - 当前还把 auto-memory 范围重新收窄成“只恢复请求注入，不顺带重新打开 extract / auto dream / team memory / agent memory 这些更宽旧分支”；对应显式禁用与范围验证已补到单独测试里
   - 对应正式验收文件是 `upstream/claude-code/tests/autoMemoryAcceptance.test.mjs`
+  - 对应补充验收文件是 `upstream/claude-code/tests/autoMemoryScope.test.mjs`、`upstream/claude-code/tests/claudeMdAcceptance.test.mjs`
 - `/memory` 这条 TUI 交互线已经补上针对性验收，不再只证明“命令能打开”：
   - 已覆盖 project memory
   - 已覆盖 user memory
   - 已覆盖 imported memory
   - 对应验收文件是 `upstream/claude-code/tests/configModeSlashCommandsTuiAcceptance.test.mjs`
 - 但整个 memory 体系还没有全量完成：
-  - 还要继续补 `CLAUDE.md` 主链
-  - 还要继续补 `@import` 更完整的上下文链
   - 还要继续补 team memory / agent memory / auto dream / extract 这些长期记忆分支
+  - 还要继续补 `CLAUDE.md` / `@import` 更宽矩阵，例如多层导入、更多来源优先级与更复杂组合

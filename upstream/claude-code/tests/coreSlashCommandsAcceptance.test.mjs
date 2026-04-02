@@ -117,7 +117,7 @@ async function writeCodexConfig(homeDir, port) {
   )
 }
 
-async function runTuiFlow({ tempHome, actions }) {
+async function runTuiFlow({ tempHome, actions, extraArgs = [] }) {
   const pythonScript = String.raw`
 import json
 import os
@@ -129,7 +129,7 @@ import subprocess
 import sys
 import time
 
-cli_path, cwd, temp_home, actions_json = sys.argv[1:5]
+cli_path, cwd, temp_home, actions_json, extra_args_json = sys.argv[1:6]
 actions = json.loads(actions_json)
 master, slave = pty.openpty()
 env = os.environ.copy()
@@ -140,7 +140,7 @@ env["CLAUDE_CODE_DISABLE_TERMINAL_TITLE"] = "1"
 env["FORCE_COLOR"] = "0"
 env["DISABLE_AUTOUPDATER"] = "1"
 proc = subprocess.Popen(
-    ["node", cli_path, "--bare"],
+    ["node", cli_path, "--bare", *json.loads(extra_args_json)],
     cwd=cwd,
     env=env,
     stdin=slave,
@@ -210,7 +210,15 @@ print(json.dumps({
 
   const child = spawn(
     'python3',
-    ['-c', pythonScript, CLI_PATH, CLI_CWD, tempHome, JSON.stringify(actions)],
+    [
+      '-c',
+      pythonScript,
+      CLI_PATH,
+      CLI_CWD,
+      tempHome,
+      JSON.stringify(actions),
+      JSON.stringify(extraArgs),
+    ],
     {
       cwd: CLI_CWD,
       env: process.env,
@@ -522,7 +530,7 @@ async function seedResumedSession({
   await utimes(transcriptPath, staleTime, staleTime)
   await utimes(resumedSummaryPath, staleTime, staleTime)
 
-  return { transcriptPath }
+  return { transcriptPath, resumedSessionId }
 }
 
 test('/help TUI: opens built-in help, shows core help content, and Esc closes it', SERIAL_TEST, async () => {
@@ -594,6 +602,66 @@ test('/plan TUI: enables plan mode and then reports empty current plan without p
       await rm(tempHome, { recursive: true, force: true })
     }
   })
+})
+
+test('/compact TUI: resume compacts locally, returns to input, and the next prompt uses the resumed summary', SERIAL_TEST, async () => {
+  await withResponsesServer(
+    [[
+      responseDoneItem({
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'after compact answer' }],
+      }),
+      responseCompleted('resp-after-compact'),
+      responseDone(),
+    ]],
+    async ({ port, requestBodies }) => {
+      const tempHome = await mkdtemp(join(tmpdir(), 'codex-compact-tui-'))
+      const resumedCwd = join(CLI_CWD, '..')
+      try {
+        await writeCodexConfig(tempHome, port)
+        const { transcriptPath } = await seedResumedSession({
+          homeDir: tempHome,
+          resumedCwd,
+          currentCwd: CLI_CWD,
+        })
+
+        const result = await runTuiFlow({
+          tempHome,
+          extraArgs: ['--resume', transcriptPath],
+          actions: [
+            { name: 'run-compact', waitFor: ['❯'], send: '/compact\r' },
+            {
+              name: 'ask-after-compact',
+              waitFor: ['Compacted'],
+              send: 'what summary is loaded?\r',
+            },
+            {
+              name: 'exit',
+              waitFor: ['after compact answer'],
+              send: '/exit\r',
+              settleMs: 800,
+            },
+          ],
+        })
+
+        assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+        assert.deepEqual(
+          result.sent,
+          ['run-compact', 'ask-after-compact', 'exit'],
+          JSON.stringify(result),
+        )
+        assert.match(result.normalizedTranscript, /Compacted/)
+        assert.match(result.normalizedTranscript, /aftercompactanswer/)
+        assert.equal(requestBodies.length, 1)
+        const requestBodyText = JSON.stringify(requestBodies[0])
+        assert.match(requestBodyText, /Prefer the resumed worktree summary/)
+        assert.doesNotMatch(requestBodyText, /Wrong current cwd project summary/)
+      } finally {
+        await rm(tempHome, { recursive: true, force: true })
+      }
+    },
+  )
 })
 
 test('/clear headless: clears the session non-interactively and accepts a fresh prompt afterward', SERIAL_TEST, async () => {

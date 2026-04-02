@@ -190,11 +190,12 @@
 - 已经正式验通的部分：
   - session memory 主链已经完成，并已有真实行为测试
   - Codex headless 下 `MEMORY.md` / auto memory 的真实请求注入已经验通，对应 `upstream/claude-code/tests/autoMemoryAcceptance.test.mjs`
+  - Codex headless 下 `CLAUDE.md` 与 `@import` 的真实请求注入已经验通，对应 `upstream/claude-code/tests/claudeMdAcceptance.test.mjs`
+  - auto-memory 范围已经重新收窄：当前只保留 Codex 主链真正需要的请求注入，不把 extract / auto dream / team memory / agent memory 这些更宽旧分支一起重新打开；对应范围验收是 `upstream/claude-code/tests/autoMemoryScope.test.mjs`
   - `/memory` 的 project / user / imported 三条 TUI 真实验收已经通过，对应 `upstream/claude-code/tests/configModeSlashCommandsTuiAcceptance.test.mjs`
 - 当前还没完成的部分：
-  - `CLAUDE.md` 在 Codex 主链下的更宽正式验收
-  - `@import` 的完整上下文链与交互链
   - team memory / agent memory / extract / auto dream 这些更宽的长期记忆分支
+  - `CLAUDE.md` / `@import` 更宽矩阵，例如多层导入、更多来源优先级与更复杂组合
 - 结论：
-  - 阶段 5B 现在已经不再是“memory 代码还在”，而是已经把 session memory、auto memory、`/memory` 交互各自推进到有正式验收
+  - 阶段 5B 现在已经不再是“memory 代码还在”，而是已经把 session memory、auto memory、`CLAUDE.md` / `@import`、`/memory` 交互各自推进到有正式验收
   - 但整个 memory 体系还没有全量收口，后续仍要继续补正式验收矩阵
