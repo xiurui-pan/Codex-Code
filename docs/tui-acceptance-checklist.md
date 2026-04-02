@@ -64,6 +64,9 @@
 
 - 最小真实 TTY 主链：启动、出现 prompt、一轮真实问答、正常退出。
 - `/help`：打开帮助、看到核心内容、`Esc` 关闭。
+- `/config`：打开设置界面并关闭，不打 provider 请求。
+- `/diff`：打开 diff 界面并关闭，不打 provider 请求。
+- `/doctor`：打开诊断界面并关闭，不打 provider 请求。
 - `/context`：打开本地上下文使用情况，不额外打 provider 请求。
 - `/rename` + `/status`：重命名会话后，`/status` 能显示最新状态，`Esc` 可关闭。
 - `/resume`：支持列表选择、`Enter` 确认、`Esc` 取消、按会话标题恢复。
@@ -77,16 +80,12 @@
 - 键盘交互：`Ctrl+L`、历史上下、`Ctrl+R`、vim 下 `Esc/Enter` 已有真实 TTY 用例，但更宽联合验收里还没完全收稳。
 - `/memory`：已经覆盖 project memory、user memory、imported memory 三条真实 TTY 路径；但 memory 专项整体还没收完，`CLAUDE.md` 主查询注入、`@import` 更宽交互、team / agent memory 还没统一收口。
 - `/clear`：当前已有行为验收，但现阶段主要证据还是 headless，不应先记成完整 TTY 已验。
-- `/compact`：当前已有摘要选择和 resume 复用的行为验收，但还缺真正的 TTY 交互验收。
+- `/compact`：已经补上 `--resume <transcriptPath>` 的真实 TTY 验收，但更宽 TTY 场景还没补齐。
 - plan mode：已覆盖“进入 plan mode、再次查看当前为空”的最小链路，但还缺更完整的退出、取消、已有 plan 状态回显。
 - TUI 显示：目前只覆盖了少量 dialog、picker、transcript 的出现与关闭，还没有形成乱码、错位、滚动、焦点、窄终端的专项矩阵。
 
 ### 未验
 
-- 第一批里还没有明确测试证据的命令：
-  - `/config`
-  - `/diff`
-  - `/doctor`
 - 第二批待纳入的命令：
   - `/add-dir`
   - `/branch`
@@ -112,7 +111,7 @@
 - plan mode 的完整交互：进入、重复进入、取消、退出、已有 plan 状态。
 - 键盘交互稳定化：尤其 `Ctrl+R`、历史浏览、transcript 进出后的焦点恢复。
 - TUI 显示专项：乱码、错位、滚动、焦点、窄终端、重绘。
-- 第一批里尚未补证据的命令：`/config`、`/diff`、`/doctor`。
+- 第二批命令开始补证据：`/add-dir`、`/branch`、`/files`、`/hooks`、`/keybindings`、`/mcp`、`/rewind`、`/skills`、`/tasks`。
 
 ### 明确不放进这份清单
 
