@@ -18,6 +18,7 @@ import test from 'node:test'
 
 const CLI_CWD = '/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code'
 const CLI_PATH = join(CLI_CWD, 'dist/cli.js')
+const SERIAL_TEST = { concurrency: false }
 const DEFAULT_CONFIG_LINES = [
   'model_provider = "test-provider"',
   'model = "gpt-5.1-codex-mini"',
@@ -524,7 +525,7 @@ async function seedResumedSession({
   return { transcriptPath }
 }
 
-test('/help TUI: opens built-in help, shows core help content, and Esc closes it', async () => {
+test('/help TUI: opens built-in help, shows core help content, and Esc closes it', SERIAL_TEST, async () => {
   await withResponsesServer([], async ({ port, requestBodies }) => {
     const tempHome = await mkdtemp(join(tmpdir(), 'codex-help-tui-'))
     try {
@@ -561,7 +562,7 @@ test('/help TUI: opens built-in help, shows core help content, and Esc closes it
   })
 })
 
-test('/plan TUI: enables plan mode and then reports empty current plan without provider traffic', async () => {
+test('/plan TUI: enables plan mode and then reports empty current plan without provider traffic', SERIAL_TEST, async () => {
   await withResponsesServer([], async ({ port, requestBodies }) => {
     const tempHome = await mkdtemp(join(tmpdir(), 'codex-plan-tui-'))
     try {
@@ -595,7 +596,7 @@ test('/plan TUI: enables plan mode and then reports empty current plan without p
   })
 })
 
-test('/clear headless: clears the session non-interactively and accepts a fresh prompt afterward', async () => {
+test('/clear headless: clears the session non-interactively and accepts a fresh prompt afterward', SERIAL_TEST, async () => {
   await withResponsesServer(
     [
       [
@@ -701,7 +702,7 @@ test('/clear headless: clears the session non-interactively and accepts a fresh 
   )
 })
 
-test('/compact headless: resume prefers the resumed transcript summary over the current cwd project summary', async () => {
+test('/compact headless: resume prefers the resumed transcript summary over the current cwd project summary', SERIAL_TEST, async () => {
   await withResponsesServer([], async ({ port, requestBodies }) => {
     const tempHome = await mkdtemp(join(tmpdir(), 'codex-compact-headless-'))
     const resumedCwd = join(CLI_CWD, '..')

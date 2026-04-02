@@ -9,6 +9,7 @@ import test from 'node:test'
 
 const CLI_CWD = '/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code'
 const CLI_PATH = join(CLI_CWD, 'dist/cli.js')
+const SERIAL_TEST = { concurrency: false }
 const DEFAULT_CONFIG_LINES = [
   'model_provider = "test-provider"',
   'model = "gpt-5.1-codex-mini"',
@@ -226,7 +227,7 @@ print(json.dumps({
   return JSON.parse(stdout)
 }
 
-test('model and effort TUI: /model picker changes model and reasoning, then /effort agrees', async () => {
+test('model and effort TUI: /model picker changes model and reasoning, then /effort agrees', SERIAL_TEST, async () => {
   await withResponsesServer(async ({ port, requestBodies }) => {
     const tempHome = await mkdtemp(join(tmpdir(), 'codex-model-effort-tui-'))
     try {
@@ -287,7 +288,7 @@ test('model and effort TUI: /model picker changes model and reasoning, then /eff
   })
 })
 
-test('model and effort TUI: Esc cancels /model changes and keeps the original effort', async () => {
+test('model and effort TUI: Esc cancels /model changes and keeps the original effort', SERIAL_TEST, async () => {
   await withResponsesServer(async ({ port, requestBodies }) => {
     const tempHome = await mkdtemp(join(tmpdir(), 'codex-model-effort-cancel-'))
     try {

@@ -2,6 +2,7 @@ import { c as _c } from "react/compiler-runtime";
 import { feature } from 'bun:bundle';
 import chalk from 'chalk';
 import { mkdir } from 'fs/promises';
+import { createRequire } from 'node:module';
 import { join } from 'path';
 import * as React from 'react';
 import { use, useEffect, useState } from 'react';
@@ -26,6 +27,7 @@ import { Select } from '../CustomSelect/index.js';
 import { ListItem } from '../design-system/ListItem.js';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
+const require = createRequire(import.meta.url);
 const teamMemPaths = feature('TEAMMEM') ? require('../../memdir/teamMemPaths.js') as typeof import('../../memdir/teamMemPaths.js') : null;
 /* eslint-enable @typescript-eslint/no-require-imports */
 

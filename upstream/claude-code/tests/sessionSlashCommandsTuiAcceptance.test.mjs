@@ -9,6 +9,7 @@ import test from 'node:test'
 
 const CLI_CWD = '/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code'
 const CLI_PATH = join(CLI_CWD, 'dist/cli.js')
+const SERIAL_TEST = { concurrency: false }
 const DEFAULT_CONFIG_LINES = [
   'model_provider = "test-provider"',
   'model = "gpt-5.1-codex-mini"',
@@ -244,7 +245,7 @@ print(json.dumps({
   return JSON.parse(stdout)
 }
 
-test('session slash commands TUI: /rename updates /status and Esc closes the status dialog', async () => {
+test('session slash commands TUI: /rename updates /status and Esc closes the status dialog', SERIAL_TEST, async () => {
   await withResponsesServer(
     [sseMessageText('RENAME_STATUS_SOURCE_REPLY', 'resp-rename-status-1')],
     async ({ port, requestBodies }) => {
@@ -308,7 +309,7 @@ test('session slash commands TUI: /rename updates /status and Esc closes the sta
   )
 })
 
-test('session slash commands TUI: /context renders local context usage without another provider request', async () => {
+test('session slash commands TUI: /context renders local context usage without another provider request', SERIAL_TEST, async () => {
   await withResponsesServer(
     [sseMessageText('CONTEXT_SOURCE_REPLY', 'resp-context-1')],
     async ({ port, requestBodies }) => {
@@ -356,7 +357,7 @@ test('session slash commands TUI: /context renders local context usage without a
   )
 })
 
-test('session slash commands TUI: /resume can reopen a session by the exact /rename title', async () => {
+test('session slash commands TUI: /resume can reopen a session by the exact /rename title', SERIAL_TEST, async () => {
   await withResponsesServer(
     [sseMessageText('RESUME_BY_TITLE_REPLY', 'resp-resume-title-1')],
     async ({ port, requestBodies }) => {

@@ -9,6 +9,7 @@ import test from 'node:test'
 
 const CLI_CWD = '/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code'
 const CLI_PATH = join(CLI_CWD, 'dist/cli.js')
+const SERIAL_TEST = { concurrency: false }
 const DEFAULT_CONFIG_LINES = [
   'model_provider = "test-provider"',
   'model = "gpt-5.1-codex-mini"',
@@ -356,7 +357,7 @@ async function runPermissionScenario({
   }
 }
 
-test('TUI permission dialog: Enter allows the default option and the command runs', async () => {
+test('TUI permission dialog: Enter allows the default option and the command runs', SERIAL_TEST, async () => {
   await runPermissionScenario({
     promptText: '请触发一次需要权限的 Bash 命令。',
     commandMarker: 'TUI_PERMISSION_ALLOW',
@@ -368,7 +369,7 @@ test('TUI permission dialog: Enter allows the default option and the command run
   })
 })
 
-test('TUI permission dialog: moving to No and pressing Enter denies the command', async () => {
+test('TUI permission dialog: moving to No and pressing Enter denies the command', SERIAL_TEST, async () => {
   await runPermissionScenario({
     promptText: '请触发一次被拒绝的 Bash 命令。',
     commandMarker: 'TUI_PERMISSION_DENY',
@@ -380,7 +381,7 @@ test('TUI permission dialog: moving to No and pressing Enter denies the command'
   })
 })
 
-test('TUI permission dialog: Esc cancels the prompt and the command does not run', async () => {
+test('TUI permission dialog: Esc cancels the prompt and the command does not run', SERIAL_TEST, async () => {
   await runPermissionScenario({
     promptText: '请触发一次按 Esc 取消的 Bash 命令。',
     commandMarker: 'TUI_PERMISSION_ESC',
@@ -395,7 +396,7 @@ test('TUI permission dialog: Esc cancels the prompt and the command does not run
   })
 })
 
-test('TUI transcript mode: Ctrl+O enters and exits transcript, then focus returns to input', async () => {
+test('TUI transcript mode: Ctrl+O enters and exits transcript, then focus returns to input', SERIAL_TEST, async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'codex-tui-transcript-'))
   try {
     await withResponsesServer(

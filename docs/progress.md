@@ -113,6 +113,31 @@
 
 ## 当前进行中
 
+## 阶段 5A：TUI 高频交互与非业务命令验收
+
+- `/theme`、`/vim`、`/permissions`、`/memory` 这一整块真实 TTY 验收已经补齐：
+  - 新增 `upstream/claude-code/tests/configModeSlashCommandsTuiAcceptance.test.mjs`
+  - 当前已覆盖：
+    - `/theme` 打开选择器、切换主题、写入全局配置
+    - `/vim` 切换编辑模式、写入全局配置
+    - `/permissions` 打开权限界面、`Esc` 关闭、无 provider 流量
+    - `/memory` 打开记忆选择器、选择项目 `CLAUDE.md`、成功创建并返回、无 provider 流量
+  - 这一块的运行时风险也顺手收了一层：`MemoryFileSelector.tsx` 里裸 `require(...)` 已改成 `createRequire(import.meta.url)`，避免当前 ESM 运行环境下 `/memory` 入口不稳。
+- 键盘交互验收已经起步，但还没收口：
+  - 新增 `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs`
+  - 当前已覆盖：
+    - `Ctrl+L`
+    - 历史上下浏览
+    - `Ctrl+R`
+    - vim mode 下 `Esc` 退插入、`Enter` 提交
+  - 这条线还在继续收稳，当前更宽的串行联合验收里，`Ctrl+R` 历史搜索还存在超时问题，暂时不能算完成。
+- 当前这批 PTY/TUI 验收文件在更大范围联跑时，会被现有 `dist/cli.js` 的双 loader 启动链放大出不稳定问题。
+  - 现象包括：
+    - 直接并发联跑时出现 `ERR_MODULE_NOT_FOUND` / `ENOENT`
+    - 个别长流程在更宽的联合验收里超时
+  - 当前判断更像“启动链 / loader 不稳，被并发放大”，不是这轮新增功能本身缺文件。
+  - 这件事已记录为后续要继续收的专项；在它收口前，这批 TUI 联合验收更适合按串行命令执行并留证据。
+
 ## 本轮新增进展
 
 - 已把 Codex Responses 这一段从“伪 streaming”改成真实增量收包：`callModelWithStreaming` 不再等完整 `response.text()`，而是按 SSE `response.output_item.done` 逐项进入主链。

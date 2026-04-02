@@ -2190,7 +2190,7 @@ function PromptInput({
     onImagePaste,
     columns: textInputColumns,
     maxVisibleLines,
-    disableCursorMovementForUpDownKeys: suggestions.length > 0 || !!footerItemSelected,
+    disableCursorMovementForUpDownKeys: suggestions.length > 0 || !!footerItemSelected || historyIndex > 0,
     disableEscapeDoublePress: suggestions.length > 0,
     cursorOffset,
     onChangeCursorOffset: setCursorOffset,

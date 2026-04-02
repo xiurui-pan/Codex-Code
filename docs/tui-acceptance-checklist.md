@@ -78,6 +78,23 @@
 - `/theme`
 - `/vim`
 
+当前已经有真实 TTY 自动化留证据的包括：
+
+- `/help`
+- `/clear`
+- `/compact`
+- `/context`
+- `/effort`
+- `/model`
+- `/plan`
+- `/rename`
+- `/resume`
+- `/status`
+- `/theme`
+- `/vim`
+- `/permissions`
+- `/memory`
+
 ### 第二批应纳入
 
 - `/add-dir`
@@ -91,6 +108,11 @@
 - `/rewind`
 - `/skills`
 - `/tasks`
+
+说明：
+
+- `/permissions` 和 `/memory` 现在已经有真实 TTY 自动化覆盖，但因为它们仍属于当前阶段正在补齐的配置/记忆交互线，这里先保留在第二批清单里，等整条 memory 专项正式收口后再整体上移。
+- 当前这一批 PTY/TUI 联合验收，更适合用串行方式执行；原因不是这几条命令本身缺入口，而是现有 CLI 启动链在并发 PTY 场景下仍有不稳定点，后续会单独继续收。
 
 ### 第三批在本地入口稳定后纳入
 
