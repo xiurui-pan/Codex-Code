@@ -385,7 +385,13 @@ export class QueryEngine {
       // slash-command processing) keeps the no-op — nothing else calls
       // setMessages past that point.
       setMessages: fn => {
-        this.mutableMessages = fn(this.mutableMessages)
+        const currentMessages = this.mutableMessages
+        const nextMessages = fn(currentMessages)
+        if (nextMessages !== currentMessages) {
+          currentMessages.length = 0
+          currentMessages.push(...nextMessages)
+        }
+        this.mutableMessages = currentMessages
       },
       onChangeAPIKey: () => {},
       handleElicitation: this.config.handleElicitation,
