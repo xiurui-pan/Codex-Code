@@ -36,6 +36,8 @@ Rule:
 | TUI stability | long output + transcript toggle returns focus for next submit | done | `upstream/claude-code/tests/tuiDisplayInteractionAcceptance.test.mjs` | added by `b4cebc3`, stabilized by `c7d136c` |
 | Provider chain | silent stream timeout gives explicit error (no silent hang) | done | `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs` | fixed by `c7e97ed` |
 | Provider chain | request-stage timeout gives explicit error | done | `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs` | fixed by `bf0555e` |
+| Provider chain | Codex-only provider selection wins over legacy provider flags | done | `upstream/claude-code/tests/providersBehavior.test.mjs` | first cut landed in `b87593a` |
+| Provider chain | API preflight / request params no longer rely on old firstParty gate in Codex-only path | done | `upstream/claude-code/tests/providersBehavior.test.mjs` | second cut landed in `5a3b315`; verifies narrowed helper is used in the two API-layer modules |
 | Permissions | Host permission request/decision flow | in-progress | `upstream/claude-code/tests/tuiPermissionTranscriptAcceptance.test.mjs` | include more tool categories |
 | Memory | Session memory inject + compact/resume | in-progress | `upstream/claude-code/tests/sessionMemoryContext.behavior.mjs` | add longer multi-session cases |
 | Memory | Auto memory injection | in-progress | `upstream/claude-code/tests/autoMemoryAcceptance.test.mjs` | continue scope edge validation |
@@ -44,6 +46,7 @@ Rule:
 | Model controls | model + reasoning effort behavior | in-progress | `upstream/claude-code/tests/modelEffortTuiAcceptance.test.mjs` | add full switch/cancel matrix |
 | Anthropic product | claude.ai auth/OAuth/Bridge/proactive | out-of-scope | `docs/roadmap.md` | excluded in Codex-only phase |
 | Comparative track | co-claw-dex performance/effectiveness comparison | pending | n/a | will add benchmark protocol and dataset |
+| Comparative track | Stage 6 baseline records per-task state and aggregate metrics | in-progress | `docs/co-claw-dex-benchmark-plan.md` | `04995ec` upgrades the baseline from skeleton to runnable result shape |
 
 ## Maintenance Rules
 
@@ -58,3 +61,4 @@ Rule:
 - `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`
 - `cd upstream/claude-code && node --test tests/tuiDisplayInteractionAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/claudeMdAcceptance.test.mjs`
+- `cd upstream/claude-code && node --test tests/providersBehavior.test.mjs`

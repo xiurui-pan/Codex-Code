@@ -10,12 +10,11 @@ What this means in practice:
 - Mainline migration goal is no longer "make Claude-shaped output look usable".
 - Mainline goal is "make Codex-shaped runtime objects first-class".
 
-## Recent Convergence Commits (45949c3, f35380d, b4cebc3, c7d136c)
+## Recent Convergence Commits (04995ec, b87593a, 5a3b315)
 
-- `45949c3`: closed the minimal `/plan` TUI chain; current evidence is "enter plan mode -> re-run `/plan` -> see empty current-plan status", while the "resume existing plan" subcase remains skipped.
-- `f35380d`: fixed the Codex request-body path so `@文件引用` now really enters the request body, with evidence in `upstream/claude-code/tests/claudeMdAcceptance.test.mjs`.
-- `b4cebc3`: added stage-five wider TUI display acceptance for narrow terminal mixed-language input and transcript-toggle focus return.
-- `c7d136c`: stabilized the TUI display interaction flow so the new wider display tests can run deterministically.
+- `04995ec`: upgraded stage six from a plan skeleton to a runnable baseline that can record per-task outcome state and aggregate benchmark metrics.
+- `b87593a`: landed provider narrowing first cut so Codex-only provider selection wins over legacy provider flags, with proof in `upstream/claude-code/tests/providersBehavior.test.mjs`.
+- `5a3b315`: landed provider narrowing second cut by replacing two API-layer first-party gates with the narrowed helper path, again covered by `upstream/claude-code/tests/providersBehavior.test.mjs`.
 
 ## Real TUI Issue Status
 
@@ -36,6 +35,8 @@ Current behavior:
 - `@文件引用` 现在已经不只是 UI 提示，而是会真实进入 Codex 请求体；证据在 `upstream/claude-code/tests/claudeMdAcceptance.test.mjs`。
 - plan mode 当前状态是“最小链路已验”；`resume existing plan` 子用例仍然 skip，原因是 resume 后 plan slug 恢复与关联时序还不稳定。
 - TUI 宽场景新增两项自动化证据：窄终端中英混输 + 补全焦点稳定，以及长输出 + transcript 进出后的焦点恢复；证据在 `upstream/claude-code/tests/tuiDisplayInteractionAcceptance.test.mjs`。
+- provider 收窄第二刀已经落地；Codex-only 路径下，API 预处理和请求参数构建不再靠 `getAPIProvider() === 'firstParty'` 的旧判断触发，证据在 `upstream/claude-code/tests/providersBehavior.test.mjs`。
+- 阶段六已经从“只有骨架说明”升级为“可记录每任务状态与聚合指标”的可执行基线。
 
 ## Done (Scope and Direction)
 
@@ -97,6 +98,7 @@ Next command set:
 - `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`
 - `cd upstream/claude-code && node --test tests/tuiDisplayInteractionAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/claudeMdAcceptance.test.mjs`
+- `cd upstream/claude-code && node --test tests/providersBehavior.test.mjs`
 
 ## Long-Term Track Added
 

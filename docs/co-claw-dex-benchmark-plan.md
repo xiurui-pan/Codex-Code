@@ -2,6 +2,12 @@
 
 This plan defines a runnable baseline for comparing Codex Code against `co-claw-dex` without SDK integration.
 
+Current status:
+
+- Stage 6 has moved past a pure outline.
+- After `04995ec`, the baseline can record per-task runnable outcome state and aggregate summary metrics.
+- This document is now the stage-six result-shape entry, not just a future TODO list.
+
 ## 1) Comparison Dimensions
 
 We keep four dimensions only:
@@ -57,7 +63,17 @@ The baseline run output should include:
 
 Reference script: `scripts/benchmark-co-claw-dex-baseline.mjs`.
 
-## 5) Exit Criteria for Stage 6 Baseline
+## 5) Current Stage 6 Capability
+
+The baseline currently records:
+
+- per-task status: `success` / `fail` / `timeout`
+- per-task duration and exit result
+- aggregate summary fields such as pass rate and timeout rate
+
+This is enough to start accumulating comparable run history, even though the full 8-task benchmark set is still being filled in.
+
+## 6) Exit Criteria for Stage 6 Baseline
 
 Stage 6 baseline is considered in place when:
 
@@ -65,7 +81,7 @@ Stage 6 baseline is considered in place when:
 - the 8-task minimal dataset is defined and usable
 - README/roadmap links to this plan and the script entry
 
-## 6) Minimal Usage (No SDK)
+## 7) Minimal Usage (No SDK)
 
 Run with built-in smoke tasks:
 
@@ -110,3 +126,9 @@ Per-task output now includes:
 - `duration_ms`
 - `exit_code` / `signal`
 - `latency.task_done_ms` placeholder (set to `duration_ms` in this stage)
+
+Aggregate output now includes:
+
+- total task count
+- success / fail / timeout counts
+- aggregate latency summary fields for the current run

@@ -44,6 +44,7 @@ So this roadmap tracks **runtime convergence**, not only prompt edits.
 - Continue replacing Claude-shaped turn/event compatibility layers.
 - Keep TUI/headless/permission paths stable while replacing internals.
 - Reduce synthetic compatibility wrappers on hot paths.
+- Provider narrowing is now in active convergence work: first cut (`b87593a`) makes Codex-only selection win over legacy provider flags, and second cut (`5a3b315`) narrows two API-layer first-party feature gates to a dedicated helper path.
 
 ### Phase B - Capability Acceptance Matrix (active)
 
@@ -60,6 +61,11 @@ So this roadmap tracks **runtime convergence**, not only prompt edits.
 
 - Add long-run benchmark and quality comparison against `co-claw-dex`.
 - Compare not just feature presence but also latency, stability, and task outcome quality.
+- Stage 6 is no longer only a planning shell: `04995ec` upgrades it to a runnable baseline that can record per-task state (`success` / `fail` / `timeout`) and aggregate summary metrics.
+
+## 4.1 Still Not Closed Yet
+
+- plan mode 的 `resume existing plan` 真实时序仍不稳定；当前保留 `test.skip`，不把它记成已验。
 
 ## 5) Definition of Done for This Roadmap Track
 
