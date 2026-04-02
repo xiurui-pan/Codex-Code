@@ -791,6 +791,93 @@ test('/files TUI: accepts the slash command input and exits without provider tra
   })
 })
 
+test('/hooks TUI: accepts the slash command input and exits without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-hooks-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'run-hooks', waitFor: ['❯'], send: '/hooks\r' },
+          {
+            name: 'exit',
+            waitFor: ['/hooks'],
+            preDelayMs: 700,
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['run-hooks', 'exit'])
+      assert.match(result.normalizedTranscript, /\/hooks/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/keybindings TUI: accepts the slash command input and exits without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-keybindings-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'run-keybindings', waitFor: ['❯'], send: '/keybindings\r' },
+          {
+            name: 'exit',
+            waitFor: ['/keybindings'],
+            preDelayMs: 700,
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['run-keybindings', 'exit'])
+      assert.match(result.normalizedTranscript, /\/keybindings/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/mcp TUI: accepts the slash command input and exits without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-mcp-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'run-mcp', waitFor: ['❯'], send: '/mcp\r' },
+          {
+            name: 'exit',
+            waitFor: ['/mcp'],
+            preDelayMs: 700,
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['run-mcp', 'exit'])
+      assert.match(result.normalizedTranscript, /\/mcp/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
 test('/compact TUI: resume compacts locally, returns to input, and the next prompt uses the resumed summary', SERIAL_TEST, async () => {
   await withResponsesServer(
     [[
