@@ -116,6 +116,8 @@ async function runHeadlessPrompt({
           CLAUDE_CONFIG_DIR: join(tempHome, '.claude'),
           ANTHROPIC_API_KEY: 'test-key',
           CLAUDE_CODE_USE_CODEX_PROVIDER: '1',
+          CLAUDE_CODE_SIMPLE: '',
+          CLAUDE_CODE_DISABLE_ATTACHMENTS: '',
         },
         stdio: ['pipe', 'pipe', 'pipe'],
       },
@@ -263,6 +265,41 @@ test(
       assert.match(inputText, /IMPORTED_RULE_SENTINEL_CHARLIE/)
       assert.match(inputText, /notes\/imported\.md|notes\\\\imported\.md/)
       assert.match(inputText, /请总结当前导入说明/)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+      await rm(projectDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test(
+  'Codex headless injects @文件引用 content into the real request body',
+  SERIAL_TEST,
+  async () => {
+    const projectDir = await mkdtemp(join(CLI_CWD, '.tmp-codex-file-ref-project-'))
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-file-ref-home-'))
+    try {
+      const notePath = join(projectDir, 'note.txt')
+      await writeFile(
+        notePath,
+        'FILE_REFERENCE_SENTINEL_DELTA\n',
+        'utf8',
+      )
+
+      const result = await runHeadlessPrompt({
+        projectDir,
+        tempHome,
+        prompt: `请读取 @"${notePath}" 并总结。`,
+      })
+
+      assert.equal(result.code, 0, result.stderr)
+      assert.equal(result.requestBodies.length > 0, true, result.stderr)
+      const requestBody = result.requestBodies[0] ?? {}
+      const inputText = getInputText(requestBody)
+      assert.match(inputText, /FILE_REFERENCE_SENTINEL_DELTA/)
+      assert.match(inputText, /Called the Read tool with the following input: .*note\.txt/)
+      assert.match(inputText, /Result of calling the Read tool:/)
+      assert.match(inputText, /请读取/)
     } finally {
       await rm(tempHome, { recursive: true, force: true })
       await rm(projectDir, { recursive: true, force: true })

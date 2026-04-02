@@ -17,6 +17,7 @@ import {
   getCodexConfiguredResponseStorage,
 } from '../../utils/codexConfig.js'
 import { errorMessage } from '../../utils/errors.js'
+import { normalizeMessagesForAPI } from '../../utils/messages.js'
 import { DEFAULT_CODEX_MODEL } from '../../utils/model/codexModels.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import { zodToJsonSchema } from '../../utils/zodToJsonSchema.js'
@@ -221,15 +222,14 @@ function pushMessageInput(
   })
 }
 
-function buildResponsesInput(messages: Message[]): ResponsesInputItem[] {
+function buildResponsesInput(
+  messages: Message[],
+  tools: Tools = [],
+): ResponsesInputItem[] {
   const items: ResponsesInputItem[] = []
   const toolNameByUseId = new Map<string, string>()
 
-  for (const message of messages) {
-    if (message.type !== 'user' && message.type !== 'assistant') {
-      continue
-    }
-
+  for (const message of normalizeMessagesForAPI(messages, tools)) {
     if (typeof message.message.content === 'string') {
       pushMessageInput(items, message.type, message.message.content)
       continue
@@ -366,7 +366,7 @@ export async function buildResponsesBody({
   const body: Record<string, unknown> = {
     model: options.model ?? getCodexConfiguredModel() ?? DEFAULT_CODEX_MODEL,
     stream: true,
-    input: buildResponsesInput(messages),
+    input: buildResponsesInput(messages, options.tools ?? []),
   }
   if (requestIdentity.metadata) {
     body.metadata = requestIdentity.metadata
