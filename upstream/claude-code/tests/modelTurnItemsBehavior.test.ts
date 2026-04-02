@@ -8,6 +8,7 @@ import {
   resolvePreferredAssistantTurnContent,
 } from '../src/services/api/modelTurnItems.js'
 import {
+  buildAssistantMessageFromTurnItems,
   createAssistantMessageFromSyntheticPayload,
   maybeCreateAssistantMessageFromPreferredAssistantResponsePayload,
 } from '../src/services/api/assistantEnvelope.js'
@@ -113,4 +114,30 @@ test('preferred response payload keeps empty distinct from an empty assistant sh
     maybeCreateAssistantMessageFromPreferredAssistantResponsePayload(payload),
     null,
   )
+})
+
+test('buildAssistantMessageFromTurnItems follows the same direct preferred path for plain text turn items', () => {
+  const message = buildAssistantMessageFromTurnItems([
+    {
+      kind: 'final_answer',
+      provider: 'custom',
+      text: 'direct preferred path',
+      source: 'message_output',
+    },
+  ])
+
+  assert.deepEqual(message.message.content, [
+    {
+      type: 'text',
+      text: 'direct preferred path',
+    },
+  ])
+  assert.deepEqual(message.modelTurnItems, [
+    {
+      kind: 'final_answer',
+      provider: 'custom',
+      text: 'direct preferred path',
+      source: 'message_output',
+    },
+  ])
 })

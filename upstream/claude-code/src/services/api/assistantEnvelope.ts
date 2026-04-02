@@ -1,7 +1,4 @@
-import type {
-  ContentBlock,
-  ToolUseBlock,
-} from '@anthropic-ai/sdk/resources/index.mjs'
+import type { ContentBlock } from '@anthropic-ai/sdk/resources/index.mjs'
 import { randomUUID } from 'crypto'
 import { NO_CONTENT_MESSAGE } from '../../constants/messages.js'
 import type { AssistantMessage } from '../../types/message.js'
@@ -109,21 +106,7 @@ export function buildPreferredAssistantMessageFromTurnItems(
 export function buildAssistantMessageFromTurnItems(
   items: ModelTurnItem[],
 ): AssistantMessage {
-  const preferred = resolvePreferredAssistantTurnContent(items)
-  if (preferred.kind === 'text') {
-    return buildAssistantMessageFromPreferredContent({
-      ...preferred,
-      kind: 'tool_use_message',
-      contentBlocks: [
-        {
-          type: 'text',
-          text: preferred.text ?? '',
-        },
-      ],
-    })
-  }
-
-  return buildAssistantMessageFromPreferredContent(preferred)
+  return buildPreferredAssistantMessageFromTurnItems(items)
 }
 
 export function mergeStreamedAssistantMessages(
