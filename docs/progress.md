@@ -103,6 +103,13 @@
   - 真实 TTY 问答
   这说明当前项目已经不只是“能起 CLI”，而是已经打通了真实交互式 TUI 主链里的基础问答回路。
 
+- 本地验收材料这轮又补齐了一层，已经不再只靠零散 smoke 判断“差不多能用”。
+  当前新增并已实跑通过的材料包括：
+  - `upstream/claude-code/tests/headlessAcceptanceMatrix.test.mjs`：把当前 Codex-only 主链下最关键的 headless 验收项集中成矩阵，覆盖真实请求、权限、结果回灌、resume / 上下文等本地可验证能力
+  - `upstream/claude-code/tests/tuiSmoke.smoke.mjs`：用真实 TTY 验证最小 TUI 主链，确认当前至少能做到启动、看到 prompt、完成一轮真实问答、正常收口
+  - `docs/codex-only-local-checklist.md`：把官方 Claude Code 文档里当前可本地验证、且非 Anthropic 特化的能力整理成紧凑清单，方便后续逐项补验
+  这说明当前项目的验收方式已经从“单点证明能跑”推进到“按主链和能力面持续留证据”。
+
 ## 当前进行中
 
 ## 本轮新增进展
@@ -111,6 +118,10 @@
 - 已把新的执行对象继续往上接：`QueryEngine` 现在会把 `local_shell_call / permission_request / permission_decision / tool_output / execution_result` 直接发成 `system:model_turn_item`，不再只在内部生成却不上送。
 - 已继续收紧 `codexTurnItems.ts` 的文本 fallback：只有以显式工具标记起始的文本才会进入这条临时降级路径，并且会标出 fallback 警告，不再作为默认可执行侧通道。
 - 已补一组更贴近行为的本地验证材料：除了现有单元测试，还新增 `upstream/claude-code/tests/headlessStreaming.smoke.mjs`，专门用本地假 Responses 服务和真实 headless CLI 去验证 request shape、SSE 增量进入主链、以及执行对象输出。
+- 这轮把本地验收材料继续从“单条 smoke”推进到“矩阵 + TUI + 清单”三层：
+  - `upstream/claude-code/tests/headlessAcceptanceMatrix.test.mjs` 用来集中验证 headless 主链上的高价值场景
+  - `upstream/claude-code/tests/tuiSmoke.smoke.mjs` 用来证明真实 TTY 下的最小交互链已经跑通
+  - `docs/codex-only-local-checklist.md` 用来记录哪些官方能力已经本地验过、哪些只是已有入口待补验
 
 ## 当前新增判断
 - 这轮把 `modelTurnItems` 再拆了一层：先产出更薄的“首选回答对象”，再由单独的包装函数决定是否生成 synthetic assistant 壳，给 `query.ts` / `model.ts` 后续直接消费更薄对象留出落点。

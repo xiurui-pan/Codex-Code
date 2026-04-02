@@ -44,6 +44,7 @@
 - 隐藏功能研究线：后续会专门研究 Claude Code 里不直接露出的行为开关、灰度能力、实验逻辑和隐藏功能点，做一次筛选，判断哪些值得迁移、哪些应直接放弃。这条线属于后续研究与筛选范围，不进入当前阶段优先级。
 - `claw-code` 和 `open-agent-sdk` 只作为辅助参考，不进入源码基线，也不进入当前阶段实现目标；其中 `open-agent-sdk` 已明确不走 SDK 方向。
 - 正式验收矩阵：后续要把“对照 Claude Code 官方文档能力列表逐项验收”提升成显式工作线。凡不是 Anthropic / Claude 特化的能力，都要按清单逐项验证，而不是只靠零散 smoke 判断“差不多能用”。
+  当前已经有第一版落点：`upstream/claude-code/tests/headlessAcceptanceMatrix.test.mjs`、`upstream/claude-code/tests/tuiSmoke.smoke.mjs` 和 `docs/codex-only-local-checklist.md`，后续在这组材料上继续补齐即可。
 
 ## 分阶段路线
 
