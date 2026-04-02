@@ -138,6 +138,7 @@ buffer = b""
 sent = []
 action_index = 0
 timeout_at = time.time() + timeout_seconds
+last_action_clean_len = 0
 
 while time.time() < timeout_at:
     if proc.poll() is not None:
@@ -156,7 +157,9 @@ while time.time() < timeout_at:
     if action_index < len(actions):
         action = actions[action_index]
         wait_for = action.get("waitFor", [])
-        if all(re.sub(r"\s+", "", token) in normalized for token in wait_for):
+        scope_text = clean[last_action_clean_len:] if action.get("waitForFresh", False) else clean
+        scope_normalized = re.sub(r"\s+", "", scope_text)
+        if all(re.sub(r"\s+", "", token) in scope_normalized for token in wait_for):
             pre_delay_ms = action.get("preDelayMs", 0)
             if pre_delay_ms > 0:
                 time.sleep(pre_delay_ms / 1000.0)
@@ -169,6 +172,7 @@ while time.time() < timeout_at:
                 os.write(master, action["send"].encode("utf-8"))
             sent.append(action["name"])
             action_index += 1
+            last_action_clean_len = len(clean)
             settle_ms = action.get("settleMs", 0)
             if settle_ms > 0:
                 time.sleep(settle_ms / 1000.0)
@@ -287,10 +291,27 @@ test('long response with transcript toggle returns focus and accepts the next su
           tempHome,
           actions: [
             { name: 'first-round', waitFor: ['❯'], send: 'first long output\r' },
-            { name: 'toggle-transcript', waitFor: ['LONG_SCROLL_OK'], send: '\u000f', settleMs: 300 },
-            { name: 'exit-transcript', waitFor: [], send: '\u001b', settleMs: 280, preDelayMs: 250 },
-            { name: 'second-round', waitFor: ['? for shortcuts'], send: 'second after transcript\r' },
-            { name: 'exit', waitFor: ['SECOND_FOCUS_OK'], send: '/exit\r', settleMs: 500 },
+            { name: 'toggle-transcript', waitFor: ['LONG_SCROLL_OK'], send: '\u000f', settleMs: 320 },
+            {
+              name: 'exit-transcript',
+              waitFor: ['Showing detailed transcript'],
+              waitForFresh: true,
+              send: '\u001b',
+              settleMs: 320,
+            },
+            {
+              name: 'second-round',
+              waitFor: ['? for shortcuts', '❯'],
+              waitForFresh: true,
+              send: 'second after transcript\r',
+            },
+            {
+              name: 'exit',
+              waitFor: ['FOCUS_OK'],
+              waitForFresh: true,
+              send: '/exit\r',
+              settleMs: 500,
+            },
           ],
         })
 
