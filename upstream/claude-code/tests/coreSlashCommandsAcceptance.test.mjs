@@ -980,6 +980,129 @@ test('/tasks TUI: opens background tasks dialog, Esc closes it, and stays local-
   })
 })
 
+test('/agents TUI: accepts command locally and exits without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-agents-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'open-agents', waitFor: ['❯'], send: '/agents\r' },
+          {
+            name: 'exit',
+            waitFor: ['/agents'],
+            preDelayMs: 1000,
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['open-agents', 'exit'])
+      assert.match(result.normalizedTranscript, /\/agents/)
+      assert.doesNotMatch(result.normalizedTranscript, /Unknownskill:agents/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/plugin TUI: accepts command locally and exits without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-plugin-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'open-plugin', waitFor: ['❯'], send: '/plugin\r' },
+          {
+            name: 'exit',
+            waitFor: ['/plugin'],
+            preDelayMs: 1400,
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['open-plugin', 'exit'])
+      assert.match(result.normalizedTranscript, /\/plugin/)
+      assert.doesNotMatch(result.normalizedTranscript, /Unknownskill:plugin/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/reload-plugins TUI: reloads plugin state locally without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-reload-plugins-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          {
+            name: 'run-reload-plugins',
+            waitFor: ['❯'],
+            send: '/reload-plugins\r',
+          },
+          {
+            name: 'exit',
+            waitFor: ['Reloaded:'],
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['run-reload-plugins', 'exit'])
+      assert.match(result.normalizedTranscript, /\/reload-plugins/)
+      assert.match(result.normalizedTranscript, /Reloaded:/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/ide TUI: accepts IDE command locally and exits without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-ide-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'open-ide', waitFor: ['❯'], send: '/ide\r' },
+          {
+            name: 'exit',
+            waitFor: ['/ide'],
+            preDelayMs: 1000,
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['open-ide', 'exit'])
+      assert.match(result.normalizedTranscript, /\/ide/)
+      assert.doesNotMatch(result.normalizedTranscript, /Unknownskill:ide/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
 test('/session TUI: rejects in non-remote mode as a local unknown-skill path without provider traffic', SERIAL_TEST, async () => {
   await withResponsesServer([], async ({ port, requestBodies }) => {
     const tempHome = await mkdtemp(join(tmpdir(), 'codex-session-tui-'))
