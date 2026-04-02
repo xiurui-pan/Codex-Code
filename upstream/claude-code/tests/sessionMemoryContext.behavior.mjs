@@ -13,7 +13,7 @@ import {
   writeFile,
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 
 function sanitizePath(name) {
@@ -85,6 +85,13 @@ async function writeSessionMemorySummary({
     await mkdir(join(candidateMemoryPath, '..'), { recursive: true })
     await writeFile(candidateMemoryPath, content, 'utf8')
   }
+}
+
+function getCompactSummaryText(transcript) {
+  const match = transcript.match(
+    /The summary below covers the earlier portion of the conversation\.\n\n([\s\S]*?)\n\nIf you need specific details from before compaction/,
+  )
+  return match?.[1] ?? ''
 }
 
 async function runSession({ queries, responseBatches }) {
@@ -457,6 +464,91 @@ test('resume-like first compact reuses stored session memory summary', async () 
   assert.equal(result.code, 0, result.stderr)
 })
 
+test('resume-like compact prefers the current resumed session summary over newer project summaries', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'codex-session-memory-compact-'))
+  const originalHome = process.env.HOME
+  const originalCodexProvider = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER
+
+  try {
+    const cwd = '/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code'
+    const projectDir = join(
+      tempHome,
+      '.claude',
+      'projects',
+      sanitizePath(cwd),
+    )
+    await mkdir(projectDir, { recursive: true })
+    const resumedSessionId = randomUUID()
+    const transcriptPath = join(projectDir, `${resumedSessionId}.jsonl`)
+    await writeFile(transcriptPath, '', 'utf8')
+    const resumedSummaryPath = join(
+      projectDir,
+      resumedSessionId,
+      'session-memory',
+      'summary.md',
+    )
+    await mkdir(join(resumedSummaryPath, '..'), { recursive: true })
+    await writeFile(
+      resumedSummaryPath,
+      '# Current State\nPrefer the resumed session summary\n',
+      'utf8',
+    )
+
+    await new Promise(resolve => setTimeout(resolve, 20))
+    const fallbackSessionId = randomUUID()
+    const fallbackSummaryPath = join(
+      projectDir,
+      fallbackSessionId,
+      'session-memory',
+      'summary.md',
+    )
+    await mkdir(join(fallbackSummaryPath, '..'), { recursive: true })
+    await writeFile(
+      fallbackSummaryPath,
+      '# Current State\nDo not steal from another session\n',
+      'utf8',
+    )
+
+    const { findSessionMemorySummaryContent } = await import(
+      '../src/services/compact/sessionMemorySelection.ts'
+    )
+
+    const selectedSummary = await findSessionMemorySummaryContent({
+      fs: {
+        readFile,
+        readdir: async path => readdir(path, { withFileTypes: true }),
+        stat,
+      },
+      projectDir,
+      currentSessionMemoryPath: join(
+        projectDir,
+        basename(transcriptPath, '.jsonl'),
+        'session-memory',
+        'summary.md',
+      ),
+      transcriptSessionMemoryPath: resumedSummaryPath,
+      isEmpty: async content => content.trim().length === 0,
+    })
+
+    assert.equal(
+      selectedSummary,
+      '# Current State\nPrefer the resumed session summary\n',
+    )
+  } finally {
+    if (originalHome === undefined) {
+      delete process.env.HOME
+    } else {
+      process.env.HOME = originalHome
+    }
+    if (originalCodexProvider === undefined) {
+      delete process.env.CLAUDE_CODE_USE_CODEX_PROVIDER
+    } else {
+      process.env.CLAUDE_CODE_USE_CODEX_PROVIDER = originalCodexProvider
+    }
+    await rm(tempHome, { recursive: true, force: true })
+  }
+})
+
 test('session memory writer path does not recurse back through provider injection', async () => {
   const result = await runSession({
     responseBatches: [DONE_RESPONSE, DONE_RESPONSE],
@@ -486,4 +578,53 @@ test('session memory writer path does not recurse back through provider injectio
   })
 
   assert.equal(result.code, 0, result.stderr)
+})
+
+test('querySource session_memory never injects current session memory back into its own writer path', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'codex-session-memory-module-'))
+  const originalHome = process.env.HOME
+  const originalCodexProvider = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER
+
+  try {
+    process.env.HOME = tempHome
+    process.env.CLAUDE_CODE_USE_CODEX_PROVIDER = '1'
+
+    const { getCurrentSessionMemoryContextItems } = await import(
+      '../src/services/SessionMemory/sessionMemoryContextRules.ts'
+    )
+
+    const content =
+      '# Current State\nThis should never loop back into session_memory\n'
+    const sessionMemoryItems = await getCurrentSessionMemoryContextItems({
+      querySource: 'session_memory',
+      content,
+      path: '/tmp/session-memory/summary.md',
+      isEmpty: async value => value.trim().length === 0,
+    })
+    const sdkItems = await getCurrentSessionMemoryContextItems({
+      querySource: 'sdk',
+      content,
+      path: '/tmp/session-memory/summary.md',
+      isEmpty: async value => value.trim().length === 0,
+    })
+
+    assert.equal(sessionMemoryItems.length, 0)
+    assert.equal(sdkItems.length, 1)
+    assert.match(
+      JSON.stringify(sdkItems[0]),
+      /This should never loop back into session_memory/,
+    )
+  } finally {
+    if (originalHome === undefined) {
+      delete process.env.HOME
+    } else {
+      process.env.HOME = originalHome
+    }
+    if (originalCodexProvider === undefined) {
+      delete process.env.CLAUDE_CODE_USE_CODEX_PROVIDER
+    } else {
+      process.env.CLAUDE_CODE_USE_CODEX_PROVIDER = originalCodexProvider
+    }
+    await rm(tempHome, { recursive: true, force: true })
+  }
 })

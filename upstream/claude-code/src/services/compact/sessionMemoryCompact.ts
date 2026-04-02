@@ -2,7 +2,7 @@
  * EXPERIMENT: Session memory compaction
  */
 
-import { join } from 'path'
+import { basename, join } from 'path'
 import type { AgentId } from '../../types/ids.js'
 import type { HookResultMessage, Message } from '../../types/message.js'
 import { logForDebugging } from '../../utils/debug.js'
@@ -45,6 +45,7 @@ import {
 } from './compact.js'
 import { estimateMessageTokens } from './microCompact.js'
 import { getCompactUserSummaryMessage } from './prompt.js'
+import { findSessionMemorySummaryContent } from './sessionMemorySelection.js'
 
 /**
  * Configuration for session memory compaction thresholds
@@ -640,46 +641,22 @@ export async function trySessionMemoryCompaction(
 
 async function getCompactionSessionMemoryContent(): Promise<string | null> {
   const fs = getFsImplementation()
-  const candidatePaths = new Set([getSessionMemoryPath()])
-
-  if (isCodexSessionMemoryEnabled()) {
-    const projectDir = getProjectDir(getCwd())
-    try {
-      const entries = await fs.readdir(projectDir)
-      for (const entry of entries) {
-        const entryName = entry.name
-        if (!/^[0-9a-f-]{36}$/i.test(entryName)) {
-          continue
-        }
-        candidatePaths.add(
-          join(projectDir, entryName, 'session-memory', 'summary.md'),
-        )
-      }
-    } catch {}
+  const currentSessionMemoryPath = getSessionMemoryPath()
+  const transcriptSessionMemoryPath = join(
+    getProjectDir(getCwd()),
+    basename(getTranscriptPath(), '.jsonl'),
+    'session-memory',
+    'summary.md',
+  )
+  if (!isCodexSessionMemoryEnabled()) {
+    return null
   }
 
-  let latestProjectSummary:
-    | {
-        content: string
-        mtimeMs: number
-      }
-    | undefined
-
-  for (const candidatePath of candidatePaths) {
-    try {
-      const content = await fs.readFile(candidatePath, { encoding: 'utf-8' })
-      if (!content || (await isSessionMemoryEmpty(content))) {
-        continue
-      }
-      const stats = await fs.stat(candidatePath)
-      if (!latestProjectSummary || stats.mtimeMs > latestProjectSummary.mtimeMs) {
-        latestProjectSummary = {
-          content,
-          mtimeMs: stats.mtimeMs,
-        }
-      }
-    } catch {}
-  }
-
-  return latestProjectSummary?.content ?? null
+  return findSessionMemorySummaryContent({
+    fs,
+    projectDir: getProjectDir(getCwd()),
+    currentSessionMemoryPath,
+    transcriptSessionMemoryPath,
+    isEmpty: isSessionMemoryEmpty,
+  })
 }

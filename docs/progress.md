@@ -197,3 +197,5 @@
 
 - 这一轮把 Codex session memory 的 resume `/compact` 主链真正收稳了：问题根因不是测试样本本身，而是 `sessionMemoryCompact.ts` 在扫描 project 目录候选 summary 时把 `Dirent` 当成字符串使用，导致当前会话之外的 session-memory 摘要路径根本没有进入候选集；修正后，resume 后第一次 `/compact` 已能真实复用预埋的 session-memory sentinel，而不再退回旧的 `done` 摘要。
 - 同时把 `current_session_memory` 继续往对象层推进：当前主查询的注入点已不再主要依赖 attachment -> hidden user meta 这条旧链，而是通过单独的 session-memory context 规则接到 `processUserInput` / `query` 主路上；这轮也补齐了三条行为测试，覆盖主查询注入、resume 后第一次 `/compact` 复用摘要、以及 session memory writer 不递归注入自己。
+- 这一轮继续把 session memory 的边界收稳：resume `/compact` 的 summary 选择不再靠“项目内最新”猜测，而是先明确优先“当前恢复会话对应 transcript 的 summary”，只有这条路径和当前会话路径都不可用时才退回项目内其他 summary。为此新增了独立的 `sessionMemorySelection` 选择层，并把 `sessionMemoryContext` 的继承规则拆到了无副作用模块里，避免主查询注入链和 writer 防递归规则继续绑在旧消息包装入口上。
+- 行为测试这轮也补到了真正要验的两条：一条直接卡住“恢复会话 transcript 路径优先于项目里其他更新 summary”，另一条直接卡住 `querySource === 'session_memory'` 时不会把当前 session memory 再注回自己的写入路径；完整构建、行为测试、headless smoke 和真实 headless Codex 回归都已重新跑通。

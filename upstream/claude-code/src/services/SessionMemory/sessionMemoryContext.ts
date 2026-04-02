@@ -5,89 +5,23 @@ import { createUserMessage } from '../../utils/messages.js'
 import { getSessionMemoryPath } from '../../utils/permissions/filesystem.js'
 import { isSessionMemoryEmpty } from './prompts.js'
 import { getSessionMemoryContent } from './sessionMemoryUtils.js'
+import {
+  type CurrentSessionMemoryContextItem,
+  createCurrentSessionMemoryContextItem,
+  getCurrentSessionMemoryContextItems,
+  getCurrentSessionMemoryInheritance,
+  isCodexSessionMemoryEnabled,
+  shouldIncludeCurrentSessionMemory,
+} from './sessionMemoryContextRules.js'
 
-export type CurrentSessionMemoryContextItem = {
-  kind: 'current_session_memory'
-  content: string
-  path: string
-  tokenCount: number
+export {
+  createCurrentSessionMemoryContextItem,
+  getCurrentSessionMemoryContextItems,
+  getCurrentSessionMemoryInheritance,
+  isCodexSessionMemoryEnabled,
+  shouldIncludeCurrentSessionMemory,
 }
-
-type CurrentSessionMemoryInheritance =
-  | 'inherit'
-  | 'disabled'
-  | 'missing_query_source'
-  | 'session_memory_writer'
-  | 'compact_summary'
-  | 'non_session_query'
-
-const SESSION_MEMORY_DIRECT_QUERY_SOURCES = new Set([
-  'sdk',
-  'away_summary',
-  'feedback',
-  'generate_session_title',
-  'rename_generate_name',
-  'teleport_generate_title',
-  'insights',
-])
-
-export function isCodexSessionMemoryEnabled(): boolean {
-  if (process.env.DISABLE_CODEX_SESSION_MEMORY === '1') {
-    return false
-  }
-  if (process.env.ENABLE_CODEX_SESSION_MEMORY === '1') {
-    return true
-  }
-  return process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
-}
-
-export function getCurrentSessionMemoryInheritance(
-  querySource: QuerySource | undefined,
-): CurrentSessionMemoryInheritance {
-  if (!isCodexSessionMemoryEnabled()) {
-    return 'disabled'
-  }
-  if (!querySource) {
-    return 'missing_query_source'
-  }
-  if (querySource === 'session_memory') {
-    return 'session_memory_writer'
-  }
-  if (querySource === 'compact') {
-    return 'compact_summary'
-  }
-  if (
-    querySource.startsWith('repl_main_thread') ||
-    querySource.startsWith('agent:') ||
-    SESSION_MEMORY_DIRECT_QUERY_SOURCES.has(querySource)
-  ) {
-    return 'inherit'
-  }
-  return 'non_session_query'
-}
-
-export function shouldIncludeCurrentSessionMemory(
-  querySource: QuerySource | undefined,
-): boolean {
-  return getCurrentSessionMemoryInheritance(querySource) === 'inherit'
-}
-
-export function createCurrentSessionMemoryContextItem(params: {
-  content: string
-  path: string
-}): CurrentSessionMemoryContextItem | null {
-  const normalizedContent = params.content.trim()
-  if (normalizedContent.length === 0) {
-    return null
-  }
-
-  return {
-    kind: 'current_session_memory',
-    content: normalizedContent,
-    path: params.path,
-    tokenCount: Math.round(normalizedContent.length / 4),
-  }
-}
+export type { CurrentSessionMemoryContextItem }
 
 export function createCurrentSessionMemoryContextMessage(
   item: CurrentSessionMemoryContextItem,
@@ -122,18 +56,11 @@ export function isCurrentSessionMemoryContextMessage(
 export async function getCurrentSessionMemoryContextMessages(
   querySource: QuerySource | undefined,
 ): Promise<UserMessage[]> {
-  if (!shouldIncludeCurrentSessionMemory(querySource)) {
-    return []
-  }
-
-  const content = await getSessionMemoryContent()
-  if (!content || (await isSessionMemoryEmpty(content))) {
-    return []
-  }
-
-  const item = createCurrentSessionMemoryContextItem({
-    content,
+  const items = await getCurrentSessionMemoryContextItems({
+    querySource,
+    content: await getSessionMemoryContent(),
     path: getSessionMemoryPath(),
+    isEmpty: isSessionMemoryEmpty,
   })
-  return item ? [createCurrentSessionMemoryContextMessage(item)] : []
+  return items.map(createCurrentSessionMemoryContextMessage)
 }
