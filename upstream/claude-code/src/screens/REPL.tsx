@@ -3255,11 +3255,15 @@ export function REPL({
         // Execute the command directly
         const executeImmediateCommand = async (): Promise<void> => {
           let doneWasCalled = false;
+          const isHelpCommand = matchingCommand.name === 'help';
           const onDone = (result?: string, doneOptions?: {
             display?: CommandResultDisplay;
             metaMessages?: string[];
           }): void => {
             doneWasCalled = true;
+            if (isHelpCommand) {
+              setIsHelpOpen(false);
+            }
             setToolJSX({
               jsx: null,
               shouldHidePromptInput: false,
@@ -3315,6 +3319,9 @@ export function REPL({
           // Skip if onDone already fired — prevents stuck isLocalJSXCommand
           // (see processSlashCommand.tsx local-jsx case for full mechanism).
           if (jsx && !doneWasCalled) {
+            if (isHelpCommand) {
+              setIsHelpOpen(true);
+            }
             // shouldHidePromptInput: false keeps Notifications mounted
             // so the onDone result isn't lost
             setToolJSX({
