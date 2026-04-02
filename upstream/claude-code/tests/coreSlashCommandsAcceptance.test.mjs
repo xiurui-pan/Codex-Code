@@ -536,6 +536,110 @@ async function seedResumedSession({
   return { transcriptPath, resumedSessionId }
 }
 
+async function seedResumedSessionWithPlan({
+  homeDir,
+  resumedCwd,
+  currentCwd,
+}) {
+  const planSlug = 'resume-plan-smoke'
+  const seeded = await seedResumedSession({
+    homeDir,
+    resumedCwd,
+    currentCwd,
+  })
+  const resumedProjectDir = join(
+    homeDir,
+    '.claude',
+    'projects',
+    sanitizePath(resumedCwd),
+  )
+  const timestamp = new Date().toISOString()
+  await writeFile(
+    seeded.transcriptPath,
+    [
+      JSON.stringify({
+        parentUuid: null,
+        isSidechain: false,
+        promptId: randomUUID(),
+        type: 'user',
+        message: { role: 'user', content: 'resume me for plan' },
+        uuid: 'plan-user-1',
+        timestamp,
+        permissionMode: 'default',
+        userType: 'external',
+        entrypoint: 'sdk-cli',
+        cwd: resumedCwd,
+        sessionId: seeded.resumedSessionId,
+        version: '0.0.0-dev',
+        gitBranch: 'main',
+        slug: planSlug,
+      }),
+      JSON.stringify({
+        parentUuid: 'plan-user-1',
+        isSidechain: false,
+        type: 'assistant',
+        uuid: 'plan-assistant-1',
+        timestamp,
+        message: {
+          id: 'plan-assistant-1',
+          container: null,
+          model: 'codex-synthetic',
+          role: 'assistant',
+          stop_reason: 'stop_sequence',
+          stop_sequence: '',
+          type: 'message',
+          usage: {
+            input_tokens: 0,
+            output_tokens: 0,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: 0,
+            server_tool_use: { web_search_requests: 0, web_fetch_requests: 0 },
+            service_tier: null,
+            cache_creation: {
+              ephemeral_1h_input_tokens: 0,
+              ephemeral_5m_input_tokens: 0,
+            },
+            inference_geo: null,
+            iterations: null,
+            speed: null,
+          },
+          content: [{ type: 'text', text: 'plan ready' }],
+          context_management: null,
+        },
+        modelTurnItems: [
+          {
+            kind: 'final_answer',
+            provider: 'custom',
+            text: 'plan ready',
+            source: 'message_output_filtered',
+          },
+        ],
+        userType: 'external',
+        entrypoint: 'sdk-cli',
+        cwd: resumedCwd,
+        sessionId: seeded.resumedSessionId,
+        version: '0.0.0-dev',
+        gitBranch: 'main',
+      }),
+    ].join('\n') + '\n',
+    'utf8',
+  )
+
+  const plansDir = join(homeDir, '.claude', 'plans')
+  await mkdir(plansDir, { recursive: true })
+  await writeFile(
+    join(plansDir, `${planSlug}.md`),
+    'Plan from resumed session\n- Step A\n- Step B\n',
+    'utf8',
+  )
+
+  // Keep existing summary files stale to avoid affecting plan assertions.
+  const staleTime = new Date(Date.now() - 1000)
+  await utimes(join(resumedProjectDir, `${seeded.resumedSessionId}.jsonl`), staleTime, staleTime)
+
+  return seeded
+}
+
 test('/help TUI: opens built-in help, shows core help content, and Esc closes it', SERIAL_TEST, async () => {
   await withResponsesServer([], async ({ port, requestBodies }) => {
     const tempHome = await mkdtemp(join(tmpdir(), 'codex-help-tui-'))
@@ -600,6 +704,54 @@ test('/plan TUI: enables plan mode and then reports empty current plan without p
       assert.deepEqual(result.sent, ['open-plan', 'show-plan-status', 'exit'])
       assert.match(result.normalizedTranscript, /Enabledplanmode/)
       assert.match(result.normalizedTranscript, /Alreadyinplanmode\.Noplanwrittenyet\./)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test.skip('/plan TUI: resume restores existing plan content, allows re-enter status, then exits (blocked by plan-slug restore timing/association)', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-plan-resume-tui-'))
+    const resumedCwd = join(CLI_CWD, '..')
+    try {
+      await writeCodexConfig(tempHome, port)
+      const { transcriptPath } = await seedResumedSessionWithPlan({
+        homeDir: tempHome,
+        resumedCwd,
+        currentCwd: CLI_CWD,
+      })
+
+      const result = await runTuiFlow({
+        tempHome,
+        extraArgs: ['--resume', transcriptPath],
+        actions: [
+          // Resume restores plan slug asynchronously; a short delay keeps this deterministic.
+          { name: 'enter-plan', waitFor: ['❯'], preDelayMs: 1500, send: '/plan\r' },
+          {
+            name: 'show-existing-plan',
+            waitFor: ['Enabled plan mode'],
+            send: '/plan\r',
+          },
+          {
+            name: 'exit',
+            waitFor: ['Current Plan', 'Plan from resumed session'],
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, [
+        'enter-plan',
+        'show-existing-plan',
+        'exit',
+      ])
+      assert.match(result.normalizedTranscript, /Enabledplanmode/)
+      assert.match(result.normalizedTranscript, /CurrentPlan/)
+      assert.match(result.normalizedTranscript, /Planfromresumedsession/)
       assert.equal(requestBodies.length, 0)
     } finally {
       await rm(tempHome, { recursive: true, force: true })
