@@ -23,12 +23,14 @@
 - `upstream/claude-code/tests/autoUpdaterMessages.test.ts`
 - `upstream/claude-code/tests/helpDismissTuiAcceptance.test.mjs`
 - `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs`
+- `upstream/claude-code/tests/tuiDisplayInteractionAcceptance.test.mjs`（阶段五新增：窄终端中英混输+补全焦点、长输出+transcript 进出后焦点恢复）
 
 本轮复验命令：
 
 - `cd upstream/claude-code && node --test tests/tuiKeyboardInputAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`
+- `cd upstream/claude-code && node --test tests/tuiDisplayInteractionAcceptance.test.mjs`
 
 ## 自动化 smoke 与人工验收的边界
 
