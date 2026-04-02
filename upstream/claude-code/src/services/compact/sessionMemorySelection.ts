@@ -1,4 +1,4 @@
-import { join } from 'path'
+import { basename, dirname, join } from 'path'
 
 type SummaryFs = {
   readFile(path: string, options: { encoding: 'utf-8' }): Promise<string>
@@ -84,4 +84,29 @@ export async function findSessionMemorySummaryContent({
   }
 
   return latestFallbackSummary?.content ?? null
+}
+
+export async function findCompactionSessionMemorySummaryContent({
+  fs,
+  transcriptPath,
+  currentSessionMemoryPath,
+  isEmpty,
+}: {
+  fs: SummaryFs
+  transcriptPath: string
+  currentSessionMemoryPath: string
+  isEmpty(content: string): Promise<boolean>
+}): Promise<string | null> {
+  return findSessionMemorySummaryContent({
+    fs,
+    transcriptProjectDir: dirname(transcriptPath),
+    currentSessionMemoryPath,
+    transcriptSessionMemoryPath: join(
+      dirname(transcriptPath),
+      basename(transcriptPath, '.jsonl'),
+      'session-memory',
+      'summary.md',
+    ),
+    isEmpty,
+  })
 }

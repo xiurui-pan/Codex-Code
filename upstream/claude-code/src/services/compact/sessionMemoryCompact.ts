@@ -2,7 +2,7 @@
  * EXPERIMENT: Session memory compaction
  */
 
-import { dirname, join } from 'path'
+import { join } from 'path'
 import type { AgentId } from '../../types/ids.js'
 import type { HookResultMessage, Message } from '../../types/message.js'
 import { logForDebugging } from '../../utils/debug.js'
@@ -43,7 +43,7 @@ import {
 } from './compact.js'
 import { estimateMessageTokens } from './microCompact.js'
 import { getCompactUserSummaryMessage } from './prompt.js'
-import { findSessionMemorySummaryContent } from './sessionMemorySelection.js'
+import { findCompactionSessionMemorySummaryContent } from './sessionMemorySelection.js'
 
 /**
  * Configuration for session memory compaction thresholds
@@ -641,21 +641,14 @@ async function getCompactionSessionMemoryContent(): Promise<string | null> {
   const fs = getFsImplementation()
   const transcriptPath = getTranscriptPath()
   const currentSessionMemoryPath = getSessionMemoryPath()
-  const transcriptProjectDir = dirname(transcriptPath)
-  const transcriptSessionMemoryPath = join(
-    transcriptProjectDir,
-    'session-memory',
-    'summary.md',
-  )
   if (!isCodexSessionMemoryEnabled()) {
     return null
   }
 
-  return findSessionMemorySummaryContent({
+  return findCompactionSessionMemorySummaryContent({
     fs,
-    transcriptProjectDir,
+    transcriptPath,
     currentSessionMemoryPath,
-    transcriptSessionMemoryPath,
     isEmpty: isSessionMemoryEmpty,
   })
 }

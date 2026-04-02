@@ -416,6 +416,7 @@ export function restoreSkillStateFromMessages(messages: Message[]): void {
 export async function loadMessagesFromJsonlPath(path: string): Promise<{
   messages: SerializedMessage[]
   sessionId: UUID | undefined
+  fullPath: string
 }> {
   const { messages: byUuid, leafUuids } = await loadTranscriptFile(path)
   let tip: (typeof byUuid extends Map<UUID, infer T> ? T : never) | null = null
@@ -428,7 +429,7 @@ export async function loadMessagesFromJsonlPath(path: string): Promise<{
       tip = m
     }
   }
-  if (!tip) return { messages: [], sessionId: undefined }
+  if (!tip) return { messages: [], sessionId: undefined, fullPath: path }
   const chain = buildConversationChain(byUuid, tip)
   return {
     messages: removeExtraFields(chain),
@@ -436,6 +437,7 @@ export async function loadMessagesFromJsonlPath(path: string): Promise<{
     // transcript, so the root retains the source session's ID. Matches
     // loadFullLog's mostRecentLeaf.sessionId.
     sessionId: tip.sessionId as UUID | undefined,
+    fullPath: path,
   }
 }
 
@@ -517,6 +519,10 @@ export async function loadConversationForResume(
       const loaded = await loadMessagesFromJsonlPath(sourceJsonlFile)
       messages = loaded.messages
       sessionId = loaded.sessionId
+      log = {
+        messages: loaded.messages as Message[],
+        fullPath: loaded.fullPath,
+      } as LogOption
     } else if (typeof source === 'string') {
       // Load specific session by ID
       log = await getLastSessionLog(source as UUID)

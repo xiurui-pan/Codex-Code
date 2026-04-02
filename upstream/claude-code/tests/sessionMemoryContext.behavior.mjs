@@ -10,6 +10,7 @@ import {
   readdir,
   rm,
   stat,
+  symlink,
   writeFile,
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -182,11 +183,22 @@ async function runSession({ queries, responseBatches }) {
   let stdoutBuffer = ''
   let resultCount = 0
   const resultWaiters = []
+  const messageWaiters = []
   const sessionId = randomUUID()
 
   function flushResultWaiters() {
     while (resultWaiters.length > 0 && resultCount >= resultWaiters[0].target) {
       resultWaiters.shift().resolve()
+    }
+  }
+
+  function flushMessageWaiters() {
+    for (let index = messageWaiters.length - 1; index >= 0; index -= 1) {
+      const waiter = messageWaiters[index]
+      if (stdoutMessages.some(waiter.predicate)) {
+        messageWaiters.splice(index, 1)
+        waiter.resolve()
+      }
     }
   }
 
@@ -204,6 +216,7 @@ async function runSession({ queries, responseBatches }) {
           resultCount += 1
           flushResultWaiters()
         }
+        flushMessageWaiters()
       }
       newlineIndex = stdoutBuffer.indexOf('\n')
     }
@@ -214,6 +227,11 @@ async function runSession({ queries, responseBatches }) {
   function waitForResult(target) {
     if (resultCount >= target) return Promise.resolve()
     return new Promise(resolve => resultWaiters.push({ target, resolve }))
+  }
+
+  function waitForMessage(predicate) {
+    if (stdoutMessages.some(predicate)) return Promise.resolve()
+    return new Promise(resolve => messageWaiters.push({ predicate, resolve }))
   }
 
   const projectDir = join(claudeDir, 'projects', sanitizePath(cwd))
@@ -379,6 +397,225 @@ async function runSession({ queries, responseBatches }) {
     child.kill('SIGKILL')
     await new Promise(resolve => server.close(resolve))
     await rm(tempHome, { recursive: true, force: true })
+  }
+}
+
+async function runResumeCompactSession({
+  currentCwd,
+  resumeTranscriptPath,
+  homeDir,
+}) {
+  const cliCwd = '/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code'
+  const stdoutMessages = []
+  const stderrChunks = []
+  const sockets = new Set()
+  const claudeDir = join(homeDir, '.claude')
+  const codexDir = join(homeDir, '.codex')
+  await mkdir(claudeDir, { recursive: true })
+  await mkdir(codexDir, { recursive: true })
+  await mkdir(currentCwd, { recursive: true })
+  try {
+    await symlink(join(cliCwd, 'node_modules'), join(currentCwd, 'node_modules'))
+  } catch {}
+
+  const server = http.createServer((_, res) => {
+    res.writeHead(200, {
+      'content-type': 'text/event-stream',
+      connection: 'keep-alive',
+      'cache-control': 'no-cache',
+    })
+    for (const step of DONE_RESPONSE) {
+      res.write(step)
+    }
+    res.end()
+  })
+  server.on('connection', socket => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+  })
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('failed to bind test server')
+  }
+
+  await writeFile(
+    join(codexDir, 'config.toml'),
+    [
+      'model_provider = "test-provider"',
+      'model = "gpt-5.1-codex-mini"',
+      'model_reasoning_effort = "medium"',
+      '',
+      '[model_providers.test-provider]',
+      `base_url = "http://127.0.0.1:${address.port}"`,
+      'env_key = "ANTHROPIC_API_KEY"',
+      '',
+    ].join('\n'),
+  )
+
+  const child = spawn(
+      'node',
+      [
+      join(cliCwd, 'dist/cli.js'),
+      '-p',
+      '--resume',
+      resumeTranscriptPath,
+      '--input-format',
+      'stream-json',
+      '--output-format',
+      'stream-json',
+      '--verbose',
+      '--debug-to-stderr',
+    ],
+    {
+      cwd: currentCwd,
+      env: {
+        ...process.env,
+        HOME: homeDir,
+        ANTHROPIC_API_KEY: 'test-key',
+        CLAUDE_CODE_USE_CODEX_PROVIDER: '1',
+      },
+      stdio: ['pipe', 'pipe', 'pipe'],
+    },
+  )
+
+  let stdoutBuffer = ''
+  let resultCount = 0
+  const resultWaiters = []
+  const messageWaiters = []
+
+  function flushResultWaiters() {
+    while (resultWaiters.length > 0 && resultCount >= resultWaiters[0].target) {
+      resultWaiters.shift().resolve()
+    }
+  }
+
+  function flushMessageWaiters() {
+    for (let index = messageWaiters.length - 1; index >= 0; index -= 1) {
+      const waiter = messageWaiters[index]
+      if (stdoutMessages.some(waiter.predicate)) {
+        messageWaiters.splice(index, 1)
+        waiter.resolve()
+      }
+    }
+  }
+
+  child.stdout.setEncoding('utf8')
+  child.stdout.on('data', chunk => {
+    stdoutBuffer += chunk
+    let newlineIndex = stdoutBuffer.indexOf('\n')
+    while (newlineIndex !== -1) {
+      const line = stdoutBuffer.slice(0, newlineIndex).trim()
+      stdoutBuffer = stdoutBuffer.slice(newlineIndex + 1)
+      if (line) {
+        const parsed = JSON.parse(line)
+        stdoutMessages.push(parsed)
+        if (parsed.type === 'result') {
+          resultCount += 1
+          flushResultWaiters()
+        }
+        flushMessageWaiters()
+      }
+      newlineIndex = stdoutBuffer.indexOf('\n')
+    }
+  })
+  child.stderr.setEncoding('utf8')
+  child.stderr.on('data', chunk => stderrChunks.push(chunk))
+
+  function waitForResult(target) {
+    if (resultCount >= target) return Promise.resolve()
+    return new Promise(resolve => resultWaiters.push({ target, resolve }))
+  }
+
+  function waitForMessage(predicate) {
+    if (stdoutMessages.some(predicate)) return Promise.resolve()
+    return new Promise(resolve => messageWaiters.push({ predicate, resolve }))
+  }
+
+  child.stdin.write(
+    JSON.stringify({
+      type: 'control_request',
+      request_id: 'init-1',
+      request: {
+        subtype: 'initialize',
+        promptSuggestions: false,
+      },
+    }) + '\n',
+  )
+
+  try {
+    await Promise.race([
+      waitForMessage(
+        message =>
+          message.type === 'control_response' &&
+          message.response?.subtype === 'success' &&
+          message.response?.request_id === 'init-1',
+      ),
+      new Promise((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `resume initialize timed out\nstdout=${stdoutMessages.map(message => JSON.stringify(message)).join('\n')}\nstderr=${stderrChunks.join('')}`,
+              ),
+            ),
+          45000,
+        ),
+      ),
+    ])
+
+    child.stdin.write(
+      JSON.stringify({
+        type: 'user',
+        session_id: randomUUID(),
+        parent_tool_use_id: null,
+        message: { role: 'user', content: '/compact' },
+        uuid: 'user-compact',
+      }) + '\n',
+    )
+
+    await Promise.race([
+      waitForResult(1),
+      new Promise((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `resume compact timed out\nstdout=${stdoutMessages.map(message => JSON.stringify(message)).join('\n')}\nstderr=${stderrChunks.join('')}`,
+              ),
+            ),
+          45000,
+        ),
+      ),
+    ])
+
+    child.stdin.end()
+    const [code] = await Promise.race([
+      once(child, 'close'),
+      new Promise((_, reject) =>
+        setTimeout(() => {
+          child.kill('SIGKILL')
+          reject(
+            new Error(
+              `resume compact close timed out\nstdout=${stdoutMessages.map(message => JSON.stringify(message)).join('\n')}\nstderr=${stderrChunks.join('')}`,
+            ),
+          )
+        }, 30000),
+      ),
+    ])
+
+    return {
+      code,
+      messages: stdoutMessages,
+      stderr: stderrChunks.join(''),
+    }
+  } finally {
+    for (const socket of sockets) {
+      socket.destroy()
+    }
+    child.kill('SIGKILL')
+    await new Promise(resolve => server.close(resolve))
   }
 }
 
@@ -553,27 +790,99 @@ test('cross-project resume compact prefers the resumed transcript project summar
   const tempHome = await mkdtemp(join(tmpdir(), 'codex-session-memory-cross-project-'))
 
   try {
+    const currentCwd = '/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code'
+    const resumedCwd = join(tempHome, 'resumed-worktree-project')
     const currentProjectDir = join(
       tempHome,
       '.claude',
       'projects',
-      sanitizePath('/tmp/current-cwd-project'),
+      sanitizePath(currentCwd),
     )
     const resumedTranscriptProjectDir = join(
       tempHome,
       '.claude',
       'projects',
-      sanitizePath('/tmp/resumed-worktree-project'),
+      sanitizePath(resumedCwd),
     )
     await mkdir(currentProjectDir, { recursive: true })
     await mkdir(resumedTranscriptProjectDir, { recursive: true })
+    await mkdir(resumedCwd, { recursive: true })
 
     const resumedSessionId = randomUUID()
     const resumedTranscriptPath = join(
       resumedTranscriptProjectDir,
       `${resumedSessionId}.jsonl`,
     )
-    await writeFile(resumedTranscriptPath, '', 'utf8')
+    const promptId = randomUUID()
+    await writeFile(
+      resumedTranscriptPath,
+      [
+        JSON.stringify({
+          parentUuid: null,
+          isSidechain: false,
+          promptId,
+          type: 'user',
+          message: { role: 'user', content: '先回一句 done。' },
+          uuid: 'user-1',
+          timestamp: new Date().toISOString(),
+          permissionMode: 'default',
+          userType: 'external',
+          entrypoint: 'sdk-cli',
+          cwd: resumedCwd,
+          sessionId: resumedSessionId,
+          version: '0.0.0-dev',
+          gitBranch: 'main',
+        }),
+        JSON.stringify({
+          parentUuid: 'user-1',
+          isSidechain: false,
+          type: 'assistant',
+          uuid: 'assistant-1',
+          timestamp: new Date().toISOString(),
+          message: {
+            id: 'assistant-1',
+            container: null,
+            model: 'codex-synthetic',
+            role: 'assistant',
+            stop_reason: 'stop_sequence',
+            stop_sequence: '',
+            type: 'message',
+            usage: {
+              input_tokens: 0,
+              output_tokens: 0,
+              cache_creation_input_tokens: 0,
+              cache_read_input_tokens: 0,
+              server_tool_use: { web_search_requests: 0, web_fetch_requests: 0 },
+              service_tier: null,
+              cache_creation: {
+                ephemeral_1h_input_tokens: 0,
+                ephemeral_5m_input_tokens: 0,
+              },
+              inference_geo: null,
+              iterations: null,
+              speed: null,
+            },
+            content: [{ type: 'text', text: 'done' }],
+            context_management: null,
+          },
+          modelTurnItems: [
+            {
+              kind: 'final_answer',
+              provider: 'custom',
+              text: 'done',
+              source: 'message_output_filtered',
+            },
+          ],
+          userType: 'external',
+          entrypoint: 'sdk-cli',
+          cwd: resumedCwd,
+          sessionId: resumedSessionId,
+          version: '0.0.0-dev',
+          gitBranch: 'main',
+        }),
+      ].join('\n') + '\n',
+      'utf8',
+    )
 
     const resumedSummaryPath = join(
       resumedTranscriptProjectDir,
@@ -602,35 +911,23 @@ test('cross-project resume compact prefers the resumed transcript project summar
       'utf8',
     )
 
-    const { findSessionMemorySummaryContent } = await import(
-      '../src/services/compact/sessionMemorySelection.ts'
-    )
-
-    const selectedSummary = await findSessionMemorySummaryContent({
-      fs: {
-        readFile,
-        readdir: async path => readdir(path, { withFileTypes: true }),
-        stat,
-      },
-      transcriptProjectDir: resumedTranscriptProjectDir,
-      currentSessionMemoryPath: join(
-        currentProjectDir,
-        resumedSessionId,
-        'session-memory',
-        'summary.md',
-      ),
-      transcriptSessionMemoryPath: join(
-        resumedTranscriptProjectDir,
-        basename(resumedTranscriptPath, '.jsonl'),
-        'session-memory',
-        'summary.md',
-      ),
-      isEmpty: async content => content.trim().length === 0,
+    const result = await runResumeCompactSession({
+      currentCwd,
+      resumeTranscriptPath: resumedTranscriptPath,
+      homeDir: tempHome,
     })
 
-    assert.equal(
-      selectedSummary,
-      '# Current State\nPrefer the resumed worktree summary\n',
+    assert.equal(result.code, 0, result.stderr)
+    const transcriptOutput = result.messages.map(message => JSON.stringify(message)).join('\n')
+    assert.match(
+      transcriptOutput,
+      /Prefer the resumed worktree summary/,
+      result.stderr,
+    )
+    assert.doesNotMatch(
+      transcriptOutput,
+      /Wrong current cwd project summary/,
+      result.stderr,
     )
   } finally {
     await rm(tempHome, { recursive: true, force: true })

@@ -16,7 +16,7 @@ import {
   getOriginalCwd,
   getSessionId,
   getSessionProjectDir,
-} from '../../bootstrap/state.js'
+} from 'src/bootstrap/state.js'
 import { checkStatsigFeatureGate_CACHED_MAY_BE_STALE } from '../../services/analytics/growthbook.js'
 import type { AnyObject, Tool, ToolPermissionContext } from '../../Tool.js'
 import { FILE_READ_TOOL_NAME } from '../../tools/FileReadTool/prompt.js'
