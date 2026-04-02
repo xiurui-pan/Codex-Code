@@ -175,11 +175,49 @@ function buildAggregate(tasks) {
   }
 }
 
+function toSummaryMarkdown(result) {
+  const lines = [
+    '# co-claw-dex Baseline Run Summary',
+    '',
+    `- run_id: \`${result.run_id}\``,
+    `- timestamp: ${result.timestamp}`,
+    `- runner: \`${result.runner}\``,
+    `- model: \`${result.model}\``,
+    `- tasks_file: \`${result.tasks_file}\``,
+    '',
+    '## Aggregate',
+    '',
+    `- task_count: ${result.aggregate.task_count}`,
+    `- success_count: ${result.aggregate.success_count}`,
+    `- fail_count: ${result.aggregate.fail_count}`,
+    `- timeout_count: ${result.aggregate.timeout_count}`,
+    `- pass_rate: ${result.aggregate.pass_rate}`,
+    `- timeout_rate: ${result.aggregate.timeout_rate}`,
+    `- latency_p50_ms: ${result.aggregate.latency_p50_ms}`,
+    `- latency_p95_ms: ${result.aggregate.latency_p95_ms}`,
+    '',
+    '## Tasks',
+    '',
+    '| task_id | category | status | duration_ms | timeout_ms | exit_code | signal |',
+    '| --- | --- | --- | ---: | ---: | ---: | --- |',
+  ]
+
+  for (const task of result.tasks) {
+    lines.push(
+      `| ${task.task_id} | ${task.category} | ${task.status} | ${task.duration_ms} | ${task.timeout_ms} | ${task.exit_code ?? ''} | ${task.signal ?? ''} |`,
+    )
+  }
+
+  lines.push('', '## Notes', '', result.notes)
+  return `${lines.join('\n')}\n`
+}
+
 async function main() {
   const runner = parseArg('--runner', 'codex-code')
   const model = parseArg('--model', 'unset')
   const tasksPath = parseArg('--tasks', '')
   const defaultTimeoutMs = Number(parseArg('--task-timeout-ms', '30000'))
+  const summaryMdPath = parseArg('--summary-md', '')
   const out = resolve(
     parseArg('--out', `artifacts/benchmark-co-claw-dex-baseline-${Date.now()}.json`),
   )
@@ -212,6 +250,12 @@ async function main() {
 
   await mkdir(dirname(out), { recursive: true })
   await writeFile(out, JSON.stringify(result, null, 2) + '\n', 'utf8')
+  if (summaryMdPath) {
+    const summaryOut = resolve(summaryMdPath)
+    await mkdir(dirname(summaryOut), { recursive: true })
+    await writeFile(summaryOut, toSummaryMarkdown(result), 'utf8')
+    process.stdout.write(`baseline summary written: ${summaryOut}\n`)
+  }
   process.stdout.write(`baseline result written: ${out}\n`)
 }
 

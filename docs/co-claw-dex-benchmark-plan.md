@@ -96,7 +96,8 @@ node scripts/benchmark-co-claw-dex-baseline.mjs \
   --runner codex-code \
   --model gpt-5.4 \
   --tasks ./docs/examples/co-claw-dex-tasks.sample.json \
-  --out ./artifacts/baseline-codex-code.json
+  --out ./artifacts/baseline-codex-code.json \
+  --summary-md ./artifacts/baseline-codex-code-summary.md
 ```
 
 Task list schema (JSON array, simple and local-run friendly):
@@ -126,6 +127,27 @@ Per-task output now includes:
 - `duration_ms`
 - `exit_code` / `signal`
 - `latency.task_done_ms` placeholder (set to `duration_ms` in this stage)
+
+## 7) Example Run Result Interpretation
+
+Suppose a run has:
+
+- `task_count = 8`
+- `success_count = 6`
+- `timeout_count = 1`
+- `pass_rate = 0.75`
+- `timeout_rate = 0.125`
+- `latency_p50_ms = 1450`
+- `latency_p95_ms = 5300`
+
+Interpretation for baseline comparison:
+
+- Stability is acceptable but timeout risk still exists (1/8).
+- Typical latency is moderate (p50), but tail latency (p95) is high.
+- If `co-claw-dex` has lower timeout rate and lower p95 on the same task file, it wins on reliability.
+- If Codex Code has higher pass rate at similar latency, it wins on completion quality.
+
+Use the JSON output for machine comparison and `--summary-md` output for quick human review in PRs.
 
 Aggregate output now includes:
 
