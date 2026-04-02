@@ -6,6 +6,7 @@
 
 当前阶段边界：只支持自定义 Codex provider API，不做 Anthropic 专属链路，包括 `claude.ai` 登录、OAuth、Bridge、assistant mode、proactive 等；这是当前阶段的收口范围，不代表永久删除这些能力。
 当前阶段只支持自定义 Codex provider，不做多模型兼容，也不再为 Claude/Anthropic 双栈继续保留额外中间层负担。
+当前项目路线已明确为 `Codex-only`：后续不再把保留 Claude/Anthropic 兼容目标当作阶段性要求。
 
 ## 已完成
 
@@ -212,3 +213,4 @@
 - 行为测试这轮也补到了真正要验的两条：一条直接卡住“恢复会话 transcript 路径优先于项目里其他更新 summary”，另一条直接卡住 `querySource === 'session_memory'` 时不会把当前 session memory 再注回自己的写入路径；完整构建、行为测试、headless smoke 和真实 headless Codex 回归都已重新跑通。
 - 这一轮继续把恢复路径从 `getCwd()` 猜测彻底收紧到 transcript 主路：`getSessionMemoryPath()` 现在会跟随当前会话的 `sessionProjectDir`，`/compact` 的 summary 选择也直接以 `getTranscriptPath()` 所在目录为恢复来源，不再去当前 cwd 项目里猜。
 - 新增了一条跨项目 / worktree resume 的真实行为测试，专门验证“当前 cwd 项目里就算有更新的其他 summary，也不会抢走恢复会话 transcript 对应的 summary”；当前 resume `/compact` 的优先级已经明确成“当前会话路径 -> 恢复 transcript 路径 -> 同目录其他 summary 兜底”。
+- 后续正式验收矩阵的范围也已经收紧：一方面要把 TUI 内模型切换纳入正式验收，另一方面要对照 Claude Code 官方文档逐项验所有非 Anthropic/Claude 特化能力，并在远期加入和 `co-claw-dex` 的性能与效果对比。
