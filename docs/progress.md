@@ -81,7 +81,7 @@ From now on, capability acceptance must be tracked row by row against the offici
 Still pending:
 
 - broader multi-round real TUI soak for repeated prompt cycles under unstable network.
-- wider slash-command matrix completion in the same run (utility commands already split into dedicated tests).
+- wider slash-command matrix completion in broader interaction scenes; `/files` `/plan` `/agents` `/plugin` `/reload-plugins` `/ide` already have minimal local TUI evidence.
 
 Next command set:
 

@@ -20,7 +20,12 @@ Rule:
 | Capability Area | Item | Status | Evidence | Notes |
 |---|---|---|---|---|
 | Core interaction | TUI basic prompt/response loop | in-progress | `upstream/claude-code/tests/tuiSmoke.smoke.mjs` | expand stability coverage |
-| Slash commands | Core local slash command set | in-progress | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | continue broadening command coverage |
+| Slash commands | Core local slash command set | in-progress | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | `/files` `/plan` `/agents` `/plugin` `/reload-plugins` `/ide` already have evidence; wider multi-state coverage still pending |
+| Slash commands | `/agents` local TUI acceptance | done | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | covers local acceptance and no provider traffic |
+| Slash commands | `/plugin` local TUI acceptance | done | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | covers local acceptance and no provider traffic |
+| Slash commands | `/reload-plugins` local TUI acceptance | done | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | covers local reload result and no provider traffic |
+| Slash commands | `/ide` local TUI acceptance | done | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | covers local acceptance and no provider traffic |
+| Slash commands | `/files` and `/plan` local TUI acceptance | done | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | covers minimal local feedback paths without provider traffic |
 | TUI stability | interrupt 后 `/exit` 仍可正常退出 | done | `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs` | fixed by `9afabd4`; new regression covers the post-interrupt `/exit` path |
 | TUI stability | `/help` Esc dismiss restores footer state | done | `upstream/claude-code/tests/helpDismissTuiAcceptance.test.mjs` | fixed by `fbc85e3` |
 | TUI stability | auto-update fallback message when package URL is missing | done | `upstream/claude-code/tests/autoUpdaterMessages.test.ts` | fixed by `ca7b9d3` |

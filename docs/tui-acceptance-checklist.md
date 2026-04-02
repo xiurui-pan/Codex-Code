@@ -99,6 +99,10 @@
 - `/rewind`：打开 rewind 选择器、`Esc` 关闭，不打 provider 请求。
 - `/skills`：打开 skills 对话框、`Esc` 关闭，不打 provider 请求。
 - `/tasks`：打开 background tasks 对话框、`Esc` 关闭，不打 provider 请求。
+- `/agents`：命令已在真实 TUI 中验收，当前证据覆盖“本地接受命令并退出，不打 provider 请求”。
+- `/plugin`：命令已在真实 TUI 中验收，当前证据覆盖“本地接受命令并退出，不打 provider 请求”。
+- `/reload-plugins`：命令已在真实 TUI 中验收，当前证据覆盖“本地重载并退出，不打 provider 请求”。
+- `/ide`：命令已在真实 TUI 中验收，当前证据覆盖“本地接受命令并退出，不打 provider 请求”。
 - `/terminal-setup`：触发命令并返回本地引导信息，不打 provider 请求。
 - `/theme`：打开选择器、切换主题、写入全局配置。
 - `/vim`：切换编辑模式、写入全局配置；vim 模式下 `Esc` 退插入、`Enter` 提交。
@@ -113,6 +117,7 @@
 - `/clear`：当前已有行为验收，但现阶段主要证据还是 headless，不应先记成完整 TTY 已验。
 - `/compact`：已经补上 `--resume <transcriptPath>` 的真实 TTY 验收，但更宽 TTY 场景还没补齐。
 - plan mode：已覆盖“进入 plan mode、再次查看当前为空”的最小链路，但还缺更完整的退出、取消、已有 plan 状态回显。
+- `/agents`、`/plugin`、`/reload-plugins`、`/ide`：当前已有真实 TUI 最小闭环证据，但还没做更宽场景验收，比如连续切换、窄终端、和其他弹层/焦点状态联动。
 - TUI 显示：目前只覆盖了少量 dialog、picker、transcript 的出现与关闭，还没有形成乱码、错位、滚动、焦点、窄终端的专项矩阵。
 
 ### 未验
@@ -120,10 +125,7 @@
 - 第二批待纳入的命令：
   - （第二批已收口）
 - 第三批在本地入口稳定后纳入的命令：
-  - `/agents`
-  - `/ide`
-  - `/plugin`
-  - `/reload-plugins`
+  - （第三批最小闭环已补证据，更宽场景仍待做）
 
 ### 下一批最该补
 
@@ -132,7 +134,7 @@
 - 键盘交互扩大矩阵：长会话、transcript 进出、滚动与焦点恢复。
 - TUI 显示专项：乱码、错位、滚动、焦点、窄终端、重绘。
 - 第二批命令补证据已完成：`/add-dir`、`/branch`、`/files`、`/hooks`、`/keybindings`、`/mcp`、`/rewind`、`/skills`、`/tasks`。
-- 第三批当前优先：`/plugin`、`/reload-plugins`、`/agents`（`/ide` 受外部环境影响，后放）。
+- 第三批更宽场景当前优先：`/plugin`、`/reload-plugins`、`/agents`、`/ide` 的联合焦点、窄终端、重复进入退出。
 - 多轮真实 TUI 稳定性回归：至少覆盖“两轮提问 + 超时错误可见 + 退出”。
 
 下一步建议命令：
