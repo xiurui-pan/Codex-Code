@@ -14,7 +14,7 @@ import {
 } from '../../utils/model/modelOptions.js'
 
 const COMMON_HELP_ARGS = ['help', '-h', '--help']
-const COMMON_INFO_ARGS = ['', 'current', 'status']
+const COMMON_INFO_ARGS = ['current', 'status']
 
 type OnDone = (
   result?: string,
