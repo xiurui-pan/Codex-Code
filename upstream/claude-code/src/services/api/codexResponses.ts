@@ -421,6 +421,7 @@ function extractPayloadTextFromSseBlock(block: string): string | null {
 
 const DEFAULT_FIRST_EVENT_TIMEOUT_MS = 30_000
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 30_000
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 
 function parseTimeoutMs(
   raw: string | undefined,
@@ -443,6 +444,49 @@ function getStreamIdleTimeoutMs(): number {
     process.env.CODEX_RESPONSES_STREAM_IDLE_TIMEOUT_MS,
     DEFAULT_STREAM_IDLE_TIMEOUT_MS,
   )
+}
+
+function getRequestTimeoutMs(): number {
+  return parseTimeoutMs(
+    process.env.CODEX_RESPONSES_REQUEST_TIMEOUT_MS,
+    DEFAULT_REQUEST_TIMEOUT_MS,
+  )
+}
+
+async function fetchWithRequestTimeout(
+  url: string,
+  init: RequestInit,
+  requestTimeoutMs: number,
+  callerSignal: AbortSignal,
+): Promise<Response> {
+  const timeoutController = new AbortController()
+  const timeoutId = setTimeout(() => {
+    timeoutController.abort()
+  }, requestTimeoutMs)
+
+  const combinedSignal =
+    typeof AbortSignal.any === 'function'
+      ? AbortSignal.any([callerSignal, timeoutController.signal])
+      : callerSignal
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: combinedSignal,
+    })
+  } catch (error) {
+    if (callerSignal.aborted) {
+      throw error
+    }
+    if (timeoutController.signal.aborted) {
+      throw new Error(
+        `Custom Codex provider request timed out (waiting for response) after ${requestTimeoutMs}ms`,
+      )
+    }
+    throw error
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }
 
 async function readWithTimeout(
@@ -544,7 +588,8 @@ export async function* queryCodexResponsesStream({
 }: CodexStreamingArgs): AsyncGenerator<CodexResponseChunk, void, unknown> {
   try {
     const requestIdentity = buildCodexRequestIdentity()
-    const response = await fetch(getResponsesBaseUrl(), {
+    const requestTimeoutMs = getRequestTimeoutMs()
+    const response = await fetchWithRequestTimeout(getResponsesBaseUrl(), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -561,8 +606,7 @@ export async function* queryCodexResponsesStream({
           options,
         }),
       ),
-      signal,
-    })
+    }, requestTimeoutMs, signal)
 
     if (!response.ok) {
       const errorText = await response.text()
