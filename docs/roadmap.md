@@ -174,7 +174,7 @@
 ## 当前阶段 5A 的拆分
 
 - 5A-1：高频配置/模式命令
-  - 当前已经补上 `/theme`、`/vim`、`/permissions`、`/memory`、`/config`、`/diff`、`/doctor`、`/add-dir`、`/branch`、`/files`、`/hooks`、`/keybindings`、`/mcp` 的真实 TTY 自动化验收。
+  - 当前已经补上 `/theme`、`/vim`、`/permissions`、`/memory`、`/config`、`/diff`、`/doctor`、`/add-dir`、`/branch`、`/files`、`/hooks`、`/keybindings`、`/mcp`、`/rewind`、`/skills`、`/tasks` 的真实 TTY 自动化验收。
   - `/files` 中途出现过一次 `src/tools.ts` 的 `require2` 初始化顺序错误，这轮已通过提前 `createRequire` 定义修复，并完成整套复测。
   - 这条线已经能稳定单独跑通，并且已经开始纳入正式验收材料。
 - 5A-2：高频键盘交互

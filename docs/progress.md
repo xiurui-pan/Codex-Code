@@ -244,11 +244,11 @@
 
 - 这一轮把 TUI 斜杠命令验收继续向前推进了一整块：
   - `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` 新增并跑通了 `/config`、`/diff`、`/doctor` 三条真实 TTY 验收
-  - 同文件继续新增并跑通了 `/add-dir`、`/branch`、`/files`、`/hooks`、`/keybindings`、`/mcp` 六条真实 TTY 验收
+  - 同文件继续新增并跑通了 `/add-dir`、`/branch`、`/files`、`/hooks`、`/keybindings`、`/mcp`、`/rewind`、`/skills`、`/tasks` 九条真实 TTY 验收
   - 同文件里的 `/compact TUI resume`、`/clear headless`、`/compact headless` 也已和这批用例一起稳定通过
   - `/files` 首轮验收已通过（整套 `coreSlash` + 单独 `--test-name-pattern` 复测）；中途出现过一次 `src/tools.ts` 的 `require2` 初始化顺序问题，这轮已通过把 `createRequire` 提前到首次调用前修复，并完成整套回归
   - `upstream/claude-code/tests/configModeSlashCommandsTuiAcceptance.test.mjs` 对 `/vim` 文案匹配做了抗折行收紧，避免终端折行导致假失败
-  - 对应提交：`e504c7b`、`c6be21a`
+  - 对应提交：`e504c7b`、`c6be21a`、`b026a76`、`15ad132`
 - session memory 主链已经完成，并且不是只留在代码里：
   - 当前 `current_session_memory` 注入、resume 后第一次 `/compact`、以及 session memory 写入不递归注入自己，都已经有真实行为测试
   - 对应验收主文件是 `upstream/claude-code/tests/sessionMemoryContext.behavior.mjs`

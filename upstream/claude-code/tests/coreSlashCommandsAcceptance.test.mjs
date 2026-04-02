@@ -878,6 +878,116 @@ test('/mcp TUI: accepts the slash command input and exits without provider traff
   })
 })
 
+test('/rewind TUI: opens rewind selector, Esc closes it, and stays local-only', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-rewind-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'open-rewind', waitFor: ['❯'], send: '/rewind\r' },
+          {
+            name: 'dismiss-rewind',
+            waitFor: ['Rewind'],
+            send: '\u001b',
+          },
+          {
+            name: 'exit',
+            waitFor: ['Nothing to rewind to yet.'],
+            preDelayMs: 700,
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.equal(result.sent[0], 'open-rewind')
+      assert.ok(result.sent.includes('dismiss-rewind'), JSON.stringify(result))
+      assert.ok(result.sent.includes('exit'), JSON.stringify(result))
+      assert.match(result.normalizedTranscript, /\/rewind/)
+      assert.match(result.normalizedTranscript, /Rewind/)
+      assert.doesNotMatch(result.normalizedTranscript, /Unknownskill:rewind/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/skills TUI: opens skills dialog, Esc closes it, and stays local-only', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-skills-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'open-skills', waitFor: ['❯'], send: '/skills\r' },
+          {
+            name: 'dismiss-skills',
+            waitFor: ['Skills'],
+            preDelayMs: 700,
+            send: '\u001b',
+          },
+          {
+            name: 'exit',
+            waitFor: ['Skills dialog dismissed'],
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['open-skills', 'dismiss-skills', 'exit'])
+      assert.match(result.normalizedTranscript, /\/skills/)
+      assert.match(result.normalizedTranscript, /Skillsdialogdismissed/)
+      assert.doesNotMatch(result.normalizedTranscript, /Unknownskill:skills/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/tasks TUI: opens background tasks dialog, Esc closes it, and stays local-only', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-tasks-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'open-tasks', waitFor: ['❯'], send: '/tasks\r' },
+          {
+            name: 'dismiss-tasks',
+            waitFor: ['Background tasks'],
+            preDelayMs: 700,
+            send: '\u001b',
+          },
+          {
+            name: 'exit',
+            waitFor: ['Background tasks dialog dismissed'],
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['open-tasks', 'dismiss-tasks', 'exit'])
+      assert.match(result.normalizedTranscript, /\/tasks/)
+      assert.match(result.normalizedTranscript, /Backgroundtasksdialogdismissed/)
+      assert.doesNotMatch(result.normalizedTranscript, /Unknownskill:tasks/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
 test('/compact TUI: resume compacts locally, returns to input, and the next prompt uses the resumed summary', SERIAL_TEST, async () => {
   await withResponsesServer(
     [[
