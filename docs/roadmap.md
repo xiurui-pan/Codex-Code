@@ -184,3 +184,17 @@
   - 这条不属于产品能力本身，但属于正式验收链必须收掉的工程问题；在它彻底解决前，这批 TUI 联合验收以串行执行为准。
 
 阶段 5A 做完后，下一整块按既定顺序直接进入 5B，也就是 memory 专项前移，不再把 `MEMORY.md`、`/memory`、长期记忆系统继续往后拖。
+
+## 当前阶段 5B：memory 专项
+
+- 已经正式验通的部分：
+  - session memory 主链已经完成，并已有真实行为测试
+  - Codex headless 下 `MEMORY.md` / auto memory 的真实请求注入已经验通，对应 `upstream/claude-code/tests/autoMemoryAcceptance.test.mjs`
+  - `/memory` 的 project / user / imported 三条 TUI 真实验收已经通过，对应 `upstream/claude-code/tests/configModeSlashCommandsTuiAcceptance.test.mjs`
+- 当前还没完成的部分：
+  - `CLAUDE.md` 在 Codex 主链下的更宽正式验收
+  - `@import` 的完整上下文链与交互链
+  - team memory / agent memory / extract / auto dream 这些更宽的长期记忆分支
+- 结论：
+  - 阶段 5B 现在已经不再是“memory 代码还在”，而是已经把 session memory、auto memory、`/memory` 交互各自推进到有正式验收
+  - 但整个 memory 体系还没有全量收口，后续仍要继续补正式验收矩阵

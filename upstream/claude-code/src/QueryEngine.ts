@@ -322,21 +322,15 @@ export class QueryEngine {
       defaultSystemPrompt,
       userContext: baseUserContext,
       systemContext,
-    } = currentPhaseCustomCodexProvider
-      ? {
-          defaultSystemPrompt: [] as string[],
-          userContext: {} as Record<string, string>,
-          systemContext: [] as string[],
-        }
-      : await fetchSystemPromptParts({
-          tools,
-          mainLoopModel: initialMainLoopModel,
-          additionalWorkingDirectories: Array.from(
-            initialAppState.toolPermissionContext.additionalWorkingDirectories.keys(),
-          ),
-          mcpClients,
-          customSystemPrompt: customPrompt,
-        })
+    } = await fetchSystemPromptParts({
+      tools,
+      mainLoopModel: initialMainLoopModel,
+      additionalWorkingDirectories: Array.from(
+        initialAppState.toolPermissionContext.additionalWorkingDirectories.keys(),
+      ),
+      mcpClients,
+      customSystemPrompt: customPrompt,
+    })
     headlessProfilerCheckpoint('after_getSystemPrompt')
     const userContext = {
       ...baseUserContext,
@@ -355,9 +349,7 @@ export class QueryEngine {
     // Write/Edit tools to call, MEMORY.md filename, loading semantics).
     // The caller can layer their own policy text via appendSystemPrompt.
     const memoryMechanicsPrompt =
-      !currentPhaseCustomCodexProvider &&
-      customPrompt !== undefined &&
-      hasAutoMemPathOverride()
+      customPrompt !== undefined && hasAutoMemPathOverride()
         ? await loadMemoryPrompt()
         : null
 

@@ -197,8 +197,14 @@ while time.time() < timeout_at:
         buffer += chunk
         clean = ansi_re.sub("", buffer.decode("utf-8", "ignore"))
         normalized = re.sub(r"\s+", "", clean)
+        normalized_lines = [
+            re.sub(r"\s+", "", line) for line in clean.splitlines() if line.strip()
+        ]
         for action in actions:
             if action["name"] in sent:
+                continue
+            after = action.get("after")
+            if after is not None and after not in sent:
                 continue
             wait_for = action.get("waitFor", [])
             wait_at_least_ms = action.get("waitAtLeastMs", 0)
@@ -211,7 +217,17 @@ while time.time() < timeout_at:
                 pre_delay_ms = action.get("preDelayMs", 0)
                 if pre_delay_ms > 0:
                     time.sleep(pre_delay_ms / 1000.0)
-                if "sendParts" in action:
+                if "selectByPattern" in action:
+                    match = None
+                    for line in normalized_lines:
+                        line_match = re.match(action["selectByPattern"], line)
+                        if line_match:
+                            match = line_match
+                            break
+                    if not match:
+                        continue
+                    os.write(master, match.group(1).encode("utf-8"))
+                elif "sendParts" in action:
                     delay_ms = action.get("delayMs", 100)
                     for part in action["sendParts"]:
                         os.write(master, part.encode("utf-8"))
@@ -443,7 +459,7 @@ test('config/mode slash commands TUI: /permissions shows project rules and Esc d
 test('config/mode slash commands TUI: /memory opens the project memory file without calling the provider', SERIAL_TEST, async () => {
   await withResponsesServer(async ({ port, requestBodies }) => {
     const tempHome = await mkdtemp(join(tmpdir(), 'codex-memory-tui-'))
-    const tempProject = await mkdtemp(join(CLI_CWD, '.tmp-memory-cwd-'))
+    const tempProject = await mkdtemp(join(CLI_CWD, '.tmp-memory-project-cwd-'))
     try {
       await writeCodexConfig(tempHome, port)
       await prepareGlobalConfigHome(tempHome)
@@ -456,20 +472,21 @@ test('config/mode slash commands TUI: /memory opens the project memory file with
           { name: 'open-memory', waitFor: ['❯'], send: '/memory\r' },
           {
             name: 'choose-project-memory',
-            waitFor: ['Memory', 'Project memory'],
-            preDelayMs: 500,
-            sendParts: ['\u001b[B', '\u001b[B', '\r'],
-            delayMs: 120,
+            after: 'open-memory',
+            waitFor: ['Memory', 'Checked in at', 'CLAUDE.md'],
+            waitAtLeastMs: 2500,
+            preDelayMs: 1000,
+            selectByPattern: '^(\\d+)\\..*Checkedinat\\./CLAUDE\\.md$',
           },
           {
             name: 'exit',
+            after: 'choose-project-memory',
             waitFor: ['Opened memory file at', 'CLAUDE.md'],
             send: '/exit\r',
             settleMs: 900,
           },
         ],
       })
-
       assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
       assert.deepEqual(result.sent, ['open-memory', 'choose-project-memory', 'exit'])
       assert.equal(requestBodies.length, 0)
@@ -479,6 +496,120 @@ test('config/mode slash commands TUI: /memory opens the project memory file with
       assert.match(result.normalizedTranscript, /Memory/)
       assert.match(result.normalizedTranscript, /Openedmemoryfileat/)
       assert.match(result.cleanedTranscript, /\.\/CLAUDE\.md/)
+    } finally {
+      await rm(tempProject, { recursive: true, force: true })
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('config/mode slash commands TUI: /memory can create and open user memory without calling the provider', SERIAL_TEST, async () => {
+  await withResponsesServer(async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-memory-user-tui-'))
+    const tempProject = await mkdtemp(join(CLI_CWD, '.tmp-memory-user-cwd-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      await prepareGlobalConfigHome(tempHome)
+      const userMemoryPath = join(tempHome, '.claude', 'CLAUDE.md')
+      const result = await runTuiFlow({
+        tempHome,
+        currentCwd: tempProject,
+        envOverrides: { EDITOR: 'true' },
+        actions: [
+          { name: 'open-memory', waitFor: ['❯'], send: '/memory\r' },
+          {
+            name: 'choose-user-memory',
+            after: 'open-memory',
+            waitFor: ['Memory', 'Saved in ~/.claude/CLAUDE.md'],
+            waitAtLeastMs: 2500,
+            preDelayMs: 1000,
+            selectByPattern: '^(\\d+)\\..*Savedin~/.claude/CLAUDE\\.md$',
+          },
+          {
+            name: 'exit',
+            after: 'choose-user-memory',
+            waitAtLeastMs: 1200,
+            fallbackAfterMs: 4000,
+            send: '/exit\r',
+            settleMs: 900,
+          },
+        ],
+      })
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['open-memory', 'choose-user-memory', 'exit'])
+      assert.equal(requestBodies.length, 0)
+      await access(userMemoryPath)
+      const memoryContent = await readFile(userMemoryPath, 'utf8')
+      assert.equal(memoryContent, '')
+      assert.match(result.normalizedTranscript, /Usermemory|\.claude\/CLAUDE\.md/)
+      assert.match(result.normalizedTranscript, /Savedin~\/\.claude\/CLAUDE\.md/)
+      assert.match(result.cleanedTranscript, /CLAUDE\.md/)
+    } finally {
+      await rm(tempProject, { recursive: true, force: true })
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('config/mode slash commands TUI: /memory shows imported entries and opens the selected memory without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer(async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-memory-import-tui-'))
+    const tempProject = await mkdtemp(join(CLI_CWD, '.tmp-memory-import-cwd-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      await prepareGlobalConfigHome(tempHome)
+      await mkdir(join(tempProject, 'notes'), { recursive: true })
+      await writeFile(
+        join(tempProject, 'CLAUDE.md'),
+        '# Project memory\n@./notes/imported-memory.md\n',
+        'utf8',
+      )
+      const importedMemoryPath = join(
+        tempProject,
+        'notes',
+        'imported-memory.md',
+      )
+      await writeFile(
+        importedMemoryPath,
+        'Imported memory says KEEP_IMPORTED_MEMORY.\n',
+        'utf8',
+      )
+
+      const result = await runTuiFlow({
+        tempHome,
+        currentCwd: tempProject,
+        envOverrides: { EDITOR: 'true' },
+        actions: [
+          { name: 'open-memory', waitFor: ['❯'], send: '/memory\r' },
+          {
+            name: 'choose-imported-memory',
+            after: 'open-memory',
+            waitFor: ['Memory', 'imported-memory.md', '@-imported'],
+            waitAtLeastMs: 1200,
+            preDelayMs: 700,
+            selectByPattern: '^(\\d+)\\..*imported-memory\\.md.*@-imported$',
+          },
+          {
+            name: 'exit',
+            after: 'choose-imported-memory',
+            waitFor: ['Opened memory file at', 'imported-memory.md'],
+            send: '/exit\r',
+            settleMs: 900,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, [
+        'open-memory',
+        'choose-imported-memory',
+        'exit',
+      ])
+      assert.equal(requestBodies.length, 0)
+      const memoryContent = await readFile(importedMemoryPath, 'utf8')
+      assert.equal(memoryContent, 'Imported memory says KEEP_IMPORTED_MEMORY.\n')
+      assert.match(result.normalizedTranscript, /imported-memory\.md/)
+      assert.match(result.normalizedTranscript, /Openedmemoryfileat/)
     } finally {
       await rm(tempProject, { recursive: true, force: true })
       await rm(tempHome, { recursive: true, force: true })

@@ -95,6 +95,12 @@
 - `/permissions`
 - `/memory`
 
+`/memory` 当前已经进一步细化到 3 条真实验收路径：
+
+- project memory
+- user memory
+- imported memory
+
 ### 第二批应纳入
 
 - `/add-dir`
@@ -111,7 +117,8 @@
 
 说明：
 
-- `/permissions` 和 `/memory` 现在已经有真实 TTY 自动化覆盖，但因为它们仍属于当前阶段正在补齐的配置/记忆交互线，这里先保留在第二批清单里，等整条 memory 专项正式收口后再整体上移。
+- `/permissions` 和 `/memory` 现在已经有真实 TTY 自动化覆盖；其中 `/memory` 已经补到 project / user / imported 三条真实用例。
+- 但 memory 专项整体还没收完，所以这里仍保留在第二批清单里，等 `CLAUDE.md`、`@import`、team/agent memory 等更宽链路也纳入正式验收后，再整体上移。
 - 当前这一批 PTY/TUI 联合验收，更适合用串行方式执行；原因不是这几条命令本身缺入口，而是现有 CLI 启动链在并发 PTY 场景下仍有不稳定点，后续会单独继续收。
 
 ### 第三批在本地入口稳定后纳入
@@ -147,3 +154,15 @@
 - `CLAUDE.md`
 - `@文件引用`
 - `@import`
+
+目前已完成的记忆相关 TUI 验收，只覆盖：
+
+- `/memory` 打开 project memory
+- `/memory` 打开 user memory
+- `/memory` 打开 imported memory
+
+还没完成的更宽 memory 验收包括：
+
+- `CLAUDE.md` 在 Codex 主链下是否稳定进入请求
+- `@import` 的更完整交互与请求链
+- team memory / agent memory / 其他长期记忆入口

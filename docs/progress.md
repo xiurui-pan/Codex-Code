@@ -239,3 +239,22 @@
 - 这一轮继续把恢复路径从 `getCwd()` 猜测彻底收紧到 transcript 主路：`getSessionMemoryPath()` 现在会跟随当前会话的 `sessionProjectDir`，`/compact` 的 summary 选择也直接以 `getTranscriptPath()` 所在目录为恢复来源，不再去当前 cwd 项目里猜。
 - 新增了一条跨项目 / worktree resume 的真实行为测试，专门验证“当前 cwd 项目里就算有更新的其他 summary，也不会抢走恢复会话 transcript 对应的 summary”；当前 resume `/compact` 的优先级已经明确成“当前会话路径 -> 恢复 transcript 路径 -> 同目录其他 summary 兜底”。
 - 后续正式验收矩阵的范围也已经收紧：一方面要把 TUI 内模型切换纳入正式验收，另一方面要对照 Claude Code 官方文档逐项验所有非 Anthropic/Claude 特化能力，并在远期加入和 `co-claw-dex` 的性能与效果对比。
+
+## 阶段 5B：memory 专项
+
+- session memory 主链已经完成，并且不是只留在代码里：
+  - 当前 `current_session_memory` 注入、resume 后第一次 `/compact`、以及 session memory 写入不递归注入自己，都已经有真实行为测试
+  - 对应验收主文件是 `upstream/claude-code/tests/sessionMemoryContext.behavior.mjs`
+- Codex headless 下的长期记忆注入已经重新进入真实请求：
+  - `MEMORY.md` / auto memory 现在会进入发给 provider 的真实 `/responses` 请求体
+  - override 路径优先级也已补验
+  - 对应正式验收文件是 `upstream/claude-code/tests/autoMemoryAcceptance.test.mjs`
+- `/memory` 这条 TUI 交互线已经补上针对性验收，不再只证明“命令能打开”：
+  - 已覆盖 project memory
+  - 已覆盖 user memory
+  - 已覆盖 imported memory
+  - 对应验收文件是 `upstream/claude-code/tests/configModeSlashCommandsTuiAcceptance.test.mjs`
+- 但整个 memory 体系还没有全量完成：
+  - 还要继续补 `CLAUDE.md` 主链
+  - 还要继续补 `@import` 更完整的上下文链
+  - 还要继续补 team memory / agent memory / auto dream / extract 这些长期记忆分支
