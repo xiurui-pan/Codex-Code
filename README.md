@@ -2,97 +2,69 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md) | [日本語](./README.ja.md)
 
-Codex Code is a Codex-first coding agent project built from a direct `claude-code` source baseline.
-It keeps the parts that already work well in the terminal, then rebuilds the model-facing runtime around Codex instead of around Claude-specific assumptions.
+Codex Code is a **Codex-only local coding client**.
+It keeps the practical terminal experience from the `claude-code` baseline, while removing Anthropic/Claude-specific product coupling from the main path.
 
-This project is not a generic multi-model framework, and it is not a simple API swap.
-The direction is intentionally narrow: keep the strong local product experience, remove provider-shaped baggage, and make the main path feel native to Codex.
+## What This Project Is
 
-## Overview
+- A focused migration from `upstream/claude-code` into a Codex-native runtime.
+- Not a multi-provider framework.
+- Not a branding-only fork.
+- Not a prompt-only adaptation.
 
-Codex Code starts from a practical belief: Claude Code already proves that a local coding agent can feel fast, trustworthy, and pleasant in the terminal.
-The TUI, main loop, tool execution, permission flow, and result handoff are worth keeping.
+## Why This Is Not "Just Prompt Changes"
 
-What does need to change is the internal runtime shape.
-A Codex-based agent should not have to pretend to be Claude just to reuse a good product shell.
-Codex Code therefore keeps the local experience, while steadily replacing Claude- and Anthropic-shaped internal layers with Codex-oriented turn items, execution objects, and model capabilities.
+Prompt edits can adjust behavior, but they cannot replace runtime responsibilities that decide whether a coding agent is reliable:
 
-## Background
+- turn item and execution object modeling
+- tool call/result lifecycle
+- permission request/decision records
+- TUI and headless state transitions
+- session memory and compact/resume boundaries
 
-This repository exists because there is a clear gap between two strengths:
+This project therefore changes both the model-facing protocol and the local execution path, not only text prompts.
 
-- `claude-code` offers a strong local terminal product experience
-- Codex is better served by a cleaner model layer and execution model
+## Scope Status (Anthropic/Account-Risk Logic)
 
-Many forks stop at the provider boundary and translate requests just enough to make the CLI run.
-That is useful, but it is not the end state of this project.
-Codex Code takes the harder path: preserve the proven terminal experience, then gradually remove the compatibility layers that keep the runtime tied to Claude-specific shapes.
+Mainline direction is explicit: Codex-only, custom Codex provider, local execution first.
 
-## Goals
+Already removed or taken out of mainline scope:
 
-The current goals are straightforward:
+- Anthropic-first product assumptions in default runtime design
+- claude.ai subscription-only capability assumptions
+- anti-distillation and account-risk signal handling as migration targets
+- GrowthBook/Anthropic product rollout logic as required dependency for Codex path
 
-- keep the proven local interaction loop: TUI, main loop, tool execution, permissions, result handoff, and local shell support
-- move the core runtime toward Codex-native turn items, execution objects, and model capabilities
-- keep the project `Codex-only` for now, instead of stretching it into a broad compatibility layer
-- turn validation into a standing discipline, not a one-off demo
+Still to remove or continue shrinking:
 
-Just as important are the current non-goals:
+- remaining Claude/Anthropic naming and user-facing copy in imported surfaces
+- residual compatibility shims that still emulate Claude-shaped events/objects
+- dead or near-dead Anthropic-specific branches that are not needed by Codex-only acceptance
 
-- this is not a broad multi-provider abstraction project
-- this is not a surface-level branding change
-- this is not a prompt-only adaptation
-- Anthropic-specific product paths are outside the current main line
+See `docs/roadmap.md` and `docs/progress.md` for precise status.
 
-## What Is Already Working
+## Capability Acceptance Matrix
 
-The repository is already beyond an early prototype.
-The current work has been validated in the real `upstream/claude-code` tree, not only in a mock sample.
+Codex Code now tracks capability acceptance as a first-class workstream:
 
-Today, the project already has:
+- Matrix doc: `docs/capability-acceptance-matrix.md`
+- Requirement: validate against the official Claude Code capability list item by item (excluding Anthropic-only product capabilities)
+- Existing acceptance materials: `docs/codex-only-local-checklist.md`, `docs/tui-acceptance-checklist.md`
 
-- a custom Codex provider wired into the real CLI path
-- quick non-interactive validation working end to end
-- interactive TUI basic Q&A running in the real terminal flow
-- headless and structured tool calls working through the main path
-- a real permission loop working with `--permission-prompt-tool stdio`
-- both permission branches verified: allow and deny
-- the first Codex turn-item and execution-item layers landed in the API path
-- model and reasoning effort selection aligned across CLI, TUI-facing flow, config-facing options, and headless metadata
+## Roadmap and Progress
 
-In short, this is already a live migration effort with working main-path behavior, not only a design note.
+- Roadmap: `docs/roadmap.md`
+- Progress log: `docs/progress.md`
+- Source baseline and references: `docs/source-baseline.md`, `docs/references.md`
 
-## What Comes Next
+## Long-Term Comparison Target
 
-The next stage is about making the Codex path deeper, cleaner, and easier to trust.
+Beyond feature parity, we will run **performance and effectiveness comparison** against `co-claw-dex`:
 
-Near term:
-
-- let more upper layers consume Codex execution objects directly
-- remove more Claude- and Anthropic-shaped compatibility shims from the main path
-- keep the TUI, headless flow, and permission loop stable while those changes land
-
-After that:
-
-- systematically rename remaining product text from `Claude Code` to `Codex Code`
-- make in-app model switching a formal TUI acceptance line, including model choice, reasoning effort, confirm, cancel, and visible state updates
-- validate non-Anthropic-specific capabilities one by one against the official Claude Code capability list
-- compare the project with `co-claw-dex` on performance and overall effectiveness, not only on feature parity
-
-That acceptance line matters.
-The long-term goal is not merely to say that Codex Code can start, answer, and call tools.
-The goal is to prove that it can grow into a polished local coding agent with a clear Codex-native core.
-
-## Repository Layout
-
-- `docs/` - roadmap, progress log, analysis, references, and acceptance notes
-- `packages/codex-code-proto/` - a small prototype for provider and request-shape validation
-- `upstream/claude-code/` - imported upstream snapshot and active adaptation workspace
-- `upstream/README.md` - source provenance and snapshot notes
-- `README.zh-CN.md` - Simplified Chinese introduction
-- `README.ja.md` - Japanese introduction
-- `LICENSE` - open source license for original repository content
-- `NOTICE` - scope note for original content and imported upstream material
+- response latency and stability
+- tool success/retry profile
+- end-to-end task completion quality
+- migration complexity and maintenance cost
 
 ## Quick Start
 
@@ -100,56 +72,21 @@ Requirements:
 
 - Node.js `>=22`
 - pnpm `>=10`
-- a configured custom Codex provider, usually from `~/.codex/config.toml`
+- custom Codex provider config (usually in `~/.codex/config.toml`)
 
-Current default values used in documentation and validation examples:
-
-- model: `gpt-5.1-codex-mini`
-- reasoning effort: `medium`
-
-Install dependencies:
+Install:
 
 ```bash
 pnpm install
 ```
 
-Run the prototype checks:
-
-```bash
-node packages/codex-code-proto/src/main.js --print-config
-node packages/codex-code-proto/src/main.js 'Reply with CODEX_CODE_SMOKE_OK only'
-node --test packages/codex-code-proto/test/*.test.js
-```
-
-Run the workspace quick verification:
-
-```bash
-pnpm smoke
-```
-
-Build the real CLI and verify the entry points:
+Build the upstream workspace:
 
 ```bash
 pnpm -C upstream/claude-code build
-node upstream/claude-code/dist/cli.js --version
-node upstream/claude-code/dist/cli.js --help
 ```
-
-## Why It Is Worth Watching
-
-Codex Code is worth following if you care about coding agents that feel serious in the terminal.
-
-- It reuses a proven local interaction experience instead of rebuilding everything from scratch.
-- It chooses a clear direction instead of becoming a vague multi-model wrapper.
-- It is moving the runtime inward, not stopping at a provider adapter.
-- It keeps written evidence of progress through roadmap, progress notes, and acceptance material.
-- It is trying to earn trust the hard way: by making the real path work, then validating it feature by feature.
-
-If that direction matches what you want from a local coding agent, a star helps more people find the project and helps signal that this path is worth continuing.
 
 ## License
 
-This repository uses the MIT License for original repository content. See `LICENSE`.
-
-Imported upstream snapshots and other third-party material are not relicensed by the root `LICENSE`.
-Please see `NOTICE` and `upstream/README.md` for the scope details.
+This repository uses MIT for original repository content. See `LICENSE`.
+Imported upstream snapshots and third-party material are not relicensed by root MIT. See `NOTICE` and `upstream/README.md`.

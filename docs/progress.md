@@ -1,270 +1,71 @@
-# 开发进展
+# Progress Log (Codex-only Convergence)
 
-项目目标：以 `claude-code` 为直接基线，逐步把模型接入层改造成更适配 Codex 的形式，同时尽量保留原有工具、权限和主循环体验。
+## Current Position
 
-当前项目里，“请求和消息”与“本地执行链”不是两套互不相关的东西。很多能力最终会体现在请求和消息里，但启动链、REPL、`QueryEngine`、`query`、工具执行、权限、结果回灌、TUI 渲染这些能力必须由本地执行链实现，不能简化成“把规则写进消息发给模型”。
+The project has moved from "provider adapter" work into **Codex-only runtime convergence**.
 
-当前阶段边界：只支持自定义 Codex provider API，不做 Anthropic 专属链路，包括 `claude.ai` 登录、OAuth、Bridge、assistant mode、proactive 等；这是当前阶段的收口范围，不代表永久删除这些能力。
-当前阶段只支持自定义 Codex provider，不做多模型兼容，也不再为 Claude/Anthropic 双栈继续保留额外中间层负担。
-当前项目路线已明确为 `Codex-only`：后续不再把保留 Claude/Anthropic 兼容目标当作阶段性要求。
+What this means in practice:
 
-## 已完成
+- TUI, headless flow, tool execution, and permission flow remain in active use.
+- Mainline migration goal is no longer "make Claude-shaped output look usable".
+- Mainline goal is "make Codex-shaped runtime objects first-class".
 
-- 当前阶段里，真实工具闭环与真实权限闭环已经打通。
-  这一轮已经完成的关键结果包括：
-  - 修掉 `upstream/claude-code` 在 ESM 运行时里的残留 `require(...)`，越过 `before-ask` 处的 `require is not defined`
-  - 打通自定义 Codex provider 在 headless/structured 路径下的真实工具调用适配，不再只停留在纯文本“伪工具输出”
-  - 打通 `--permission-prompt-tool stdio` 下的真实 `can_use_tool -> control_response` 权限协议
-  - 已分别验证允许/拒绝两条分支：
-    - 允许分支：`cd src && echo ok > perm-check.txt`
-    - 拒绝分支：同一命令由宿主返回 deny
-  - 两条分支都已确认走完整个闭环：工具调用、权限事件、结果回灌、最终回答
-  这说明当前已经不只是“模型能回复”或“工具能偶发执行”，而是 Claude Code 原有的本地权限与工具主循环，已经在 Codex 适配层下形成最小真实闭环。
+## Done (Scope and Direction)
 
-- `44637ed` `docs: add codex code baseline and upstream snapshot`
-  固定了文档基线、分析结论和 `upstream/claude-code` 源码快照，明确项目不是单纯协议替换。
+- Confirmed project target: Codex-only client, custom Codex provider first.
+- Explicitly documented this is not a prompt-only rewrite.
+- Re-centered docs on runtime-level migration tasks.
+- Started maintaining a dedicated capability acceptance matrix entry point:
+  - `docs/capability-acceptance-matrix.md`
 
-- `83ecf76` `feat: add codex code prototype baseline`
-  建立了最小协议验证样本，用来核对 provider、Responses 请求形状和基础标准化路径。
+## Anthropic / Account-Risk Logic Boundary
 
-- `4d838a7` `fix: handle responses stream failures`
-  补齐了 Responses 流式错误路径，避免 200 状态下的错误事件被误当成功。
+### Already removed from mainline target
 
-- `6099b04` `refactor: recenter codex code on claude-code baseline`
-  完成第一轮纠偏，把 prototype 从主线降回验证样本，重新把正式改造主线拉回 `claude-code` 基线。
+- Anthropic-first architecture decisions as default direction
+- claude.ai subscription assumptions for required core paths
+- anti-distillation and account-risk signal handling as migration objective
+- GrowthBook/Anthropic rollout dependency as "must keep" requirement
 
-- `f994214` `refactor: add model facade for query deps`
-  新增 `src/services/api/model.ts` 作为最小中立 facade，并让 `query/deps` 先走这层入口。
+### Still pending cleanup
 
-- `7869d4d` `refactor: route web search through model facade`
-  把 `WebSearchTool` 的模型调用入口改接到 facade，行为保持不变。
+- residual Claude/Anthropic naming in user-facing text
+- leftover compatibility wrappers around Claude-shaped event structures
+- stale branch descriptions that imply Anthropic-only features are still in Codex mainline plan
 
-- `6d1dcec` `refactor: route compact through model facade`
-  把 `services/compact/compact.ts` 需要的流式调用和最大输出 token 查询接到 facade，继续保持原实现委托给 Claude。
+## Why Not "Just Prompt Changes"
 
-- `2cd61dc` `docs: add development progress log`
-  新增仓库内的持续进展记录文件，开始按轮次记录已完成提交、当前进行中和下一步。
+Progress shows repeated runtime-level work that prompts alone cannot replace:
 
-- `aba4abf` `refactor: route side queries through provider client`
-  新增 `services/api/providerClient.ts` 这层最小客户端 facade，并把侧边查询先接到这层入口，继续委托现有 `client.ts`。
+- turn item normalization
+- execution object handling
+- permission object chain
+- compact/resume memory boundaries
+- testable TUI/headless state behavior
 
-- `136206f` `refactor: route model capabilities through provider client`
-  把模型能力相关的一条 client 侧链先接到 `providerClient` facade，继续收窄直接依赖 `client.ts` 的范围。
+This is the reason roadmap/progress now tracks object-model and lifecycle convergence explicitly.
 
-- `8003f17` `refactor: route claude ai limits through provider client`
-  把 Claude AI limits 这一条 client 侧链旁路到 `providerClient`，继续保持原行为不变。
+## New Mandatory Acceptance Line
 
-- `648e077` `refactor: route token estimation through provider client`
-  把 token estimation 的客户端入口接到 `providerClient`，继续沿着 `services/api/client.ts` 侧链做最小替换。
+From now on, capability acceptance must be tracked row by row against the official capability list:
 
-- `1579cb0` `refactor: route query engine usage through model facade`
-  把 `QueryEngine` 需要的 usage helper 接到 `services/api/model.ts`，让主查询链的一部分先从 facade 取入口。
+- canonical board: `docs/capability-acceptance-matrix.md`
+- supporting evidence: acceptance tests and checklist docs
+- pass condition: reproducible evidence, not narrative-only status
 
-- `1bf24e0` `refactor: route forked agent usage through model facade`
-  把 forked agent 这条 usage 路径接到 `model` facade，继续减少外围代码直接依赖 Claude 专名实现。
+## Long-Term Track Added
 
-- `c4569b7` `refactor: route helper callers through model facade`
-  把一整批非流式和小模型 helper callers 接到 `model` facade，明显扩大了中立调用面的覆盖范围。
+A dedicated comparative track against `co-claw-dex` is now part of planning scope:
 
-- `b0b9144` `refactor: route request helpers through request config facade`
-  新增 `src/services/api/requestConfig.ts` 作为 `getAPIMetadata`、`getExtraBodyParams`、`getCacheControl` 的统一入口，并把 `claudeAiLimits`、`tokenEstimation`、`sideQuery`、`yoloClassifier` 这 4 个外部调用点从直接依赖 `claude.ts` 改成走这层入口，继续压缩外围代码对 `services/api/claude.ts` 的直连面。
+- performance (latency/stability/retry)
+- effectiveness (task completion quality)
+- implementation and maintenance cost
 
-- `f064633` `refactor: route remaining small-model callers through facade`
-  把剩余外围小模型调用继续接到 `model` facade，进一步清理外部对 `queryHaiku` 这类 Claude 专名入口的直接依赖。
+## Next Update Rule
 
-- `236e35a` `refactor: move request config helpers out of claude api`
-  把请求配置家族从 `claude.ts` 内部继续拆出，形成 `requestConfig.ts` / `requestCacheControl.ts` 这组更清晰的宿主入口，并明确不再保留 Anthropic 专用的 `anti_distillation` 相关逻辑。
+Each progress update should include:
 
-- `c7e95bd` `refactor: move request prompt assembly out of claude api`
-  把请求构造主段从 `claude.ts` 内部继续拆出到 `requestPromptAssembly.ts`，并保持 Claude Code 现有的 system prompt 骨架、提示词内容和拼接顺序不变。
-
-- `9a1c7af` `refactor: move request params builder out of claude api`
-  把 `paramsFromContext` 这层请求参数构造逻辑搬到 `requestParamsBuilder.ts`，并让 `claude.ts` 改成调用这层；同时保持 system prompt 骨架和流式解析主干不变。
-
-- `3bf8c47` `refactor: move request preflight state out of claude api`
-  把请求前置状态准备这一层搬到 `requestPreflightState.ts`，并让 `claude.ts` 改成调用这层；同时保持 system prompt 骨架、`paramsFromContext` 本体和流式解析主干不变。
-
-- `2f82d3a` `refactor: move request input preparation out of claude api`
-  把请求输入准备主段搬到 `requestInputPreparation.ts`，覆盖 `messagesForAPI` 归一化、tool-search 后处理、tool result 成对修复、advisor/media 清理、指纹、deferred tools prepend、Chrome 指令注入，以及 `systemPrompt/system/allTools` 组装；同时保持 Claude Code 现有的 system prompt 骨架和流式解析主干不变。
-
-- 当前阶段里，自定义 Codex provider 的本地 CLI 启动链与非交互主链已经打通。
-  已确认通过的验证包括：
-  - `pnpm -C upstream/claude-code build`
-  - `node dist/cli.js --version`
-  - `node dist/cli.js --help`
-  - 按 `~/.codex/config.toml` 和 `gpt-5.1-codex-mini medium` 跑真实非交互 smoke，并返回 `CODEX_CODE_SMOKE_OK`
-  这说明当前阶段至少已经跑通了真实源码入口下的本地构建、CLI 启动和非交互主链，而不是停留在假入口或协议样机。
-
-- 当前阶段里，`main import -> 可见 TUI -> 可输入 -> 真实问答` 这一整块已经完成。
-  这一轮验收通过的范围包括：
-  - `pnpm -C upstream/claude-code build`
-  - `node dist/cli.js --version`
-  - `node dist/cli.js --help`
-  - 非交互 smoke
-  - 真实 TTY 问答
-  这说明当前项目已经不只是“能起 CLI”，而是已经打通了真实交互式 TUI 主链里的基础问答回路。
-
-- 本地验收材料这轮又补齐了一层，已经不再只靠零散 smoke 判断“差不多能用”。
-  当前新增并已实跑通过的材料包括：
-  - `upstream/claude-code/tests/headlessAcceptanceMatrix.test.mjs`：把当前 Codex-only 主链下最关键的 headless 验收项集中成矩阵，覆盖真实请求、权限、结果回灌、resume / 上下文等本地可验证能力
-  - `upstream/claude-code/tests/tuiSmoke.smoke.mjs`：用真实 TTY 验证最小 TUI 主链，确认当前至少能做到启动、看到 prompt、完成一轮真实问答、正常收口
-  - `docs/codex-only-local-checklist.md`：把官方 Claude Code 文档里当前可本地验证、且非 Anthropic 特化的能力整理成紧凑清单，方便后续逐项补验
-  这说明当前项目的验收方式已经从“单点证明能跑”推进到“按主链和能力面持续留证据”。
-
-## 当前进行中
-
-## 阶段 5A：TUI 高频交互与非业务命令验收
-
-- `/theme`、`/vim`、`/permissions`、`/memory` 这一整块真实 TTY 验收已经补齐：
-  - 新增 `upstream/claude-code/tests/configModeSlashCommandsTuiAcceptance.test.mjs`
-  - 当前已覆盖：
-    - `/theme` 打开选择器、切换主题、写入全局配置
-    - `/vim` 切换编辑模式、写入全局配置
-    - `/permissions` 打开权限界面、`Esc` 关闭、无 provider 流量
-    - `/memory` 打开记忆选择器、选择项目 `CLAUDE.md`、成功创建并返回、无 provider 流量
-  - 这一块的运行时风险也顺手收了一层：`MemoryFileSelector.tsx` 里裸 `require(...)` 已改成 `createRequire(import.meta.url)`，避免当前 ESM 运行环境下 `/memory` 入口不稳。
-- 键盘交互最小闭环已收口：
-  - 新增 `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs`
-  - 当前已覆盖：
-    - `Ctrl+L`
-    - 历史上下浏览
-    - `Ctrl+R`
-    - vim mode 下 `Esc` 退插入、`Enter` 提交
-  - 与 `upstream/claude-code/tests/modelEffortTuiAcceptance.test.mjs` 一起联跑，当前已经是 6/6 全通过。
-- 当前这批 PTY/TUI 验收文件在更大范围联跑时，会被现有 `dist/cli.js` 的双 loader 启动链放大出不稳定问题。
-  - 现象包括：
-    - 直接并发联跑时出现 `ERR_MODULE_NOT_FOUND` / `ENOENT`
-    - 个别长流程在更宽的联合验收里超时
-  - 当前判断更像“启动链 / loader 不稳，被并发放大”，不是这轮新增功能本身缺文件。
-  - 这件事已记录为后续要继续收的专项；在它收口前，这批 TUI 联合验收更适合按串行命令执行并留证据。
-
-## 本轮新增进展
-
-- 已把 Codex Responses 这一段从“伪 streaming”改成真实增量收包：`callModelWithStreaming` 不再等完整 `response.text()`，而是按 SSE `response.output_item.done` 逐项进入主链。
-- 已把新的执行对象继续往上接：`QueryEngine` 现在会把 `local_shell_call / permission_request / permission_decision / tool_output / execution_result` 直接发成 `system:model_turn_item`，不再只在内部生成却不上送。
-- 已继续收紧 `codexTurnItems.ts` 的文本 fallback：只有以显式工具标记起始的文本才会进入这条临时降级路径，并且会标出 fallback 警告，不再作为默认可执行侧通道。
-- 已补一组更贴近行为的本地验证材料：除了现有单元测试，还新增 `upstream/claude-code/tests/headlessStreaming.smoke.mjs`，专门用本地假 Responses 服务和真实 headless CLI 去验证 request shape、SSE 增量进入主链、以及执行对象输出。
-- 这轮把本地验收材料继续从“单条 smoke”推进到“矩阵 + TUI + 清单”三层：
-  - `upstream/claude-code/tests/headlessAcceptanceMatrix.test.mjs` 用来集中验证 headless 主链上的高价值场景
-  - `upstream/claude-code/tests/tuiSmoke.smoke.mjs` 用来证明真实 TTY 下的最小交互链已经跑通
-  - `docs/codex-only-local-checklist.md` 用来记录哪些官方能力已经本地验过、哪些只是已有入口待补验
-
-## 当前新增判断
-- 这轮把 `modelTurnItems` 再拆了一层：先产出更薄的“首选回答对象”，再由单独的包装函数决定是否生成 synthetic assistant 壳，给 `query.ts` / `model.ts` 后续直接消费更薄对象留出落点。
-- 同时把 `WebSearchTool` 的多 citation 边界补稳：同一次搜索的多个 citation 文本块会合并回同一个搜索结果；如果中间某次搜索没有 citation，后续 citation 至少不会错位挂到前一条，前面的空搜索会保留成零链接结果。
-- 这轮又把 `model.ts` 往前推了一步：现在 streaming、非 streaming、小模型这三条文本入口都会先形成首选回答对象，再按外围兼容边界需要时才包装回 synthetic assistant。
-- 还补了一条更值钱的 WebSearch 多 citation 用例：同一条 assistant message 同时承载两个搜索时，如果前一个搜索有多段 citation、后一个也有 citation，前一个会优先吃掉前面的多段 citation，后一个保留自己的 citation，不会再被前一个并吞。
-- 这轮继续把 assistant 兼容壳往外推：`modelTurnItems` 里先单独产出 synthetic payload，再由外层决定何时包装成 `AssistantMessage`，`query.ts` 和 `model.ts` 都已经接到这层更薄的 payload。
-- 同时把 WebSearch 的多 citation 分配从“轮转平均分配”改成“前面的搜索优先吃掉前面的连续 citation，后面的搜索至少保留自己的尾部 citation”，补上了“前一次 3 段 citation、后一次 1 段 citation”的不均匀分布用例。
-- 这轮把 `services/compact/compact.ts` 也从旧 assistant 流式入口往主路上挪了：compact 现在优先消费 preferred streaming 结果，再在最后一步按需要包装回 assistant 壳。
-- 远端权限入口这轮也收了一层：`useRemoteSession.ts`、`useSSHSession.ts`、`useDirectConnect.ts` 不再各自手搓整条 synthetic assistant message，而是统一先走 `remotePermissionBridge` 里的薄 payload，再在共享包装点生成 UI 还需要的 `AssistantMessage`。
-- 这轮把上面两条补成了真实行为测试：compact 不再只做源码检查，而是直接验证 preferred streaming 的聚合结果；远端权限桥也不再只查源码字符串，而是直接验证 payload 和最终 assistant message 的形状一致。
-- 已把模型切换正式抬成 Codex-only 交互能力：`ModelPicker`、`/model`、CLI 初始化返回的 `models` 列表现在都围绕 `gpt-5.1-codex-mini` 默认模型和 `medium` 默认 reasoning 对齐，同一份能力表会准确暴露每个模型真实支持的 reasoning 档位。
-- 这一轮继续把模型能力面收成单一来源：附加自定义模型不再只在 picker 可见，`/model` 和 headless `models` 列表现在也共用同一份模型目录；未知自定义模型的 reasoning 档位也统一成同一条 Codex 规则，并把公开模型能力面压成最小的 Codex-only 字段。
-- 已开始把记忆/上下文系统接回 Codex 主路的最小闭环：当前阶段先打通会话内记忆，Codex 路径下会启用 session memory 提取与 session-memory compact，并把已有会话摘要作为结构化上下文重新注入主线程与 SDK 查询，和现有 compact / resume 主链共用同一份摘要文件。
-- `modelTurnItems` 这轮又往壳中心外推了一点：现在可以直接从 turn items 产出 synthetic payload，`query.ts` / `model.ts` / compact 聚合都开始优先走这层 payload，再决定是否包装成 `AssistantMessage`。
-- 这轮继续把核心兼容边界往里收：`query.ts` 和 `services/api/model.ts` 不再各自手搓“纯文本时直接出 assistant、否则退回 synthetic 壳”的分支，而是统一改成走 `modelTurnItems` 里的首选回答构造逻辑。
-- 同时补稳了 `WebSearchTool` 的多次搜索归属：当同一轮里有多次 `web_search_call` 时，带 citation 的结果会按完成顺序归到对应的 `toolUseId`，不再全挂到最后一次搜索上。
-- 这轮把 `WebSearchTool` 的 Codex 数据源假设修正成当前主路真实能看到的形状：不再按 `content_block_start/content_block_delta` 读 Anthropic 风格块事件，而是直接从 `response.output_item.done -> web_search_call` 和 assistant `message.output_text.annotations` 提取搜索进度、链接和来源文本，不再把结果降成 `No links found.` 空壳。
-- 同时把上一轮新增的 `query.ts` / `compact.ts` 字符串断言测试换成真实行为测试：前者直接验证“有无 `tool_call` 时是否走纯文本回答路径”，后者直接验证摘要优先取 `modelTurnItems.final_answer`。
-- 这一轮把 `WebSearchTool` 也从旧 streaming assistant 壳上往里挪了：它现在直接消费 Codex turn-item streaming，再从原始输出项里提取搜索进度和结果。
-- 同时补了两条就近行为测试，明确 `query.ts` 在纯文本 turn-item 且不含 `tool_call` 时优先产出普通 assistant 文本，`compact.ts` 在摘要消息带 `modelTurnItems.final_answer` 时优先取 turn-item 文本。
-
-- 这一轮先把 `apiQueryHookHelper` 里的静默偏差修掉了：迁到 turn-item 主路后，成功分支不再去读旧 `response.message.id`，避免把成功结果错误打进异常路径。
-- 然后继续从核心边界往里收：`query.ts` 的纯文本 chunk 现在优先直接产出普通 assistant 文本消息，`services/compact/compact.ts` 的摘要提取会优先读 turn items，不再先退回旧 assistant 文本壳。
-
-- 这一轮把 shell prefix 的错误识别也收回 Codex 主路：不再把 provider 错误当成旧 `API Error` 文本前缀去猜，而是直接按 `errorMessage` 分支处理。
-- `extractFinalAnswerTextFromTurnItems()` 也补了 `separator === ''` 的边界处理：现在会保留原始块边界里的空白而不是逐块硬裁剪，避免把原本有空格的自然语言拼成一串，或把被分块的 JSON 误拼坏。
-- 又迁了一批外围旧入口：`teleport.tsx`、`Feedback.tsx`、`skillImprovement.ts`、`execPromptHook.ts`、`apiQueryHookHelper.ts` 都开始直接消费 Codex turn items。
-
-- 这一轮继续缩小旧 assistant 兼容壳的实际消费面：session title、`/rename` 名称生成、shell 前缀判断、WebFetch 二次处理这几条也开始直接消费 Codex turn items。
-- 还补了 `extractFinalAnswerTextFromTurnItems()` 的行为测试，专门卡住多段拼接、空白裁剪和无最终回答时返回空字符串这三种基础风险。
-
-- 这一轮继续把非流式文本消费者从旧 assistant 壳上往外挪：`awaySummary`、agent 生成、tool use summary、自然语言时间解析这几条已开始直接消费 Codex turn items，不再先投影回 synthetic assistant 再取文本。
-- 权限对象链的测试也补到 allow 分支了：现在 headless smoke 会同时验证 deny 和 allow 两条分支都按 `permission_request -> permission_decision -> tool_output -> execution_result` 顺序上送，并检查关键 `details` 字段。
-
-- 这一轮把权限对象链也补进了系统执行对象主路：`--permission-prompt-tool stdio` 这类宿主审批不再只靠旧消息壳侧写，headless 宿主现在可以直接从 `permission_request -> permission_decision -> tool_output -> execution_result` 这条对象顺序理解权限流。
-- `model.ts` 这一层也继续往 Codex-only 主路收窄：保留兼容壳只作为外围边界，新增更直接的 turn-item 入口，避免还走 `callModelWithStreaming` / `callModelWithoutStreaming` 的调用点继续把旧 assistant 壳当主出口。
-
-
-- 这一轮已经明确：Claude Code 的 harness 本身适合继续复用，真正不适合直接沿用的是默认按 Claude 表示回合、工具、审批和结果的中间结构。
-- 所以接下来的主线不再是继续给 `codexResponses.ts` 增加一条条兼容分支，也不再是只改提示词或协议名，而是转向更系统地借鉴本地 `codex/` 的回合表示、能力建模和 shell / 审批 / 结果对象设计。
-- 已继续往这个方向推进一小步：把 provider 返回里的工具协议杂质文本拦在统一条目归一化层，不再让拒绝分支后的脏文本继续污染后续回合。
-- 已把后续两条远期目标记入计划：一是系统把残留 `Claude Code` 命名改成 `Codex Code`，二是对照 Claude Code 官方文档能力列表逐项做非 Anthropic 特化能力验收。
-
-- 当前阶段已经明确收口：只继续推进自定义 Codex provider API 这一条主线，不再为 `claude.ai` 登录、OAuth、Bridge、assistant mode、proactive 这些 Anthropic 专属能力补齐可运行链路。
-- 当前改造对象已经明确分成三类：只需提示词适配的、需要改消息生产规则的、必须本地实现的。当前重点在第三类，也就是把真实启动链、REPL、`QueryEngine`、`query`、工具执行、权限、结果回灌和 TUI 渲染继续保住并改到 Codex 路线。
-- 五阶段主线不变，但已经确认后续要补强三项长期工作：记忆系统、系统提示词结构、消息类型层。这三项都已进入总计划，只是当前还不抢主链优先级。
-- 另外两条新增计划也已经明确：工具提示词适配线会在后续系统梳理工具提示词、工具描述、权限文案并做 Codex 适配；隐藏功能研究线会在后续专门做研究和筛选。这两条都属于后续工作，不进入当前阶段验收。
-- 真实启动链已经接入 `~/.codex/config.toml` 的最小字段，当前读取并注入的范围包括 `model_provider`、`model`、`model_reasoning_effort`、`model_providers.<id>.base_url`、`model_providers.<id>.env_key`，入口在 `cli.tsx`，主链消费在 `main.tsx`。
-- `providerClient`、`model`、`requestConfig` 三条入口已经初步成形，外围外部直连点也已经基本清零，`services/api/claude.ts` 的内部拆分已经推进到真实可跑的本地 CLI、非交互主链和交互式 TUI 基础问答回路。
-- 当前已经完成“先把构建跑起来”和“把交互式基础问答跑起来”这两步，后续重点不再是首屏可见性，而是把这条真实问答链继续往稳定可用推进。
-- `upstream/claude-code` 的可运行面仍按这个边界收口：只服务 Codex 主链，不再以跑通 Anthropic 专属入口为目标。
-- 构建校验和 CLI 可达图已经收窄到当前阶段真实主链；`sdkUrl / RemoteIO` 这一类远端传输路径当前阶段显式禁用，不再作为可运行面的一部分继续补齐。
-- 明确不再保留 Anthropic 专用的 `anti_distillation` 逻辑，后续拆分以通用调用能力为主。
-- 控制改动范围，避免又回到 prototype 扩功能的路线。
-- 当前新的重点已经不是登录、OAuth 或远端传输链路，也不是“能不能显示首个 REPL 画面”，而是让已经打通的真实交互问答链继续稳定下来，并逐步接上后续能力。
-- 当前这一整块主线已经从“打通最小权限闭环”推进到“收尾与稳定化”：后续重点不再是找权限事件，而是继续减少 provider 文本输出形状带来的适配脆弱点，并逐步把更多工具场景收进同一条稳定路径。
-- 这一轮又往外推了一层 synthetic assistant 包壳：`compact` 的 `api_error` 不再在边界手写 assistant 结构，而是回到统一的 preferred payload 包装；`query.ts` 和 `model.ts` 也开始优先在 payload 层传递，再在更外层按需生成 `AssistantMessage`。
-- 这轮还把 `empty` 语义单独站稳了：主链里先保留显式的空 payload，再只在最外层旧兼容入口按需变成空 assistant，避免后面继续迁调用方时把“没有可显示回答”和“生成了一个空壳回答”混在一起。
-- 这一轮继续把集中包壳往外推：`query.ts` 里的流式 `api_error` 已并回统一 preferred payload 链，`compact` 的流式聚合先收口到 payload 再在外围决定是否包 assistant，远端权限请求也改成先产 payload、再只在 hooks 的 UI 边界生成 assistant。
-- 这轮又把包壳中心往外移了一步：`modelTurnItems.ts` 现在更集中在 turn item 和 preferred payload，本来的 synthetic assistant 生成与统一 assistant 包装已经抽到单独的 `assistantEnvelope.ts`；Codex 主链上的若干旧 `createAssistantAPIErrorMessage(...)` 也已经并回统一错误包装链。
-
-## 下一步
-
-- 下一整块建议转到“交互式 TUI 真实问答回路的稳定化与扩展”。
-- 下一轮可以优先整理两类稳定化工作：
-  - 继续收窄 Codex provider 文本工具输出的兼容面，减少非常规文本形状带来的解析抖动
-  - 把当前已验证的 headless 权限闭环继续扩到更多工具与更多权限场景
-- 继续围绕 Codex provider 主链拆 `services/api/claude.ts`，优先处理与交互式问答稳定性、回合边界、模型调用中间层直接相关的能力。
-- 停止为 Anthropic 专属链路补缺模块；claude.ai 登录、OAuth、Bridge、assistant mode、proactive 这些能力后续是否恢复，放到后续阶段单独评估。
-- 优先围绕 `main.tsx -> replLauncher.tsx -> screens/REPL.tsx -> QueryEngine.ts -> query.ts` 这条主链，继续把真实问答、结果回灌和交互状态传递做稳。
-- 接下来的文档和实现都要继续按三类对象来拆：提示词适配、消息生产规则、本地执行链，避免再把“消息层”和“执行链”说成两回事，或者误写成“只要调提示词就够了”。
-- 在不改坏当前 CLI 和非交互主链的前提下，继续处理请求发送后的流式收包、主循环收口和交互层状态传递。
-- 下一大块不再是“补工程壳”或“补 Anthropic 缺模块”，也不再是“让首帧出来”，而是把已经打通的真实 TUI 问答回路做稳、做深。
-- 优先选择高频复用、但写入范围还能控制住的主链入口，避免一次跨太大。
-- 在 facade 足够稳定后，再进入下一层：抽更中立的调用类型和回合边界。
-- 当前阶段之外，后续要单列推进五个补强方向：
-  - 记忆系统
-  - 系统提示词结构
-  - 消息类型层
-  - 工具提示词适配线
-  - 隐藏功能研究线
-- 每轮都同步更新这份文件，记录已完成提交、当前进行中和下一步。
-
-- 这一轮把 Codex session memory 的 resume `/compact` 主链真正收稳了：问题根因不是测试样本本身，而是 `sessionMemoryCompact.ts` 在扫描 project 目录候选 summary 时把 `Dirent` 当成字符串使用，导致当前会话之外的 session-memory 摘要路径根本没有进入候选集；修正后，resume 后第一次 `/compact` 已能真实复用预埋的 session-memory sentinel，而不再退回旧的 `done` 摘要。
-- 同时把 `current_session_memory` 继续往对象层推进：当前主查询的注入点已不再主要依赖 attachment -> hidden user meta 这条旧链，而是通过单独的 session-memory context 规则接到 `processUserInput` / `query` 主路上；这轮也补齐了三条行为测试，覆盖主查询注入、resume 后第一次 `/compact` 复用摘要、以及 session memory writer 不递归注入自己。
-- 这一轮继续把 session memory 的边界收稳：resume `/compact` 的 summary 选择不再靠“项目内最新”猜测，而是先明确优先“当前恢复会话对应 transcript 的 summary”，只有这条路径和当前会话路径都不可用时才退回项目内其他 summary。为此新增了独立的 `sessionMemorySelection` 选择层，并把 `sessionMemoryContext` 的继承规则拆到了无副作用模块里，避免主查询注入链和 writer 防递归规则继续绑在旧消息包装入口上。
-- 行为测试这轮也补到了真正要验的两条：一条直接卡住“恢复会话 transcript 路径优先于项目里其他更新 summary”，另一条直接卡住 `querySource === 'session_memory'` 时不会把当前 session memory 再注回自己的写入路径；完整构建、行为测试、headless smoke 和真实 headless Codex 回归都已重新跑通。
-- 这一轮继续把恢复路径从 `getCwd()` 猜测彻底收紧到 transcript 主路：`getSessionMemoryPath()` 现在会跟随当前会话的 `sessionProjectDir`，`/compact` 的 summary 选择也直接以 `getTranscriptPath()` 所在目录为恢复来源，不再去当前 cwd 项目里猜。
-- 新增了一条跨项目 / worktree resume 的真实行为测试，专门验证“当前 cwd 项目里就算有更新的其他 summary，也不会抢走恢复会话 transcript 对应的 summary”；当前 resume `/compact` 的优先级已经明确成“当前会话路径 -> 恢复 transcript 路径 -> 同目录其他 summary 兜底”。
-- 后续正式验收矩阵的范围也已经收紧：一方面要把 TUI 内模型切换纳入正式验收，另一方面要对照 Claude Code 官方文档逐项验所有非 Anthropic/Claude 特化能力，并在远期加入和 `co-claw-dex` 的性能与效果对比。
-
-## 阶段 5B：memory 专项
-
-- 这一轮把 TUI 斜杠命令验收继续向前推进了一整块：
-  - `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` 新增并跑通了 `/config`、`/diff`、`/doctor` 三条真实 TTY 验收
-  - 同文件继续新增并跑通了 `/add-dir`、`/branch`、`/files`、`/hooks`、`/keybindings`、`/mcp`、`/rewind`、`/skills`、`/tasks`、`/terminal-setup` 十条真实 TTY 验收
-  - `/session`、`/summary` 当前也有可重复的本地降级路径验收（Unknown skill），并保持 `requestBodies.length === 0`
-  - 同文件里的 `/compact TUI resume`、`/clear headless`、`/compact headless` 也已和这批用例一起稳定通过
-  - `/files` 首轮验收已通过（整套 `coreSlash` + 单独 `--test-name-pattern` 复测）；中途出现过一次 `src/tools.ts` 的 `require2` 初始化顺序问题，这轮已通过把 `createRequire` 提前到首次调用前修复，并完成整套回归
-  - `upstream/claude-code/tests/configModeSlashCommandsTuiAcceptance.test.mjs` 对 `/vim` 文案匹配做了抗折行收紧，避免终端折行导致假失败
-  - 对应提交：`e504c7b`、`c6be21a`、`b026a76`、`15ad132`、`517dd55`
-- session memory 主链已经完成，并且不是只留在代码里：
-  - 当前 `current_session_memory` 注入、resume 后第一次 `/compact`、以及 session memory 写入不递归注入自己，都已经有真实行为测试
-  - 对应验收主文件是 `upstream/claude-code/tests/sessionMemoryContext.behavior.mjs`
-- Codex headless 下的长期记忆注入已经重新进入真实请求：
-  - `MEMORY.md` / auto memory 现在会进入发给 provider 的真实 `/responses` 请求体
-  - override 路径优先级也已补验
-  - `CLAUDE.md` 与 `@import` 也已在真实 Codex headless 请求链下补齐正式验收
-  - 当前还把 auto-memory 范围重新收窄成“只恢复请求注入，不顺带重新打开 extract / auto dream / team memory / agent memory 这些更宽旧分支”；对应显式禁用与范围验证已补到单独测试里
-  - 对应正式验收文件是 `upstream/claude-code/tests/autoMemoryAcceptance.test.mjs`
-  - 对应补充验收文件是 `upstream/claude-code/tests/autoMemoryScope.test.mjs`、`upstream/claude-code/tests/claudeMdAcceptance.test.mjs`
-- `/memory` 这条 TUI 交互线已经补上针对性验收，不再只证明“命令能打开”：
-  - 已覆盖 project memory
-  - 已覆盖 user memory
-  - 已覆盖 imported memory
-  - 对应验收文件是 `upstream/claude-code/tests/configModeSlashCommandsTuiAcceptance.test.mjs`
-- 但整个 memory 体系还没有全量完成：
-  - 还要继续补 team memory / agent memory / auto dream / extract 这些长期记忆分支
-  - 还要继续补 `CLAUDE.md` / `@import` 更宽矩阵，例如多层导入、更多来源优先级与更复杂组合
+- what changed in scope (if any)
+- what was removed vs what is still pending
+- which matrix rows moved status and what evidence was added
+- whether `co-claw-dex` comparison dataset changed

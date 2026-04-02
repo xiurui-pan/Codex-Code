@@ -1,202 +1,71 @@
-# 实施路线
+# Codex Code Roadmap (Codex-only)
 
-## 目标
+## 1) Project Target
 
-把 `claude-code` 改造成更适配 Codex 模型的编码代理，同时尽量保留 Claude Code 现有的终端交互、权限控制、远端会话、工具生态和执行体验。
+This project is converging to a **Codex-only client**.
 
-## 非目标
+Core definition:
 
-- 不是先做一层简单的 OpenAI 客户端替换。
-- 不是只改 `/model` 下拉框和模型名称。
-- 不是把 Claude 事件硬翻译成另一套事件后继续沿用旧状态机。
-- 当前阶段不做 Anthropic 专属链路，包括 claude.ai 登录、OAuth、Bridge、assistant mode、proactive 等；这些能力只是暂不纳入当前阶段，不是永久删除。
-- Anthropic 第一方账号、订阅特权、GrowthBook、遥测上报、远程策略、反蒸馏、防伪 header、封号信号这类产品侧机制，不属于自定义 Codex provider 路线，当前阶段不保留，长期也不作为迁移目标。
+- Keep local product strengths from `claude-code`: TUI loop, tool execution, permission flow, transcript lifecycle.
+- Replace Claude/Anthropic-shaped runtime assumptions with Codex-native objects and behavior.
+- Keep migration scope focused: custom Codex provider first, no broad multi-provider abstraction in this phase.
 
-## 总策略
+## 2) Why This Is Not Prompt-Only Work
 
-- 架构基线：直接分叉 `claude-code` 源码。
-- 复用判断：明确保留 Claude Code 的本地 harness，也就是 TUI、主循环、工具执行、权限、结果回灌、压缩和本地 shell。
-- 重做重点：不再把主要精力放在提示词替换、协议改名或 `codexResponses.ts` 兼容分支堆叠上，而是优先重做中间回合表示和能力建模。
-- 借鉴来源：下一阶段系统参考 `/home/pxr/workspace/CodingAgent/codex` 的回合表示、能力表、shell / 审批 / 结果建模方式，不再沿着“看到一种 provider 输出就补一种解析”继续长。
-- 社区对照：已经审阅过 `InDreamer/co-claw-dex` 这类社区路径。它证明“在 provider 边界做 Responses 翻译”可以较快做出可用 fork，但它本质上仍是边界翻译型 fork，不是当前 `Codex-Code` 这条 `Codex-only` 内部收口路线的替代。
-- 当前正式源码基线固定为 `upstream/claude-code`，不会切到 `claw-code`、`open-agent-sdk` 或其他第三方仓库。
-- 第一阶段模型范围：只做 `Codex`。
-- 第一阶段接入范围：只支持自定义 Codex provider API。
-- 当前阶段明确不做多模型兼容；凡是只为 Claude/Anthropic 双栈或通用 provider 想象存在的中间层，后续都按 Codex 主链收窄或下线。
-- 工具策略：尽量保留 Claude Code 的工具使用面，重写后端执行与模型适配层。
-- 本地执行链策略：明确保留并逐步接管 Claude Code 现有的启动链、REPL、`QueryEngine`、`query`、工具执行、权限、结果回灌、TUI 渲染；这不是抽象的“外围系统”，而是当前产品可用性的核心。
-- 评估方式：同时对比 `Claude Code` 和 `Codex CLI`，而不是只和其中一边比。
+The hard part is runtime semantics, not wording:
 
-## 三类改造对象
+- message/event shape normalization
+- tool call and tool result boundaries
+- permission request/decision object chain
+- state machine behavior across TUI and headless mode
+- session memory compact/resume consistency
 
-- 只需提示词或描述适配的：例如工具提示词、工具描述、权限文案、部分系统提示词措辞。
-- 需要改消息生产规则的：例如消息归一化、工具结果回灌、阶段化输出、上下文进出规则。
-- 必须由本地执行链实现的：例如启动链、REPL、`QueryEngine`、`query`、工具执行、权限记录、结果回灌、TUI 渲染。
+So this roadmap tracks **runtime convergence**, not only prompt edits.
 
-很多能力最后都会体现到请求和消息里，但不能把 coding agent 简化成“把规则写进消息发给模型”。当前计划保留的重点，正是 Claude Code 这条本地执行链。
+## 3) Anthropic and Account-Risk Logic Status
 
-## 跨阶段补强项
+### 3.1 Removed or explicitly out of Codex mainline
 
-- 记忆系统：后续要把 Claude Code 现有的记忆相关能力单独梳理出来，明确哪些属于长期记忆、会话记忆、项目记忆，以及 Codex 路径下应该如何保留或重做。这项已经纳入总目标，但不挤占当前阶段主线。
-- 系统提示词结构：后续要系统整理 Claude Code 现有的 system prompt 骨架、拼接顺序和分层职责，区分哪些是通用代理约束，哪些是 Claude 专属写法，再为 Codex 重组。这项已经纳入总目标。
-- 消息类型层：后续要把消息对象、工具块、推理块、阶段化输出和最终回答的类型层继续抽干净，避免后续还把模型差异塞回主循环。这项已经纳入总目标。
-- 工具提示词适配线：后续需要系统梳理 Claude Code 的工具提示词、工具描述、权限文案、调用约束和用户可见说明，再按 Codex 的工具能力与行为习惯做适配。这项属于正式计划的一部分，但排在当前阶段主线之后。
-- 隐藏功能研究线：后续会专门研究 Claude Code 里不直接露出的行为开关、灰度能力、实验逻辑和隐藏功能点，做一次筛选，判断哪些值得迁移、哪些应直接放弃。这条线属于后续研究与筛选范围，不进入当前阶段优先级。
-- `claw-code` 和 `open-agent-sdk` 只作为辅助参考，不进入源码基线，也不进入当前阶段实现目标；其中 `open-agent-sdk` 已明确不走 SDK 方向。
-- 正式验收矩阵：后续要把“对照 Claude Code 官方文档能力列表逐项验收”提升成显式工作线。凡不是 Anthropic / Claude 特化的能力，都要按清单逐项验证，而不是只靠零散 smoke 判断“差不多能用”。
-  当前已经有第一版落点：`upstream/claude-code/tests/headlessAcceptanceMatrix.test.mjs`、`upstream/claude-code/tests/tuiSmoke.smoke.mjs`、`docs/codex-only-local-checklist.md` 和 `docs/tui-acceptance-checklist.md`，后续在这组材料上继续补齐即可。
+- Anthropic-first product path as architecture center
+- claude.ai subscription gate assumptions for core capability paths
+- anti-distillation and account-risk signal handling as migration goals
+- treating GrowthBook/Anthropic rollout logic as required for Codex runtime correctness
 
-## 分阶段路线
+### 3.2 Pending removal / continued shrink
 
-### 阶段 0：固定基线
+- residual Claude/Anthropic naming in imported UI and docs
+- compatibility shims that still preserve Claude-shaped event objects in internal boundaries
+- low-value Anthropic-specific branches that are no longer part of Codex acceptance scope
 
-- 把 `claude-code` 源码快照导入新仓库。
-- 固定参考提交、关键入口、强耦合点和参考资料分级。
-- 把“为什么 Claude Code 更好用”明确写成单独文档。
+## 4) Phased Plan
 
-### 阶段 1：抽内部中间层
+### Phase A - Runtime Core Convergence (in progress)
 
-这一步现在已经不是抽象目标，而是明确要把当前仓库从“Claude 形状优先”改成“本地统一条目优先”。也就是说，后续 provider 适配层只能翻译，不再兼任回合语义中心。
+- Continue replacing Claude-shaped turn/event compatibility layers.
+- Keep TUI/headless/permission paths stable while replacing internals.
+- Reduce synthetic compatibility wrappers on hot paths.
 
-- 统一回合对象：
-  - 用户输入
-  - 助手中间输出
-  - 最终输出
-  - 推理
-  - 工具调用
-  - 工具结果
-  - 权限请求
-  - 压缩事件
-- 让界面、存储、远端会话不再直接消费 Anthropic 原始块结构。
-- 同时明确消息层和本地执行链的分工：消息对象要统一，但启动链、REPL、`QueryEngine`、`query`、工具执行和 TUI 仍然是本地实现，不会退化成“全靠提示词”。
+### Phase B - Capability Acceptance Matrix (active)
 
-### 阶段 2：抽模型能力表
+- Use `docs/capability-acceptance-matrix.md` as the canonical acceptance board.
+- Validate item by item against the official Claude Code capability list.
+- Exclude Anthropic-only product features from "must pass" target set.
 
-- 把 `thinking`、`adaptive thinking`、`1M`、`fast mode`、额外计费说明这类 Claude 产品词从公共层移出。
-- 改成通用能力字段：
-  - 推理档位
-  - 是否支持并行工具
-  - 是否支持本地命令
-  - 是否支持图像
-  - 是否支持阶段化输出
-  - 是否支持结构化结果
+### Phase C - Product Surface Cleanup
 
-### 阶段 3：重写工具与权限循环
+- Complete Codex naming cleanup in user-facing surfaces.
+- Remove stale docs and stale route descriptions that imply Anthropic product dependencies.
 
-- Claude 适配器继续保留 `tool_use / tool_result`。
-- Codex 适配器改走结构化工具调用、工具结果、权限申请这一套对象。
-- 把沙箱权限、理由说明、许可范围从外围补丁改成正式输入。
-- 工具提示词和权限文案会在这一阶段之后继续系统适配，但工具执行、权限记录、结果回灌仍由本地执行链负责。
+### Phase D - Comparative Evaluation
 
-### 阶段 4：重做模型选择与交互外壳
+- Add long-run benchmark and quality comparison against `co-claw-dex`.
+- Compare not just feature presence but also latency, stability, and task outcome quality.
 
-- 重做模型注册表、默认模型、能力提示、`/model` 文案。
-- 明确把“模型切换”作为正式产品能力处理：既要保留 CLI / TUI 里的切换入口，也要把默认模型、可选模型和推理档位改成 Codex 语义。
-- TUI 内模型切换后续要进入正式验收矩阵，至少覆盖打开选择、切换模型、切换 reasoning effort、确认、取消和状态回显。
-- 当前文档里的测试与交互默认模型选择记为 `gpt-5.1-codex-mini`，reasoning effort 记为 `medium`。
-- 去掉所有直接面向 Claude 产品线的界面假设。
-- 调整中间进度展示和最终收口方式，使之更适合 Codex。
+## 5) Definition of Done for This Roadmap Track
 
-### 阶段 5：落第一版 Codex 后端
+A roadmap checkpoint is considered complete only when:
 
-- 先打通基础对话、工具调用、权限、压缩和子代理。
-- 再处理远端能力、长会话续航、更多交互优化。
-
-## 第一里程碑
-
-第一里程碑不是“接上 Codex 接口”，而是“本地单会话编码闭环可用”。
-
-验收标准：
-
-- 能读代码并生成中间更新。
-- 能调用本地命令并回收结果。
-- 能发起权限请求并正确记录用户选择。
-- 能输出最终结果，不混淆中间进度和最终回答。
-- 即使这时还没有完整长会话、远端会话和多代理，也不能把结构做死。
-
-## 当前优先级
-
-先做阶段 1，再做阶段 2。
-
-原因很直接：如果不先拆中间层和模型能力表，后续所有 Codex 接入都会沦为“让 Codex 假装自己是 Claude”。
-
-当前阶段同时要记住三件补强事项，但不改变五阶段顺序：
-
-- 记忆系统已经进入总计划，后续单独展开。
-- 系统提示词结构已经进入总计划，后续在主链稳定后继续深拆。
-- 消息类型层已经进入总计划，后续要继续往更中立的对象层推进。
-
-## 当前进展
-
-- 阶段 0 已完成：文档基线、上游快照、参考分级已经落稳。
-- 阶段 1 已不再停留在协议探测样本，正式改造已经进入 `upstream/claude-code` 主链路。
-- 当前阶段已经完成两块基础打通：
-  - 真实工具调用、权限申请、结果回灌的最小闭环已经在 headless/structured 路径下完成允许/拒绝两条分支验证
-  - 自定义 Codex provider 的本地 CLI 启动链与非交互主链
-  - `main import -> 可见 TUI -> 可输入 -> 真实问答`
-- 当前阶段边界已经明确：只推进 Codex provider 主链；Anthropic 专属的登录、OAuth、Bridge、assistant mode、proactive 能力不纳入这一阶段。
-- 工具提示词适配线和隐藏功能研究线已经明确写入后续计划，但都不进入当前阶段优先级。
-
-## 下一轮目标
-
-- 继续围绕已经打通的真实主链推进稳定化和扩展，而不是回到协议样本或工程壳层。
-- 优先处理这些真实接缝：
-  - `src/services/api/claude.ts`
-  - `src/query.ts`
-  - `src/QueryEngine.ts`
-  - `src/screens/REPL.tsx`
-  - `src/replLauncher.tsx`
-- 每一轮都保持：
-  - 同步文档
-  - 复跑测试
-  - 提交并推送
-- 在五阶段主线不变的前提下，逐步补强：
-  - 记忆系统
-  - 系统提示词结构
-  - 消息类型层
-  - 工具提示词适配线
-  - 隐藏功能研究线
-
-## 开发约束
-
-- 先保证旧路径能继续跑，再逐步换内部结构。
-- 先保行为正确，再做体验调优。
-- 每一轮先检查是否偏离 `claude-code` 基线改造目标，再决定是否保留实验原型。
-- 当前阶段只为 Codex provider 主链补工程壳和运行入口，不以补齐 Anthropic 专属路径为目标。
-
-## 后续已记录但不抢当前优先级
-
-- 后续要把项目名、UI 文案和残留的 `Claude Code` 命名系统性改成 `Codex Code`。
-- 后续要对照 Claude Code 官方文档的能力列表，凡是不是 Anthropic/Claude 特化的能力，都逐项测试和验收；这是一条正式验收主线，不是附带检查项。
-- 后续正式验收矩阵要覆盖全部本地 TUI 交互能力，包括键盘交互、显示正确性、模式切换、确认/取消，以及所有非 Anthropic/Claude 业务的反斜杠命令。
-- 后续要和 `co-claw-dex` 做性能与效果对比评估，不只看功能是否对齐，也要看真实体验与实现代价。
-
-## 当前阶段 5A 的拆分
-
-- 5A-1：高频配置/模式命令
-  - 当前已经补上 `/theme`、`/vim`、`/permissions`、`/memory`、`/config`、`/diff`、`/doctor`、`/add-dir`、`/branch`、`/files`、`/hooks`、`/keybindings`、`/mcp`、`/rewind`、`/skills`、`/tasks`、`/terminal-setup` 的真实 TTY 自动化验收。
-  - `/files` 中途出现过一次 `src/tools.ts` 的 `require2` 初始化顺序错误，这轮已通过提前 `createRequire` 定义修复，并完成整套复测。
-  - 这条线已经能稳定单独跑通，并且已经开始纳入正式验收材料。
-- 5A-2：高频键盘交互
-  - `Ctrl+L`、历史上下、`Ctrl+R`、vim mode 下 `Esc/Enter` 最小闭环已验通。
-  - 下一步是更宽矩阵：长会话、视图切换、滚动与焦点恢复，不再把问题收敛到单个按键。
-- 5A-3：联合验收稳定性
-  - 当前更宽的 PTY/TUI 联合验收会被现有 CLI 双 loader 启动链放大出不稳定问题。
-  - 这条不属于产品能力本身，但属于正式验收链必须收掉的工程问题；在它彻底解决前，这批 TUI 联合验收以串行执行为准。
-
-阶段 5A 做完后，下一整块按既定顺序直接进入 5B，也就是 memory 专项前移，不再把 `MEMORY.md`、`/memory`、长期记忆系统继续往后拖。
-
-## 当前阶段 5B：memory 专项
-
-- 已经正式验通的部分：
-  - session memory 主链已经完成，并已有真实行为测试
-  - Codex headless 下 `MEMORY.md` / auto memory 的真实请求注入已经验通，对应 `upstream/claude-code/tests/autoMemoryAcceptance.test.mjs`
-  - Codex headless 下 `CLAUDE.md` 与 `@import` 的真实请求注入已经验通，对应 `upstream/claude-code/tests/claudeMdAcceptance.test.mjs`
-  - auto-memory 范围已经重新收窄：当前只保留 Codex 主链真正需要的请求注入，不把 extract / auto dream / team memory / agent memory 这些更宽旧分支一起重新打开；对应范围验收是 `upstream/claude-code/tests/autoMemoryScope.test.mjs`
-  - `/memory` 的 project / user / imported 三条 TUI 真实验收已经通过，对应 `upstream/claude-code/tests/configModeSlashCommandsTuiAcceptance.test.mjs`
-- 当前还没完成的部分：
-  - team memory / agent memory / extract / auto dream 这些更宽的长期记忆分支
-  - `CLAUDE.md` / `@import` 更宽矩阵，例如多层导入、更多来源优先级与更复杂组合
-- 结论：
-  - 阶段 5B 现在已经不再是“memory 代码还在”，而是已经把 session memory、auto memory、`CLAUDE.md` / `@import`、`/memory` 交互各自推进到有正式验收
-  - 但整个 memory 体系还没有全量收口，后续仍要继续补正式验收矩阵
+- docs reflect current scope truthfully (no stale Anthropic promise in Codex-only mainline)
+- acceptance matrix row status is updated with evidence
+- related TUI/headless tests are reproducible
+- progress log is updated with concrete "done / pending" boundary
