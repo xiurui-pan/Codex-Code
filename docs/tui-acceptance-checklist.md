@@ -24,6 +24,7 @@
 - `upstream/claude-code/tests/helpDismissTuiAcceptance.test.mjs`
 - `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs`
 - `upstream/claude-code/tests/tuiDisplayInteractionAcceptance.test.mjs`（阶段五新增：窄终端中英混输+补全焦点、长输出+transcript 进出后焦点恢复）
+- `upstream/claude-code/tests/claudeMdAcceptance.test.mjs`（`CLAUDE.md`、`@import`、`@文件引用` 已确认进入真实请求体）
 
 本轮复验命令：
 
@@ -31,6 +32,7 @@
 - `cd upstream/claude-code && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`
 - `cd upstream/claude-code && node --test tests/tuiDisplayInteractionAcceptance.test.mjs`
+- `cd upstream/claude-code && node --test tests/claudeMdAcceptance.test.mjs`
 
 ## 自动化 smoke 与人工验收的边界
 
@@ -66,7 +68,7 @@
 
 - 反斜杠命令补全、命令选择框、帮助提示的打开、关闭、确认、取消流程。
 - `CLAUDE.md` 能进入主查询；如果当前实现还没打通，至少要给出稳定、可重复的缺口测试。
-- `@文件引用` 不只显示路径，还要把文件内容真正带进请求；若失败，要有清楚提示。
+- `@文件引用` 现在已能把文件内容真正带进请求；下一步主要是补更宽 TUI 联动场景。
 - `@import` 如果当前有明确入口，要么真正生效，要么有明确失败测试和提示说明，不能静默失效。
 - `/resume`、`/rewind`、`/clear`、`/compact` 这类会改会话状态的命令，执行前后要能看清状态变化。
 - `Ctrl+O` 切到历史视图后，长消息、工具输出、权限消息的展开和回退要正常。
@@ -121,9 +123,9 @@
 - `/session`、`/summary`：当前在 Codex-only 本地路径下已覆盖“未知命令/技能”降级行为，不打 provider 请求；是否要提供正向功能还待产品决策。
 - `/clear`：当前已有行为验收，但现阶段主要证据还是 headless，不应先记成完整 TTY 已验。
 - `/compact`：已经补上 `--resume <transcriptPath>` 的真实 TTY 验收，但更宽 TTY 场景还没补齐。
-- plan mode：已覆盖“进入 plan mode、再次查看当前为空”的最小链路，但还缺更完整的退出、取消、已有 plan 状态回显。
+- plan mode：已覆盖“进入 plan mode、再次查看当前为空”的最小链路；`resume existing plan` 子用例当前仍为 skip，原因是 resume 后 plan slug 恢复与关联时序还不稳定。
 - `/agents`、`/plugin`、`/reload-plugins`、`/ide`：当前已有真实 TUI 最小闭环证据，但还没做更宽场景验收，比如连续切换、窄终端、和其他弹层/焦点状态联动。
-- TUI 显示：目前只覆盖了少量 dialog、picker、transcript 的出现与关闭，还没有形成乱码、错位、滚动、焦点、窄终端的专项矩阵。
+- TUI 显示：已新增两项更宽场景证据，覆盖“窄终端中英混输 + 补全焦点稳定”和“长输出 + transcript 进出后焦点恢复”；乱码、错位、滚动、重绘矩阵仍待继续补。
 
 ### 未验
 
@@ -172,6 +174,12 @@
 - `@文件引用`
 - `@import`
 
+当前主链已确认进入请求的包括：
+
+- `CLAUDE.md`
+- `@文件引用`
+- `@import`
+
 目前已完成的记忆相关 TUI 验收，只覆盖：
 
 - `/memory` 打开 project memory
@@ -180,6 +188,5 @@
 
 还没完成的更宽 memory 验收包括：
 
-- `CLAUDE.md` 在 Codex 主链下是否稳定进入请求
-- `@import` 的更完整交互与请求链
+- `CLAUDE.md` / `@文件引用` / `@import` 在更多 TUI 联动场景下的稳定性
 - team memory / agent memory / 其他长期记忆入口

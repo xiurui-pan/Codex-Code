@@ -10,13 +10,12 @@ What this means in practice:
 - Mainline migration goal is no longer "make Claude-shaped output look usable".
 - Mainline goal is "make Codex-shaped runtime objects first-class".
 
-## Recent 5 Commits (9afabd4, ca7b9d3, fbc85e3, c7e97ed, bf0555e)
+## Recent Convergence Commits (45949c3, f35380d, b4cebc3, c7d136c)
 
-- `9afabd4`: fixed the real TUI case where `/exit` could fail to exit after an interrupt; regression is covered by the new case in `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs`.
-- `ca7b9d3`: fixed auto-update failure hint fallback when package URL is undefined; recovery command is now stable and explicit.
-- `fbc85e3`: fixed `/help` dismiss flow so `Esc` closes help and footer state returns to normal shortcut hint.
-- `c7e97ed`: fixed silent provider stream hang by adding fail-fast path in Codex responses stream handling.
-- `bf0555e`: added request-stage timeout in Codex responses request chain, so waiting-for-response hang now returns explicit error.
+- `45949c3`: closed the minimal `/plan` TUI chain; current evidence is "enter plan mode -> re-run `/plan` -> see empty current-plan status", while the "resume existing plan" subcase remains skipped.
+- `f35380d`: fixed the Codex request-body path so `@文件引用` now really enters the request body, with evidence in `upstream/claude-code/tests/claudeMdAcceptance.test.mjs`.
+- `b4cebc3`: added stage-five wider TUI display acceptance for narrow terminal mixed-language input and transcript-toggle focus return.
+- `c7d136c`: stabilized the TUI display interaction flow so the new wider display tests can run deterministically.
 
 ## Real TUI Issue Status
 
@@ -34,6 +33,9 @@ Current behavior:
 - interrupt 之后再次执行 `/exit`，现在会正常退出；对应回归用例已加到 `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs`。
 - 多轮真实 TUI 稳定性当前以 `upstream/claude-code/tests/tuiMultiTurnStabilityAcceptance.test.mjs` 留证；覆盖范围明确是“round1 成功 + round2 中断 + `/exit` 退出”，不是第三轮再提问已自动化覆盖。
 - provider unreachable / silent stream / request-stage timeout now returns explicit provider error text instead of silent waiting.
+- `@文件引用` 现在已经不只是 UI 提示，而是会真实进入 Codex 请求体；证据在 `upstream/claude-code/tests/claudeMdAcceptance.test.mjs`。
+- plan mode 当前状态是“最小链路已验”；`resume existing plan` 子用例仍然 skip，原因是 resume 后 plan slug 恢复与关联时序还不稳定。
+- TUI 宽场景新增两项自动化证据：窄终端中英混输 + 补全焦点稳定，以及长输出 + transcript 进出后的焦点恢复；证据在 `upstream/claude-code/tests/tuiDisplayInteractionAcceptance.test.mjs`。
 
 ## Done (Scope and Direction)
 
@@ -84,6 +86,7 @@ Still pending:
 
 - broader multi-round real TUI soak for repeated prompt cycles under unstable network.
 - wider slash-command matrix completion in broader interaction scenes; `/files` `/plan` `/agents` `/plugin` `/reload-plugins` `/ide` already have minimal local TUI evidence.
+- plan mode 的 `resume existing plan` 子用例仍未收口，当前继续以 skip 保留，避免把不稳定时序误记成已验。
 
 Next command set:
 
@@ -92,6 +95,8 @@ Next command set:
 - `cd upstream/claude-code && node --test tests/tuiKeyboardInputAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`
+- `cd upstream/claude-code && node --test tests/tuiDisplayInteractionAcceptance.test.mjs`
+- `cd upstream/claude-code && node --test tests/claudeMdAcceptance.test.mjs`
 
 ## Long-Term Track Added
 
