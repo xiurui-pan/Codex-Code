@@ -81,6 +81,57 @@ async function withResponsesServer(responseText, fn) {
   }
 }
 
+async function withStalledResponsesServer(fn) {
+  const requestBodies = []
+  const sockets = new Set()
+  const server = http.createServer((req, res) => {
+    if (req.method !== 'POST' || req.url !== '/responses') {
+      res.statusCode = 404
+      res.end('not found')
+      return
+    }
+
+    let body = ''
+    req.on('data', chunk => {
+      body += chunk.toString()
+    })
+    req.on('end', () => {
+      requestBodies.push(JSON.parse(body))
+      res.writeHead(200, {
+        'content-type': 'text/event-stream',
+        connection: 'keep-alive',
+        'cache-control': 'no-cache',
+      })
+      // Keep the stream open without emitting events so the TUI stays in
+      // "request in progress" state until user interrupt.
+      req.on('close', () => {
+        res.end()
+      })
+    })
+  })
+
+  server.on('connection', socket => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+  })
+
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('failed to bind stalled TUI provider server')
+  }
+
+  try {
+    return await fn({ port: address.port, requestBodies })
+  } finally {
+    for (const socket of sockets) {
+      socket.destroy()
+    }
+    await new Promise(resolve => server.close(resolve))
+  }
+}
+
 async function writeCodexConfig(homeDir, port) {
   const codexDir = join(homeDir, '.codex')
   await mkdir(codexDir, { recursive: true })
@@ -407,6 +458,30 @@ test('vim mode uses Esc to leave insert mode and Enter still submits', SERIAL_TE
       const requestJson = JSON.stringify(requestBodies.at(-1))
       assert.match(requestJson, /abc!/)
       assert.doesNotMatch(requestJson, /abcA!/)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('after interrupting an in-flight request, /exit still exits cleanly', SERIAL_TEST, async () => {
+  await withStalledResponsesServer(async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-tui-exit-after-interrupt-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'submit-request', waitFor: ['❯'], send: 'hang please\r' },
+          { name: 'interrupt-request', waitFor: ['esc to interrupt'], send: '\u001b', settleMs: 300 },
+          { name: 'exit', waitFor: ['❯'], send: '/exit\r', settleMs: 500 },
+        ],
+      })
+
+      assert.equal(result.code, 0, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['submit-request', 'interrupt-request', 'exit'])
+      assert.equal(requestBodies.length, 1)
+      assert.match(JSON.stringify(requestBodies[0]), /hang please/)
     } finally {
       await rm(tempHome, { recursive: true, force: true })
     }
