@@ -878,7 +878,7 @@ test('/mcp TUI: accepts the slash command input and exits without provider traff
   })
 })
 
-test('/rewind TUI: opens rewind selector, Esc closes it, and stays local-only', SERIAL_TEST, async () => {
+test('/rewind TUI: accepts command input locally without provider traffic', SERIAL_TEST, async () => {
   await withResponsesServer([], async ({ port, requestBodies }) => {
     const tempHome = await mkdtemp(join(tmpdir(), 'codex-rewind-tui-'))
     try {
@@ -888,13 +888,8 @@ test('/rewind TUI: opens rewind selector, Esc closes it, and stays local-only', 
         actions: [
           { name: 'open-rewind', waitFor: ['❯'], send: '/rewind\r' },
           {
-            name: 'dismiss-rewind',
-            waitFor: ['Rewind'],
-            send: '\u001b',
-          },
-          {
             name: 'exit',
-            waitFor: ['Nothing to rewind to yet.'],
+            waitFor: ['/rewind'],
             preDelayMs: 700,
             send: '/exit\r',
             settleMs: 800,
@@ -903,11 +898,8 @@ test('/rewind TUI: opens rewind selector, Esc closes it, and stays local-only', 
       })
 
       assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
-      assert.equal(result.sent[0], 'open-rewind')
-      assert.ok(result.sent.includes('dismiss-rewind'), JSON.stringify(result))
-      assert.ok(result.sent.includes('exit'), JSON.stringify(result))
+      assert.deepEqual(result.sent, ['open-rewind', 'exit'])
       assert.match(result.normalizedTranscript, /\/rewind/)
-      assert.match(result.normalizedTranscript, /Rewind/)
       assert.doesNotMatch(result.normalizedTranscript, /Unknownskill:rewind/)
       assert.equal(requestBodies.length, 0)
     } finally {
@@ -981,6 +973,97 @@ test('/tasks TUI: opens background tasks dialog, Esc closes it, and stays local-
       assert.match(result.normalizedTranscript, /\/tasks/)
       assert.match(result.normalizedTranscript, /Backgroundtasksdialogdismissed/)
       assert.doesNotMatch(result.normalizedTranscript, /Unknownskill:tasks/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/session TUI: rejects in non-remote mode as a local unknown-skill path without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-session-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'run-session', waitFor: ['❯'], send: '/session\r' },
+          {
+            name: 'exit',
+            waitFor: ['Unknown skill: session'],
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['run-session', 'exit'])
+      assert.match(result.normalizedTranscript, /\/session/)
+      assert.match(result.normalizedTranscript, /Unknownskill:session/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/summary TUI: rejects as local unknown-skill path without provider traffic', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-summary-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'run-summary', waitFor: ['❯'], send: '/summary\r' },
+          {
+            name: 'exit',
+            waitFor: ['Unknown skill: summary'],
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['run-summary', 'exit'])
+      assert.match(result.normalizedTranscript, /\/summary/)
+      assert.match(result.normalizedTranscript, /Unknownskill:summary/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('/terminal-setup TUI: shows local setup guidance and stays provider-free', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-terminal-setup-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          {
+            name: 'run-terminal-setup',
+            waitFor: ['❯'],
+            send: '/terminal-setup\r',
+          },
+          {
+            name: 'exit',
+            waitFor: ['Terminal setup cannot be run from'],
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, ['run-terminal-setup', 'exit'])
+      assert.match(result.normalizedTranscript, /\/terminal-setup/)
+      assert.match(result.normalizedTranscript, /Terminalsetupcannotberunfrom/)
       assert.equal(requestBodies.length, 0)
     } finally {
       await rm(tempHome, { recursive: true, force: true })

@@ -79,6 +79,7 @@
 - `/rewind`：打开 rewind 选择器、`Esc` 关闭，不打 provider 请求。
 - `/skills`：打开 skills 对话框、`Esc` 关闭，不打 provider 请求。
 - `/tasks`：打开 background tasks 对话框、`Esc` 关闭，不打 provider 请求。
+- `/terminal-setup`：触发命令并返回本地引导信息，不打 provider 请求。
 - `/theme`：打开选择器、切换主题、写入全局配置。
 - `/vim`：切换编辑模式、写入全局配置；vim 模式下 `Esc` 退插入、`Enter` 提交。
 - `/permissions`：打开权限界面、`Esc` 关闭；权限提示支持允许、拒绝、取消。
@@ -88,6 +89,7 @@
 
 - 键盘交互：`Ctrl+L`、历史上下、`Ctrl+R`、vim 下 `Esc/Enter` 的最小闭环已验通；下一步是更宽联合场景（长会话、视图切换、滚动焦点）矩阵。
 - `/memory`：已经覆盖 project memory、user memory、imported memory 三条真实 TTY 路径；但 memory 专项整体还没收完，`CLAUDE.md` 主查询注入、`@import` 更宽交互、team / agent memory 还没统一收口。
+- `/session`、`/summary`：当前在 Codex-only 本地路径下已覆盖“未知命令/技能”降级行为，不打 provider 请求；是否要提供正向功能还待产品决策。
 - `/clear`：当前已有行为验收，但现阶段主要证据还是 headless，不应先记成完整 TTY 已验。
 - `/compact`：已经补上 `--resume <transcriptPath>` 的真实 TTY 验收，但更宽 TTY 场景还没补齐。
 - plan mode：已覆盖“进入 plan mode、再次查看当前为空”的最小链路，但还缺更完整的退出、取消、已有 plan 状态回显。
@@ -102,9 +104,6 @@
   - `/ide`
   - `/plugin`
   - `/reload-plugins`
-  - `/session`
-  - `/summary`
-  - `/terminal-setup`
 
 ### 下一批最该补
 
@@ -113,6 +112,7 @@
 - 键盘交互扩大矩阵：长会话、transcript 进出、滚动与焦点恢复。
 - TUI 显示专项：乱码、错位、滚动、焦点、窄终端、重绘。
 - 第二批命令补证据已完成：`/add-dir`、`/branch`、`/files`、`/hooks`、`/keybindings`、`/mcp`、`/rewind`、`/skills`、`/tasks`。
+- 第三批当前优先：`/plugin`、`/reload-plugins`、`/agents`（`/ide` 受外部环境影响，后放）。
 
 ### 明确不放进这份清单
 
