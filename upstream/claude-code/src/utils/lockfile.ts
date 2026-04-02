@@ -10,10 +10,12 @@
  */
 
 import type { CheckOptions, LockOptions, UnlockOptions } from 'proper-lockfile'
+import { createRequire } from 'node:module'
 
 type Lockfile = typeof import('proper-lockfile')
 
 let _lockfile: Lockfile | undefined
+const require = createRequire(import.meta.url)
 
 function getLockfile(): Lockfile {
   if (!_lockfile) {
