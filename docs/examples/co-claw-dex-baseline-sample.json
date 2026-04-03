@@ -1,0 +1,91 @@
+{
+  "run_id": "baseline-1775179930424",
+  "timestamp": "2026-04-03T01:32:10.424Z",
+  "runner": "codex-code",
+  "model": "gpt-5.4",
+  "tasks_file": "/home/pxr/workspace/CodingAgent/Codex-Code/docs/examples/co-claw-dex-tasks.sample.json",
+  "environment": {
+    "node": "v22.18.0",
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "tasks": [
+    {
+      "task_id": "quick-pass",
+      "category": "smoke",
+      "prompt": "sample pass task",
+      "status": "success",
+      "timeout_ms": 8000,
+      "duration_ms": 33,
+      "command": "node -e \"console.log('ok')\"",
+      "exit_code": 0,
+      "signal": null,
+      "latency": {
+        "first_token_ms": null,
+        "task_done_ms": 33
+      },
+      "stability": {
+        "timeout": false,
+        "retry_count": 0,
+        "interrupt_recovered": null
+      },
+      "quality": {
+        "auto_check_pass": true,
+        "reviewer_score_1_to_5": null,
+        "notes": ""
+      },
+      "maintenance": {
+        "setup_minutes": null,
+        "harness_issues": []
+      },
+      "output": {
+        "stdout": "",
+        "stderr": ""
+      }
+    },
+    {
+      "task_id": "quick-timeout",
+      "category": "smoke",
+      "prompt": "sample timeout task",
+      "status": "timeout",
+      "timeout_ms": 500,
+      "duration_ms": 502,
+      "command": "node -e \"setTimeout(() => {}, 60000)\"",
+      "exit_code": null,
+      "signal": "SIGTERM",
+      "latency": {
+        "first_token_ms": null,
+        "task_done_ms": 502
+      },
+      "stability": {
+        "timeout": true,
+        "retry_count": 0,
+        "interrupt_recovered": null
+      },
+      "quality": {
+        "auto_check_pass": false,
+        "reviewer_score_1_to_5": null,
+        "notes": ""
+      },
+      "maintenance": {
+        "setup_minutes": null,
+        "harness_issues": []
+      },
+      "output": {
+        "stdout": "",
+        "stderr": ""
+      }
+    }
+  ],
+  "aggregate": {
+    "task_count": 2,
+    "success_count": 1,
+    "fail_count": 0,
+    "timeout_count": 1,
+    "pass_rate": 0.5,
+    "timeout_rate": 0.5,
+    "latency_p50_ms": 33,
+    "latency_p95_ms": 502
+  },
+  "notes": "Stage 6 baseline run. Compare JSON outputs directly between codex-code and co-claw-dex."
+}
