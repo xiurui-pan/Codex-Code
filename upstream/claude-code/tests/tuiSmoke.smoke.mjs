@@ -229,7 +229,7 @@ test('interactive TTY can start, show a prompt, answer once, and exit cleanly', 
     assert.equal(result.promptSeen, true)
     assert.equal(result.sentPrompt, true)
     assert.equal(result.sentExit, true)
-    assert.match(result.cleanedTranscript, /Claude\s*Code/)
+    assert.match(result.cleanedTranscript, /Codex\s*Code/)
     assert.match(result.cleanedTranscript, /TUI_SMOKE_DONE/)
     assert.ok(server.requestBodies.length >= 1)
     assert.match(JSON.stringify(server.requestBodies.at(-1)), /TUI_SMOKE_DONE/)

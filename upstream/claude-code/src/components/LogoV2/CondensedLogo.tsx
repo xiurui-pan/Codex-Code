@@ -11,11 +11,13 @@ import { truncate } from '../../utils/format.js';
 import { isFullscreenEnvEnabled } from '../../utils/fullscreen.js';
 import { formatModelAndBilling, getLogoDisplayData, truncatePath } from '../../utils/logoV2Utils.js';
 import { renderModelSetting } from '../../utils/model/model.js';
+import { isCurrentPhaseCustomCodexProvider } from '../../utils/currentPhase.js';
 import { OffscreenFreeze } from '../OffscreenFreeze.js';
 import { AnimatedClawd } from './AnimatedClawd.js';
 import { Clawd } from './Clawd.js';
 import { GuestPassesUpsell, incrementGuestPassesSeenCount, useShowGuestPassesUpsell } from './GuestPassesUpsell.js';
 import { incrementOverageCreditUpsellSeenCount, OverageCreditUpsell, useShowOverageCreditUpsell } from './OverageCreditUpsell.js';
+const PRODUCT_NAME = isCurrentPhaseCustomCodexProvider() ? 'Codex Code' : 'Claude Code';
 export function CondensedLogo() {
   const $ = _c(29);
   const {
@@ -88,7 +90,7 @@ export function CondensedLogo() {
   }
   let t5;
   if ($[8] === Symbol.for("react.memo_cache_sentinel")) {
-    t5 = <Text bold={true}>Claude Code</Text>;
+    t5 = <Text bold={true}>{PRODUCT_NAME}</Text>;
     $[8] = t5;
   } else {
     t5 = $[8];

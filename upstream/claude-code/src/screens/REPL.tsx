@@ -218,6 +218,7 @@ const UndercoverAutoCallout = "external" === 'ant' ? require('../components/Unde
 /* eslint-enable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
 import { activityManager } from '../utils/activityManager.js';
 import { createAbortController } from '../utils/abortController.js';
+import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js';
 import { MCPConnectionManager } from '../services/mcp/MCPConnectionManager.js';
 import { useFeedbackSurvey } from '../components/FeedbackSurvey/useFeedbackSurvey.js';
 import { useMemorySurvey } from '../components/FeedbackSurvey/useMemorySurvey.js';
@@ -306,6 +307,7 @@ const useClaudeCodeHintRecommendationForCurrentStage = currentStageDisableStartu
   recommendation: null,
   handleResponse: () => {}
 }) : useClaudeCodeHintRecommendation;
+const PRODUCT_NAME = isCurrentPhaseCustomCodexProvider() ? 'Codex Code' : 'Claude Code';
 const EffortCallout = currentStageDisableStartupNotifications ? (() => null) : require('../components/EffortCallout.js').EffortCallout;
 const shouldShowEffortCallout = currentStageDisableStartupNotifications ? (() => false) : require('../components/EffortCallout.js').shouldShowEffortCallout;
 const RemoteCallout = currentStageDisableStartupNotifications ? (() => null) : require('../components/RemoteCallout.js').RemoteCallout;
@@ -1176,7 +1178,7 @@ export function REPL({
   // session from mid-conversation context.
   const haikuTitleAttemptedRef = useRef((initialMessages?.length ?? 0) > 0);
   const agentTitle = mainThreadAgentDefinition?.agentType;
-  const terminalTitle = sessionTitle ?? agentTitle ?? haikuTitle ?? 'Claude Code';
+  const terminalTitle = sessionTitle ?? agentTitle ?? haikuTitle ?? PRODUCT_NAME;
   const isWaitingForApproval = toolUseConfirmQueue.length > 0 || promptQueue.length > 0 || pendingWorkerRequest || pendingSandboxRequest;
   // Local-jsx commands (like /plugin, /config) show user-facing dialogs that
   // wait for input. Require jsx != null — if the flag is stuck true but jsx
@@ -4178,7 +4180,7 @@ export function REPL({
   useEffect(() => {
     const handleSuspend = () => {
       // Print suspension instructions
-      process.stdout.write(`\nClaude Code has been suspended. Run \`fg\` to bring Claude Code back.\nNote: ctrl + z now suspends Claude Code, ctrl + _ undoes input.\n`);
+      process.stdout.write(`\n${PRODUCT_NAME} has been suspended. Run \`fg\` to bring ${PRODUCT_NAME} back.\nNote: ctrl + z now suspends ${PRODUCT_NAME}, ctrl + _ undoes input.\n`);
     };
     const handleResume = () => {
       // Force complete component tree replacement instead of terminal clear

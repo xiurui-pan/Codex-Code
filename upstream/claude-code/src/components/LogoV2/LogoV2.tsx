@@ -43,7 +43,7 @@ const ChannelsNoticeModule = !currentPhaseDisableAnthropicLogoNotices && (featur
 export function LogoV2() {
   const $ = _c(94);
   if (currentPhaseDisableAnthropicLogoNotices) {
-    return <Box flexDirection="column" borderStyle="round" borderColor="claude" paddingX={1} paddingY={1}><Text bold={true}>Claude Code</Text><Text dimColor={true}>Custom Codex provider</Text></Box>;
+    return <Box flexDirection="column" borderStyle="round" borderColor="claude" paddingX={1} paddingY={1}><Text bold={true}>Codex Code</Text><Text dimColor={true}>Custom Codex provider</Text></Box>;
   }
   const activities = getRecentActivitySync();
   const username = getGlobalConfig().oauthAccount?.displayName ?? "";

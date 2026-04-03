@@ -101,12 +101,39 @@ export const THEME_NAMES = [
 export type ThemeName = (typeof THEME_NAMES)[number]
 
 export const THEME_SETTINGS = ['auto', ...THEME_NAMES] as const
+const USE_CODEX_BRANDING_COLORS =
+  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
 
 /**
  * A theme preference as stored in user config. `'auto'` follows the system
  * dark/light mode and is resolved to a ThemeName at runtime.
  */
 export type ThemeSetting = (typeof THEME_SETTINGS)[number]
+
+function alignToCodexCliColors(base: Theme): Theme {
+  const useAnsi = base.claude.startsWith('ansi:')
+  const codexAccent = useAnsi ? 'ansi:cyan' : 'rgb(0,179,219)'
+  const codexAccentShimmer = useAnsi ? 'ansi:cyanBright' : 'rgb(102,216,255)'
+  const codexWarning = useAnsi ? 'ansi:yellow' : 'rgb(230,180,0)'
+  const codexError = useAnsi ? 'ansi:red' : 'rgb(220,70,70)'
+  return {
+    ...base,
+    claude: codexAccent,
+    claudeShimmer: codexAccentShimmer,
+    claudeBlue_FOR_SYSTEM_SPINNER: codexAccent,
+    claudeBlueShimmer_FOR_SYSTEM_SPINNER: codexAccentShimmer,
+    permission: codexAccent,
+    permissionShimmer: codexAccentShimmer,
+    suggestion: codexAccent,
+    professionalBlue: codexAccent,
+    planMode: codexAccent,
+    clawd_body: codexAccent,
+    briefLabelClaude: codexAccent,
+    warning: codexWarning,
+    warningShimmer: codexWarning,
+    error: codexError,
+  }
+}
 
 /**
  * Light theme using explicit RGB values to avoid inconsistencies
@@ -596,7 +623,8 @@ const darkDaltonizedTheme: Theme = {
 }
 
 export function getTheme(themeName: ThemeName): Theme {
-  switch (themeName) {
+  const theme = (() => {
+    switch (themeName) {
     case 'light':
       return lightTheme
     case 'light-ansi':
@@ -609,7 +637,9 @@ export function getTheme(themeName: ThemeName): Theme {
       return darkDaltonizedTheme
     default:
       return darkTheme
-  }
+    }
+  })()
+  return USE_CODEX_BRANDING_COLORS ? alignToCodexCliColors(theme) : theme
 }
 
 // Create a chalk instance with 256-color level for Apple Terminal
