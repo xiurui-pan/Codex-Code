@@ -84,6 +84,10 @@ test('preferred response conversion keeps api_error on the payload side until wr
 test('codex model capability table resolves aliases and supported reasoning levels', () => {
   assert.equal(DEFAULT_CODEX_MODEL, 'gpt-5.1-codex-mini')
   assert.equal(resolveCodexModelInput('mini'), 'gpt-5.1-codex-mini')
+  assert.equal(resolveCodexModelInput('haiku'), 'gpt-5.1-codex-mini')
+  assert.equal(resolveCodexModelInput('sonnet'), 'gpt-5.1-codex')
+  assert.equal(resolveCodexModelInput('opus'), 'gpt-5.1-codex-max')
+  assert.equal(resolveCodexModelInput('opusplan'), 'gpt-5.1-codex-max')
   assert.deepEqual(getCodexSupportedEffortLevels('gpt-5.1-codex-mini'), [
     'medium',
     'high',

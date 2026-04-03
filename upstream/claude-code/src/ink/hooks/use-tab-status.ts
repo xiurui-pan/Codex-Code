@@ -17,6 +17,9 @@ const rgb = (r: number, g: number, b: number): Color => ({
   b,
 })
 
+const USE_CODEX_BRANDING_COLORS =
+  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+
 // Per the OSC 21337 usage guide's suggested mapping.
 const TAB_STATUS_PRESETS: Record<
   TabStatusKind,
@@ -28,14 +31,20 @@ const TAB_STATUS_PRESETS: Record<
     statusColor: rgb(136, 136, 136),
   },
   busy: {
-    indicator: rgb(255, 149, 0),
+    indicator: USE_CODEX_BRANDING_COLORS ? rgb(0, 179, 219) : rgb(255, 149, 0),
     status: 'Working…',
-    statusColor: rgb(255, 149, 0),
+    statusColor: USE_CODEX_BRANDING_COLORS ? rgb(0, 179, 219) : rgb(255, 149, 0),
   },
   waiting: {
-    indicator: rgb(95, 135, 255),
+    indicator: USE_CODEX_BRANDING_COLORS ? rgb(230, 180, 0) : rgb(95, 135, 255),
     status: 'Waiting',
-    statusColor: rgb(95, 135, 255),
+    statusColor: USE_CODEX_BRANDING_COLORS ? rgb(230, 180, 0) : rgb(95, 135, 255),
+  },
+}
+
+export const __test = {
+  getTabStatusPreset(kind: TabStatusKind) {
+    return TAB_STATUS_PRESETS[kind]
   },
 }
 

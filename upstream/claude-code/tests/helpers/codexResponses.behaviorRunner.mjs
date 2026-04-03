@@ -234,6 +234,145 @@ async function runMissingBaseUrl() {
   )
 }
 
+async function runToolBody() {
+  const { buildResponsesBody } = await import(
+    '../../src/services/api/codexResponses.ts'
+  )
+
+  return withEnv(
+    {
+      ANTHROPIC_MODEL: 'gpt-5.1-codex-mini',
+    },
+    async () => {
+      const body = await buildResponsesBody({
+        messages: [
+          {
+            type: 'user',
+            uuid: 'user-1',
+            message: { content: 'read the repo and search the web' },
+          },
+        ],
+        systemPrompt: [],
+        options: {
+          tools: [
+            {
+              name: 'ReadAllFiles',
+              prompt: async () => 'Read files from the working directory',
+              inputJSONSchema: {
+                type: 'object',
+                properties: {
+                  path: { type: 'string' },
+                },
+                required: ['path'],
+              },
+            },
+          ],
+          extraToolSchemas: [
+            {
+              type: 'web_search_20250305',
+              name: 'web_search',
+              allowed_domains: ['example.com'],
+            },
+          ],
+        },
+      })
+
+      return {
+        toolNames: (body.tools ?? []).map(tool => tool.name ?? tool.type),
+        webSearchTool: (body.tools ?? []).find(tool => tool.type === 'web_search') ?? null,
+      }
+    },
+  )
+}
+
+async function runQueryToolForwarding() {
+  const { queryCodexResponses } = await import(
+    '../../src/services/api/codexResponses.ts'
+  )
+
+  let capturedBody = null
+  const server = http.createServer((req, res) => {
+    if (req.method !== 'POST' || req.url !== '/responses') {
+      res.writeHead(404).end('not found')
+      return
+    }
+
+    let requestText = ''
+    req.setEncoding('utf8')
+    req.on('data', chunk => {
+      requestText += chunk
+    })
+    req.on('end', () => {
+      capturedBody = JSON.parse(requestText)
+      res.writeHead(200, {
+        'content-type': 'text/event-stream',
+        connection: 'keep-alive',
+        'cache-control': 'no-cache',
+      })
+      res.write(
+        'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"done"}]}}\n\n',
+      )
+      res.write(
+        'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp-tool-forward"}}\n\n',
+      )
+      res.end('data: [DONE]\n\n')
+    })
+  })
+
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('failed to bind test server')
+  }
+
+  try {
+    return await withEnv(
+      {
+        ANTHROPIC_BASE_URL: `http://127.0.0.1:${address.port}`,
+        ANTHROPIC_API_KEY: 'test-key',
+        ANTHROPIC_MODEL: 'gpt-5.1-codex-mini',
+      },
+      async () => {
+        await queryCodexResponses({
+          messages: [
+            {
+              type: 'user',
+              uuid: 'user-1',
+              message: { content: 'inspect the repo' },
+            },
+          ],
+          systemPrompt: [],
+          tools: [
+            {
+              name: 'ReadAllFiles',
+              prompt: async () => 'Read files from the working directory',
+              inputJSONSchema: {
+                type: 'object',
+                properties: {
+                  path: { type: 'string' },
+                },
+                required: ['path'],
+              },
+            },
+          ],
+          options: {},
+          signal: new AbortController().signal,
+        })
+
+        return {
+          toolNames: (capturedBody?.tools ?? []).map(
+            tool => tool.name ?? tool.type,
+          ),
+          toolChoice: capturedBody?.tool_choice ?? null,
+        }
+      },
+    )
+  } finally {
+    await new Promise(resolve => server.close(resolve))
+  }
+}
+
 const result =
   mode === 'merge'
     ? await runMerge()
@@ -243,5 +382,9 @@ const result =
         ? await runIdentity(false)
         : mode === 'identity-enabled'
           ? await runIdentity(true)
-          : await runMissingBaseUrl()
+          : mode === 'tool-body'
+            ? await runToolBody()
+            : mode === 'query-tool-forwarding'
+              ? await runQueryToolForwarding()
+            : await runMissingBaseUrl()
 process.stdout.write(JSON.stringify(result))

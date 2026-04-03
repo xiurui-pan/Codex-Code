@@ -13,6 +13,7 @@ import {
   isFastModeEnabled,
 } from 'src/utils/fastMode.js'
 import { Box, Text } from '../ink.js'
+import { useRegisterKeybindingContext } from '../keybindings/KeybindingContext.js'
 import { useKeybindings } from '../keybindings/useKeybinding.js'
 import { useAppState, useSetAppState } from '../state/AppState.js'
 import {
@@ -68,6 +69,7 @@ export function ModelPicker({
 }: Props): React.ReactNode {
   const setAppState = useSetAppState()
   const exitState = useExitOnCtrlCDWithKeybindings()
+  useRegisterKeybindingContext('ModelPicker')
   const effortValue = useAppState(state => state.effortValue)
   const isFastMode = useAppState(state => (isFastModeEnabled() ? state.fastMode : false))
   const [hasToggledEffort, setHasToggledEffort] = useState(false)

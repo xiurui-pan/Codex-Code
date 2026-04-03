@@ -211,3 +211,44 @@ test('exact quoted code payload only executes in isolated debug mode', () => {
   assert.equal(debugItems.some(item => item.kind === 'tool_call'), true)
   assert.equal(debugItems.some(item => item.kind === 'local_shell_call'), true)
 })
+
+test('commentary messages are not surfaced as final answers', () => {
+  const items = normalizeResponsesOutputToTurnItems([
+    {
+      type: 'message',
+      role: 'assistant',
+      phase: 'commentary',
+      content: [
+        {
+          type: 'output_text',
+          text: "Let's inspect the current directory before summarizing.",
+        },
+      ],
+    },
+  ])
+
+  assert.equal(items.some(item => item.kind === 'final_answer'), false)
+})
+
+test('web search call emits a visible progress message', () => {
+  const items = normalizeResponsesOutputToTurnItems([
+    {
+      type: 'web_search_call',
+      status: 'in_progress',
+      action: {
+        type: 'search',
+        query: 'codex cli tool calling',
+      },
+    },
+  ])
+
+  assert.equal(
+    items.some(
+      item =>
+        item.kind === 'ui_message' &&
+        item.source === 'web_search_call' &&
+        item.text.includes('codex cli tool calling'),
+    ),
+    true,
+  )
+})

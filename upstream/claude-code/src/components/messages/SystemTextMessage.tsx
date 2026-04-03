@@ -33,6 +33,29 @@ type Props = {
   verbose: boolean;
   isTranscriptMode?: boolean;
 };
+
+function shouldShowInfoMessageByDefault(message: SystemMessage): boolean {
+  const item = 'modelTurnItem' in message ? message.modelTurnItem : undefined
+  if (!item) {
+    return false
+  }
+
+  if (item.kind === 'ui_message') {
+    return (
+      item.source === 'web_search_call' ||
+      item.source === 'web_search_call_completed' ||
+      item.source === 'tool_call_started'
+    )
+  }
+
+  return (
+    item.kind === 'local_shell_call' ||
+    item.kind === 'permission_request' ||
+    item.kind === 'permission_decision' ||
+    item.kind === 'execution_result'
+  )
+}
+
 export function SystemTextMessage(t0) {
   const $ = _c(51);
   const {
@@ -198,7 +221,7 @@ export function SystemTextMessage(t0) {
     return t6;
   }
   const isStopHookSummary = message.subtype === "stop_hook_summary";
-  if (!isStopHookSummary && !verbose && message.level === "info") {
+  if (!isStopHookSummary && !verbose && message.level === "info" && !shouldShowInfoMessageByDefault(message)) {
     return null;
   }
   if (message.subtype === "api_error") {

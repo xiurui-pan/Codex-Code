@@ -15,6 +15,10 @@
 - `/help` + `Esc`：帮助弹层关闭后，底部提示已恢复到正常快捷键状态。
 - provider silent stream：Responses SSE 长时间无事件时，已返回明确超时错误，不再静默卡住。
 - request-stage timeout：请求阶段新增显式超时，等待响应过久会给出错误反馈。
+- local slash 主链：当前已补到“连续本地 slash”以及“本地 slash 后继续普通提问”的真实 TUI 证据。
+- permission 边界：当前 checklist 里的权限验收指工具权限弹窗；host 沙箱网络权限不在这条本地路线内。
+- “请读取当前目录的所有文件然后告诉我”这类真实自然语言场景，当前已回到直接工具调用主链，不再先来回解释。
+- 真实联网搜索已收口：正常对话会直接走 Codex 原生 `web_search`，CLI 输出可见 `正在联网搜索...` / `联网搜索已完成...`。
 
 对应证据：
 
@@ -25,6 +29,10 @@
 - `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs`
 - `upstream/claude-code/tests/tuiDisplayInteractionAcceptance.test.mjs`（阶段五新增：窄终端中英混输+补全焦点、长输出+transcript 进出后焦点恢复）
 - `upstream/claude-code/tests/claudeMdAcceptance.test.mjs`（`CLAUDE.md`、`@import`、`@文件引用` 已确认进入真实请求体）
+- `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs`（已覆盖连续本地 slash，以及本地 slash 后继续普通提问）
+- `upstream/claude-code/tests/headlessAcceptanceMatrix.test.mjs`（headless capability matrix 当前已整体验收通过）
+- `timeout 80s env OPENAI_API_KEY=\"$CRS_OAI_KEY\" node dist/cli.js -p --verbose --output-format stream-json --include-partial-messages '请读取当前目录的所有文件，然后直接告诉我这个项目的结构和关键入口。不要先提问，不要解释过程。' </dev/null`（真实自然语言读目录场景已确认直接走工具）
+- `timeout 140s env OPENAI_API_KEY=\"$CRS_OAI_KEY\" node dist/cli.js -p --verbose --output-format stream-json --include-partial-messages '请联网搜索 OpenAI Codex CLI 官方文档，并用中文给我三点总结。' </dev/null`（2026-04-03 复验通过：可见搜索开始/完成进度，并返回最终总结）
 
 本轮复验命令：
 
@@ -33,6 +41,7 @@
 - `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`
 - `cd upstream/claude-code && node --test tests/tuiDisplayInteractionAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/claudeMdAcceptance.test.mjs`
+- `cd upstream/claude-code && node --test --test-name-pattern "resume restores existing plan content" tests/coreSlashCommandsAcceptance.test.mjs`
 
 ## 自动化 smoke 与人工验收的边界
 
@@ -123,7 +132,7 @@
 - `/session`、`/summary`：当前在 Codex-only 本地路径下已覆盖“未知命令/技能”降级行为，不打 provider 请求；是否要提供正向功能还待产品决策。
 - `/clear`：当前已有行为验收，但现阶段主要证据还是 headless，不应先记成完整 TTY 已验。
 - `/compact`：已经补上 `--resume <transcriptPath>` 的真实 TTY 验收，但更宽 TTY 场景还没补齐。
-- plan mode：已覆盖“进入 plan mode、再次查看当前为空”的最小链路；`resume existing plan` 子用例当前仍为 skip，原因是 resume 后 plan slug 恢复与关联时序还不稳定。
+- plan mode：已覆盖“进入 plan mode、再次查看当前为空”以及“`--resume <jsonl>` 后再次 `/plan` 读取已有计划内容”的链路；`resume existing plan` 子用例已放开并通过。
 - `/agents`、`/plugin`、`/reload-plugins`、`/ide`：当前已有真实 TUI 最小闭环证据，但还没做更宽场景验收，比如连续切换、窄终端、和其他弹层/焦点状态联动。
 - TUI 显示：已新增两项更宽场景证据，覆盖“窄终端中英混输 + 补全焦点稳定”和“长输出 + transcript 进出后焦点恢复”；乱码、错位、滚动、重绘矩阵仍待继续补。
 

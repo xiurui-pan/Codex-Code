@@ -97,3 +97,20 @@ test('missing base URL error points to configured Codex base URL sources', async
     /configured base URL \(\.codex model_providers\.<id>\.base_url \/ ANTHROPIC_BASE_URL\)/,
   )
 })
+
+test('responses body keeps harness tools exposed and maps native web search for Codex', async () => {
+  const result = await runBehavior('tool-body')
+
+  assert.ok(result.toolNames.includes('ReadAllFiles'))
+  assert.equal(result.webSearchTool?.type, 'web_search')
+  assert.deepEqual(result.webSearchTool?.filters?.allowed_domains, [
+    'example.com',
+  ])
+})
+
+test('queryCodexResponses forwards top-level tools into the Responses request body', async () => {
+  const result = await runBehavior('query-tool-forwarding')
+
+  assert.ok(result.toolNames.includes('ReadAllFiles'))
+  assert.equal(result.toolChoice, 'auto')
+})

@@ -28,7 +28,7 @@ const CODEX_MODEL_CAPABILITIES = [
     description: 'Cheaper and faster for everyday coding work.',
     defaultEffort: 'medium',
     supportedEffortLevels: ['medium', 'high'],
-    aliases: ['mini'],
+    aliases: ['mini', 'haiku'],
   },
   {
     value: 'gpt-5.1-codex',
@@ -36,7 +36,7 @@ const CODEX_MODEL_CAPABILITIES = [
     description: 'Balanced default for regular Codex work.',
     defaultEffort: 'medium',
     supportedEffortLevels: ['low', 'medium', 'high'],
-    aliases: ['codex'],
+    aliases: ['codex', 'sonnet'],
   },
   {
     value: 'gpt-5.1-codex-max',
@@ -44,7 +44,7 @@ const CODEX_MODEL_CAPABILITIES = [
     description: 'Most capable Codex model for deep reasoning.',
     defaultEffort: 'medium',
     supportedEffortLevels: ['low', 'medium', 'high', 'max'],
-    aliases: ['max', 'best'],
+    aliases: ['max', 'best', 'opus', 'opusplan'],
   },
 ] as const satisfies readonly CodexModelCapability[]
 

@@ -61,6 +61,22 @@ export function createSystemMessageFromModelTurnItem(
         content: `工具结果已回灌: ${item.toolUseId}`,
         modelTurnItem: item,
       }
+    case 'ui_message':
+      if (
+        item.level !== 'info' ||
+        item.source === 'web_search_call' ||
+        item.source === 'web_search_call_completed' ||
+        item.source === 'tool_call_started'
+      ) {
+        return {
+          type: 'system',
+          subtype: 'informational',
+          level: item.level,
+          content: item.text,
+          modelTurnItem: item,
+        }
+      }
+      return null
     default:
       return null
   }
@@ -78,6 +94,7 @@ export function buildSDKExecutionItemMessages(
     | 'permission_decision'
     | 'tool_output'
     | 'execution_result'
+    | 'ui_message'
   item: ModelTurnItem
   parent_tool_use_id: string | null
   session_id: string
@@ -91,7 +108,18 @@ export function buildSDKExecutionItemMessages(
       item.kind !== 'permission_request' &&
       item.kind !== 'permission_decision' &&
       item.kind !== 'tool_output' &&
-      item.kind !== 'execution_result'
+      item.kind !== 'execution_result' &&
+      item.kind !== 'ui_message'
+    ) {
+      continue
+    }
+
+    if (
+      item.kind === 'ui_message' &&
+      item.level === 'info' &&
+      item.source !== 'web_search_call' &&
+      item.source !== 'web_search_call_completed' &&
+      item.source !== 'tool_call_started'
     ) {
       continue
     }

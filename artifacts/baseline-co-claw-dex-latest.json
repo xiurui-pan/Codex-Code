@@ -1,0 +1,289 @@
+{
+  "run_id": "baseline-1775191895756",
+  "timestamp": "2026-04-03T04:51:35.756Z",
+  "runner": "co-claw-dex",
+  "model": "gpt-5.4",
+  "tasks_file": "/home/pxr/workspace/CodingAgent/Codex-Code/docs/examples/co-claw-dex-native-tasks.sample.json",
+  "environment": {
+    "node": "v22.18.0",
+    "platform": "linux",
+    "arch": "x64"
+  },
+  "tasks": [
+    {
+      "task_id": "model-api-contract",
+      "category": "model",
+      "prompt": "OpenAI API contract stays green",
+      "status": "success",
+      "timeout_ms": 120000,
+      "duration_ms": 1921,
+      "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/model/openaiApi.test.ts",
+      "exit_code": 0,
+      "signal": null,
+      "latency": {
+        "first_token_ms": null,
+        "task_done_ms": 1921
+      },
+      "stability": {
+        "timeout": false,
+        "retry_count": 0,
+        "interrupt_recovered": null
+      },
+      "quality": {
+        "auto_check_pass": true,
+        "reviewer_score_1_to_5": null,
+        "notes": ""
+      },
+      "maintenance": {
+        "setup_minutes": null,
+        "harness_issues": []
+      },
+      "output": {
+        "stdout": "\n RUN  v3.2.4 /home/pxr/workspace/CodingAgent/co-claw-dex\n\n···········\n\n Test Files  1 passed (1)\n      Tests  11 passed (11)\n   Start at  12:51:26\n   Duration  526ms (transform 105ms, setup 0ms, collect 88ms, tests 56ms, environment 0ms, prepare 105ms)\n\n",
+        "stderr": ""
+      }
+    },
+    {
+      "task_id": "model-config",
+      "category": "model",
+      "prompt": "Codex config resolution stays green",
+      "status": "success",
+      "timeout_ms": 120000,
+      "duration_ms": 1251,
+      "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/model/openaiCodexConfig.test.ts",
+      "exit_code": 0,
+      "signal": null,
+      "latency": {
+        "first_token_ms": null,
+        "task_done_ms": 1251
+      },
+      "stability": {
+        "timeout": false,
+        "retry_count": 0,
+        "interrupt_recovered": null
+      },
+      "quality": {
+        "auto_check_pass": true,
+        "reviewer_score_1_to_5": null,
+        "notes": ""
+      },
+      "maintenance": {
+        "setup_minutes": null,
+        "harness_issues": []
+      },
+      "output": {
+        "stdout": "\n RUN  v3.2.4 /home/pxr/workspace/CodingAgent/co-claw-dex\n\n············\n\n Test Files  1 passed (1)\n      Tests  12 passed (12)\n   Start at  12:51:27\n   Duration  521ms (transform 99ms, setup 0ms, collect 76ms, tests 62ms, environment 0ms, prepare 118ms)\n\n",
+        "stderr": ""
+      }
+    },
+    {
+      "task_id": "responses-backend",
+      "category": "headless",
+      "prompt": "Responses backend streaming contracts stay green",
+      "status": "success",
+      "timeout_ms": 120000,
+      "duration_ms": 1473,
+      "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/model/openaiResponsesBackend.test.ts",
+      "exit_code": 0,
+      "signal": null,
+      "latency": {
+        "first_token_ms": null,
+        "task_done_ms": 1473
+      },
+      "stability": {
+        "timeout": false,
+        "retry_count": 0,
+        "interrupt_recovered": null
+      },
+      "quality": {
+        "auto_check_pass": true,
+        "reviewer_score_1_to_5": null,
+        "notes": ""
+      },
+      "maintenance": {
+        "setup_minutes": null,
+        "harness_issues": []
+      },
+      "output": {
+        "stdout": "\n RUN  v3.2.4 /home/pxr/workspace/CodingAgent/co-claw-dex\n\n······································\n\n Test Files  1 passed (1)\n      Tests  38 passed (38)\n   Start at  12:51:28\n   Duration  708ms (transform 272ms, setup 0ms, collect 264ms, tests 39ms, environment 0ms, prepare 121ms)\n\n",
+        "stderr": ""
+      }
+    },
+    {
+      "task_id": "remote-permission-bridge",
+      "category": "permissions",
+      "prompt": "Remote permission bridge contracts stay green",
+      "status": "success",
+      "timeout_ms": 120000,
+      "duration_ms": 1219,
+      "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/protocol/remotePermissionBridge.test.ts",
+      "exit_code": 0,
+      "signal": null,
+      "latency": {
+        "first_token_ms": null,
+        "task_done_ms": 1219
+      },
+      "stability": {
+        "timeout": false,
+        "retry_count": 0,
+        "interrupt_recovered": null
+      },
+      "quality": {
+        "auto_check_pass": true,
+        "reviewer_score_1_to_5": null,
+        "notes": ""
+      },
+      "maintenance": {
+        "setup_minutes": null,
+        "harness_issues": []
+      },
+      "output": {
+        "stdout": "\n RUN  v3.2.4 /home/pxr/workspace/CodingAgent/co-claw-dex\n\n··\n\n Test Files  1 passed (1)\n      Tests  2 passed (2)\n   Start at  12:51:30\n   Duration  461ms (transform 69ms, setup 0ms, collect 64ms, tests 7ms, environment 0ms, prepare 102ms)\n\n",
+        "stderr": ""
+      }
+    },
+    {
+      "task_id": "sdk-message-adapter",
+      "category": "protocol",
+      "prompt": "SDK message adapter contracts stay green",
+      "status": "success",
+      "timeout_ms": 120000,
+      "duration_ms": 1239,
+      "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/protocol/sdkMessageAdapter.test.ts",
+      "exit_code": 0,
+      "signal": null,
+      "latency": {
+        "first_token_ms": null,
+        "task_done_ms": 1239
+      },
+      "stability": {
+        "timeout": false,
+        "retry_count": 0,
+        "interrupt_recovered": null
+      },
+      "quality": {
+        "auto_check_pass": true,
+        "reviewer_score_1_to_5": null,
+        "notes": ""
+      },
+      "maintenance": {
+        "setup_minutes": null,
+        "harness_issues": []
+      },
+      "output": {
+        "stdout": "\n RUN  v3.2.4 /home/pxr/workspace/CodingAgent/co-claw-dex\n\n···············\n\n Test Files  1 passed (1)\n      Tests  15 passed (15)\n   Start at  12:51:31\n   Duration  507ms (transform 106ms, setup 0ms, collect 102ms, tests 16ms, environment 0ms, prepare 142ms)\n\n",
+        "stderr": ""
+      }
+    },
+    {
+      "task_id": "remote-session-manager",
+      "category": "session",
+      "prompt": "Remote session lifecycle stays green",
+      "status": "success",
+      "timeout_ms": 120000,
+      "duration_ms": 1193,
+      "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/protocol/RemoteSessionManager.test.ts",
+      "exit_code": 0,
+      "signal": null,
+      "latency": {
+        "first_token_ms": null,
+        "task_done_ms": 1193
+      },
+      "stability": {
+        "timeout": false,
+        "retry_count": 0,
+        "interrupt_recovered": null
+      },
+      "quality": {
+        "auto_check_pass": true,
+        "reviewer_score_1_to_5": null,
+        "notes": ""
+      },
+      "maintenance": {
+        "setup_minutes": null,
+        "harness_issues": []
+      },
+      "output": {
+        "stdout": "\n RUN  v3.2.4 /home/pxr/workspace/CodingAgent/co-claw-dex\n\n········\n\n Test Files  1 passed (1)\n      Tests  8 passed (8)\n   Start at  12:51:32\n   Duration  458ms (transform 96ms, setup 0ms, collect 90ms, tests 15ms, environment 0ms, prepare 109ms)\n\n",
+        "stderr": ""
+      }
+    },
+    {
+      "task_id": "tool-execution",
+      "category": "tool",
+      "prompt": "Tool execution contracts stay green",
+      "status": "success",
+      "timeout_ms": 120000,
+      "duration_ms": 1297,
+      "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/tool/toolExecution.test.ts",
+      "exit_code": 0,
+      "signal": null,
+      "latency": {
+        "first_token_ms": null,
+        "task_done_ms": 1297
+      },
+      "stability": {
+        "timeout": false,
+        "retry_count": 0,
+        "interrupt_recovered": null
+      },
+      "quality": {
+        "auto_check_pass": true,
+        "reviewer_score_1_to_5": null,
+        "notes": ""
+      },
+      "maintenance": {
+        "setup_minutes": null,
+        "harness_issues": []
+      },
+      "output": {
+        "stdout": "\n RUN  v3.2.4 /home/pxr/workspace/CodingAgent/co-claw-dex\n\n······\n\n Test Files  1 passed (1)\n      Tests  6 passed (6)\n   Start at  12:51:33\n   Duration  573ms (transform 161ms, setup 0ms, collect 200ms, tests 6ms, environment 0ms, prepare 116ms)\n\n",
+        "stderr": ""
+      }
+    },
+    {
+      "task_id": "tool-orchestration",
+      "category": "tool",
+      "prompt": "Tool orchestration contracts stay green",
+      "status": "success",
+      "timeout_ms": 120000,
+      "duration_ms": 1247,
+      "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/tool/toolOrchestration.test.ts",
+      "exit_code": 0,
+      "signal": null,
+      "latency": {
+        "first_token_ms": null,
+        "task_done_ms": 1247
+      },
+      "stability": {
+        "timeout": false,
+        "retry_count": 0,
+        "interrupt_recovered": null
+      },
+      "quality": {
+        "auto_check_pass": true,
+        "reviewer_score_1_to_5": null,
+        "notes": ""
+      },
+      "maintenance": {
+        "setup_minutes": null,
+        "harness_issues": []
+      },
+      "output": {
+        "stdout": "\n RUN  v3.2.4 /home/pxr/workspace/CodingAgent/co-claw-dex\n\n···\n\n Test Files  1 passed (1)\n      Tests  3 passed (3)\n   Start at  12:51:35\n   Duration  491ms (transform 87ms, setup 0ms, collect 87ms, tests 28ms, environment 0ms, prepare 106ms)\n\n",
+        "stderr": ""
+      }
+    }
+  ],
+  "aggregate": {
+    "task_count": 8,
+    "success_count": 8,
+    "fail_count": 0,
+    "timeout_count": 0,
+    "pass_rate": 1,
+    "timeout_rate": 0,
+    "latency_p50_ms": 1247,
+    "latency_p95_ms": 1921
+  },
+  "notes": "Stage 6 baseline run. Compare JSON outputs directly between codex-code and co-claw-dex."
+}

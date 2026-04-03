@@ -62,10 +62,22 @@ So this roadmap tracks **runtime convergence**, not only prompt edits.
 - Add long-run benchmark and quality comparison against `co-claw-dex`.
 - Compare not just feature presence but also latency, stability, and task outcome quality.
 - Stage 6 is no longer only a planning shell: `04995ec` upgrades it to a runnable baseline that can record per-task state (`success` / `fail` / `timeout`) and aggregate summary metrics.
+- 2026-04-03 local proof run has been recorded at `artifacts/baseline-codex-code-latest.json` and `artifacts/baseline-codex-code-latest-summary.md`.
+- 2026-04-03 首个本地成对对照包已经落地：Codex Code `baseline-1775191017783` 和 `co-claw-dex` `baseline-1775191895756` 都已记录，并且有并排结论文档 `artifacts/co-claw-dex-vs-codex-code-comparison.md`。
+- 当前限制也已写清：这第一版成对对照使用的是两边各自可直接复跑的任务包，不是“两边完全同命令”的严格外部对照。
 
-## 4.1 Still Not Closed Yet
+## 4.1 Recently Closed
 
-- plan mode 的 `resume existing plan` 真实时序仍不稳定；当前保留 `test.skip`，不把它记成已验。
+- plan mode 的 `resume existing plan` 已在真实 TUI 链路收口；对应用例已从 skip 放开并纳入常规验收。
+- 最小真实 TTY 主链、memory / auto-memory 主链、model / effort 切换链路已在 2026-04-03 复验收口。
+- Codex 色板对齐已有运行时验收证据，不再只靠源码字符串匹配。
+- local slash 主链与 headless capability matrix 已在 2026-04-03 收口；permission 边界也已拆清为“工具权限已验 / host 沙箱权限不在当前本地路线内”。
+- 真实“读目录并总结”场景已经回到直接工具调用主链；同时修掉了 Codex provider 下 subagent 默认模型别名不兼容和缺失 ripgrep 二进制导致的搜索主链失败。
+- 自然语言联网搜索已在 2026-04-03 收口：正常对话直接暴露 Codex 原生 `web_search`，并能在 CLI 输出里看到搜索开始/完成进度。
+
+## 4.2 Current Remaining Gap
+
+- 当前没有新的 P0 阻塞；联网搜索已从未完成项转为已完成项。
 
 ## 5) Definition of Done for This Roadmap Track
 

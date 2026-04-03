@@ -25,6 +25,7 @@ import {
   createUserMessage,
   hasToolCallsInLastAssistantTurn,
 } from '../../utils/messages.js'
+import { isCurrentPhaseCustomCodexProvider } from '../../utils/currentPhase.js'
 import { sequential } from '../../utils/sequential.js'
 import { buildMagicDocsUpdatePrompt } from './prompts.js'
 
@@ -101,7 +102,7 @@ function getMagicDocsAgent(): BuiltInAgentDefinition {
     agentType: 'magic-docs',
     whenToUse: 'Update Magic Docs',
     tools: [FILE_EDIT_TOOL_NAME], // Only allow Edit
-    model: 'sonnet',
+    model: isCurrentPhaseCustomCodexProvider() ? 'inherit' : 'sonnet',
     source: 'built-in',
     baseDir: 'built-in',
     getSystemPrompt: () => '', // Will use override systemPrompt

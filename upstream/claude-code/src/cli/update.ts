@@ -26,6 +26,10 @@ import { getPackageManager } from 'src/utils/nativeInstaller/packageManagers.js'
 import { writeToStdout } from 'src/utils/process.js'
 import { gte } from 'src/utils/semver.js'
 import { getInitialSettings } from 'src/utils/settings/settings.js'
+import {
+  getAutoUpdateRecoveryCommand,
+  resolveAutoUpdatePackageName,
+} from 'src/utils/autoUpdaterMessages.js'
 
 export async function update() {
   logEvent('tengu_update_check', {})
@@ -292,11 +296,10 @@ export async function update() {
     process.stderr.write('Try:\n')
     process.stderr.write('  • Check your internet connection\n')
     process.stderr.write('  • Run with --debug flag for more details\n')
-    const packageName =
-      MACRO.PACKAGE_URL ||
-      (process.env.USER_TYPE === 'ant'
-        ? '@anthropic-ai/claude-cli'
-        : '@anthropic-ai/claude-code')
+    const packageName = resolveAutoUpdatePackageName(
+      MACRO.PACKAGE_URL,
+      process.env.USER_TYPE,
+    )
     process.stderr.write(
       `  • Manually check: npm view ${packageName} version\n`,
     )
@@ -369,6 +372,11 @@ export async function update() {
   }
 
   logForDebugging(`update: Installation status: ${status}`)
+  const recoveryCommand = getAutoUpdateRecoveryCommand({
+    hasLocalInstall: useLocalUpdate,
+    packageUrl: MACRO.PACKAGE_URL,
+    userType: process.env.USER_TYPE,
+  })
 
   switch (status) {
     case 'success':
@@ -385,9 +393,7 @@ export async function update() {
       )
       if (useLocalUpdate) {
         process.stderr.write('Try manually updating with:\n')
-        process.stderr.write(
-          `  cd ~/.claude/local && npm update ${MACRO.PACKAGE_URL}\n`,
-        )
+        process.stderr.write(`  ${recoveryCommand}\n`)
       } else {
         process.stderr.write('Try running with sudo or fix npm permissions\n')
         process.stderr.write(
@@ -400,9 +406,7 @@ export async function update() {
       process.stderr.write('Error: Failed to install update\n')
       if (useLocalUpdate) {
         process.stderr.write('Try manually updating with:\n')
-        process.stderr.write(
-          `  cd ~/.claude/local && npm update ${MACRO.PACKAGE_URL}\n`,
-        )
+        process.stderr.write(`  ${recoveryCommand}\n`)
       } else {
         process.stderr.write(
           'Or consider using native installation with: claude install\n',

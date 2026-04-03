@@ -6,7 +6,24 @@ Current status:
 
 - Stage 6 has moved past a pure outline.
 - After `04995ec`, the baseline can record per-task runnable outcome state and aggregate summary metrics.
+- 2026-04-03 local 8-task baseline run artifacts are available at `artifacts/baseline-codex-code-latest.json` and `artifacts/baseline-codex-code-latest-summary.md`.
+- 2026-04-03 paired local comparison artifacts are now available at `artifacts/baseline-co-claw-dex-latest.json`, `artifacts/baseline-co-claw-dex-latest-summary.md`, and `artifacts/co-claw-dex-vs-codex-code-comparison.md`.
 - This document is now the stage-six result-shape entry, not just a future TODO list.
+
+Latest baseline snapshot (2026-04-03):
+
+- run_id: `baseline-1775191017783`
+- runner/model: `codex-code` + `gpt-5.1-codex-mini`
+- task set: local 8-task acceptance-backed sample (`task_count = 8`)
+- aggregate: `success_count = 8`, `fail_count = 0`, `timeout_count = 0`, `pass_rate = 1`, `latency_p50_ms = 56589`, `latency_p95_ms = 80769`
+- command used:
+  `node scripts/benchmark-co-claw-dex-baseline.mjs --runner codex-code --model gpt-5.1-codex-mini --tasks ./docs/examples/co-claw-dex-tasks.sample.json --out artifacts/baseline-codex-code-latest.json --summary-md artifacts/baseline-codex-code-latest-summary.md`
+
+Paired comparison snapshot (2026-04-03):
+
+- Codex Code: `baseline-1775191017783` (`task_count = 8`, `pass_rate = 1`, `timeout_rate = 0`, `latency_p50_ms = 56589`, `latency_p95_ms = 80769`)
+- `co-claw-dex`: `baseline-1775191895756` (`task_count = 8`, `pass_rate = 1`, `timeout_rate = 0`, `latency_p50_ms = 1247`, `latency_p95_ms = 1921`)
+- side-by-side readout: `artifacts/co-claw-dex-vs-codex-code-comparison.md`
 
 ## 1) Comparison Dimensions
 
@@ -52,6 +69,13 @@ For each side (`codex-code`, `co-claw-dex`):
 3. Save structured JSON results in one file per run.
 4. Keep environment notes (Node version, machine info, date, model).
 
+Practical note for the current paired local run:
+
+- The two repositories do not expose the same direct acceptance harnesses.
+- The current comparison therefore uses runner-native packs instead of forcing fake same-command inputs:
+  - `docs/examples/co-claw-dex-tasks.sample.json` for Codex Code real-chain acceptance
+  - `docs/examples/co-claw-dex-native-tasks.sample.json` for `co-claw-dex` repository-native P0 verification
+
 ## 4) Result Format (Baseline)
 
 The baseline run output should include:
@@ -71,7 +95,11 @@ The baseline currently records:
 - per-task duration and exit result
 - aggregate summary fields such as pass rate and timeout rate
 
-This is enough to start accumulating comparable run history, even though the full 8-task benchmark set is still being filled in.
+This is enough to start accumulating comparable run history, and both sides now have reproducible local baseline artifacts.
+
+Current limitation to keep visible:
+
+- 当前成对对照已经能在同一台机器上稳定复跑，但它还是“同类能力对照”，不是“两边完全同命令、同场景”的严格外部对照。
 
 ## 6) Exit Criteria for Stage 6 Baseline
 
@@ -79,6 +107,8 @@ Stage 6 baseline is considered in place when:
 
 - the script runs locally and emits valid structured JSON
 - the 8-task minimal dataset is defined and usable
+- both sides have runnable result files for the chosen comparison pack
+- a side-by-side comparison summary is checked in or regenerated alongside the run
 - README/roadmap links to this plan and the script entry
 
 ## 7) Minimal Usage (No SDK)

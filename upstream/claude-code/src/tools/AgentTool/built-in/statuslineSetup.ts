@@ -1,4 +1,5 @@
 import type { BuiltInAgentDefinition } from '../loadAgentsDir.js'
+import { isCurrentPhaseCustomCodexProvider } from '../../../utils/currentPhase.js'
 
 const STATUSLINE_SYSTEM_PROMPT = `You are a status line setup agent for Claude Code. Your job is to create or update the statusLine command in the user's Claude Code settings.
 
@@ -138,7 +139,7 @@ export const STATUSLINE_SETUP_AGENT: BuiltInAgentDefinition = {
   tools: ['Read', 'Edit'],
   source: 'built-in',
   baseDir: 'built-in',
-  model: 'sonnet',
+  model: isCurrentPhaseCustomCodexProvider() ? 'inherit' : 'sonnet',
   color: 'orange',
   getSystemPrompt: () => STATUSLINE_SYSTEM_PROMPT,
 }

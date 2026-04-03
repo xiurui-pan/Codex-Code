@@ -666,6 +666,12 @@ export function canBatchWith(
   )
 }
 
+function writeHeadlessProbe(message: string): void {
+  if (process.argv.includes('--debug-to-stderr')) {
+    process.stderr.write(`[HEADLESS_PROBE] ${message}\n`)
+  }
+}
+
 export async function runHeadless(
   inputPrompt: string | AsyncIterable<string>,
   getAppState: () => AppState,
@@ -892,7 +898,7 @@ export async function runHeadless(
     await processSetupHooks(options.setupTrigger)
   }
 
-  process.stderr.write('[HEADLESS_PROBE] before-loadInitialMessages\n')
+  writeHeadlessProbe('before-loadInitialMessages')
   headlessProfilerCheckpoint('before_loadInitialMessages')
   const appState = getAppState()
   const {
@@ -948,7 +954,7 @@ export async function runHeadless(
   if (initialMessages.length === 0 && process.exitCode !== undefined) {
     return
   }
-  process.stderr.write('[HEADLESS_PROBE] after-loadInitialMessages\n')
+  writeHeadlessProbe('after-loadInitialMessages')
 
   // Handle --rewind-files: restore filesystem and exit immediately
   if (options.rewindFiles) {
@@ -1053,9 +1059,9 @@ export async function runHeadless(
 
   // Ensure model strings are initialized before generating model options.
   // For Bedrock users, this waits for the profile fetch to get correct region strings.
-  process.stderr.write('[HEADLESS_PROBE] before-ensureModelStringsInitialized\n')
+  writeHeadlessProbe('before-ensureModelStringsInitialized')
   await ensureModelStringsInitialized()
-  process.stderr.write('[HEADLESS_PROBE] after-ensureModelStringsInitialized\n')
+  writeHeadlessProbe('after-ensureModelStringsInitialized')
   headlessProfilerCheckpoint('after_modelStrings')
 
   // UDS inbox store registration is deferred until after `run` is defined
@@ -1078,7 +1084,7 @@ export async function runHeadless(
       : null
 
   headlessProfilerCheckpoint('before_runHeadlessStreaming')
-  process.stderr.write('[HEADLESS_PROBE] before-runHeadlessStreaming\n')
+  writeHeadlessProbe('before-runHeadlessStreaming')
   for await (const message of runHeadlessStreaming(
     structuredIO,
     appState.mcp.clients,
@@ -1225,7 +1231,7 @@ function runHeadlessStreaming(
   },
   turnInterruptionState?: TurnInterruptionState,
 ): AsyncIterable<StdoutMessage> {
-  process.stderr.write('[HEADLESS_PROBE] runHeadlessStreaming-enter\n')
+  writeHeadlessProbe('runHeadlessStreaming-enter')
   let running = false
   let runPhase:
     | 'draining_commands'
@@ -1341,7 +1347,7 @@ function runHeadlessStreaming(
       })
     })
   }
-  process.stderr.write('[HEADLESS_PROBE] runHeadlessStreaming-after-auth-status\n')
+  writeHeadlessProbe('runHeadlessStreaming-after-auth-status')
 
   // Set up rate limit status listener to emit SDKRateLimitEvent for all status changes.
   // Emitting for all statuses (including 'allowed') ensures consumers can clear warnings
@@ -1420,7 +1426,7 @@ function runHeadlessStreaming(
     extraModels: [activeUserSpecifiedModel, currentPhaseResolvedModel],
   })
   const modelInfos = modelOptions.map(option => getPublicModelInfoForOption(option))
-  process.stderr.write('[HEADLESS_PROBE] runHeadlessStreaming-after-model-options\n')
+  writeHeadlessProbe('runHeadlessStreaming-after-model-options')
 
   function injectModelSwitchBreadcrumbs(
     modelArg: string,
@@ -2030,7 +2036,7 @@ function runHeadlessStreaming(
       currentCommands = newCommands
     })
   })
-  process.stderr.write('[HEADLESS_PROBE] runHeadlessStreaming-before-async-loop\n')
+  writeHeadlessProbe('runHeadlessStreaming-before-async-loop')
 
   // Proactive mode: schedule a tick to keep the model looping autonomously.
   // setTimeout(0) yields to the event loop so pending stdin messages
@@ -2067,9 +2073,9 @@ function runHeadlessStreaming(
   })
 
   const run = async () => {
-    process.stderr.write('[HEADLESS_PROBE] run-enter\n')
+    writeHeadlessProbe('run-enter')
     if (running) {
-      process.stderr.write('[HEADLESS_PROBE] run-skip-already-running\n')
+      writeHeadlessProbe('run-skip-already-running')
       return
     }
 
@@ -2083,7 +2089,7 @@ function runHeadlessStreaming(
 
     await updateSdkMcp()
     headlessProfilerCheckpoint('after_updateSdkMcp')
-    process.stderr.write('[HEADLESS_PROBE] after-updateSdkMcp\n')
+    writeHeadlessProbe('after-updateSdkMcp')
 
     // Resolve deferred plugin installation (CLAUDE_CODE_SYNC_PLUGIN_INSTALL).
     // The promise was started eagerly so installation overlaps with other init.
@@ -2112,7 +2118,7 @@ function runHeadlessStreaming(
         await pluginInstallPromise
       }
       pluginInstallPromise = null
-      process.stderr.write('[HEADLESS_PROBE] after-pluginInstallPromise\n')
+      writeHeadlessProbe('after-pluginInstallPromise')
 
       // Refresh commands, agents, and hooks now that plugins are installed
       await refreshPluginState()
@@ -2338,7 +2344,7 @@ function runHeadlessStreaming(
             : undefined
 
           headlessProfilerCheckpoint('before_ask')
-          process.stderr.write('[HEADLESS_PROBE] before-ask\n')
+          writeHeadlessProbe('before-ask')
           startQueryProfile()
           // Per-iteration ALS context so bg agents spawned inside ask()
           // inherit workload across their detached awaits. In-process cron
@@ -2630,7 +2636,7 @@ function runHeadlessStreaming(
           error instanceof Error && error.stack
             ? error.stack
             : String(error)
-        process.stderr.write(`[HEADLESS_PROBE] run-error:${stack}\n`)
+        writeHeadlessProbe(`run-error:${stack}`)
       } catch {}
       // Emit error result message before shutting down
       // Write directly to structuredIO to ensure immediate delivery
@@ -2981,7 +2987,7 @@ function runHeadlessStreaming(
       },
     })
   })
-  process.stderr.write('[HEADLESS_PROBE] runHeadlessStreaming-before-return\n')
+  writeHeadlessProbe('runHeadlessStreaming-before-return')
 
   // Track active OAuth flows per server so we can abort a previous flow
   // when a new mcp_authenticate request arrives for the same server.
@@ -3019,10 +3025,10 @@ function runHeadlessStreaming(
   void (async () => {
     let initialized = false
     logForDiagnosticsNoPII('info', 'cli_message_loop_started')
-    process.stderr.write('[HEADLESS_PROBE] structuredInput-loop-start\n')
+    writeHeadlessProbe('structuredInput-loop-start')
     for await (const message of structuredIO.structuredInput) {
-      process.stderr.write(
-        `[HEADLESS_PROBE] structuredInput-message:${message.type}${message.type === 'control_request' ? `:${message.request.subtype}` : ''}\n`,
+      writeHeadlessProbe(
+        `structuredInput-message:${message.type}${message.type === 'control_request' ? `:${message.request.subtype}` : ''}`,
       )
       // Non-user events are handled inline (no queue). started→completed in
       // the same tick carries no information, so only fire completed.

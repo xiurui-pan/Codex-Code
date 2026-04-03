@@ -4,12 +4,15 @@ export function resolveAutoUpdatePackageName(
   packageUrl: string | undefined,
   userType: string | undefined,
 ): string {
+  void userType
   if (packageUrl && packageUrl.trim().length > 0) {
+    // Keep official legacy package names out of user-facing recovery commands.
+    if (packageUrl.trim() === '@anthropic-ai/claude-code') {
+      return 'claude-code'
+    }
     return packageUrl
   }
-  return userType === 'ant'
-    ? '@anthropic-ai/claude-cli'
-    : '@anthropic-ai/claude-code'
+  return 'claude-code'
 }
 
 export function getAutoUpdateRecoveryCommand({

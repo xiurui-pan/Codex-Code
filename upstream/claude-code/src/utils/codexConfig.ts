@@ -7,6 +7,19 @@ type MinimalCodexProvider = {
   env_key?: string
 }
 
+type MinimalCodexWebSearchLocation = {
+  country?: string
+  region?: string
+  city?: string
+  timezone?: string
+}
+
+type MinimalCodexWebSearchConfig = {
+  context_size?: string
+  allowed_domains?: string[]
+  location?: MinimalCodexWebSearchLocation
+}
+
 export type LoadedCodexConfig = {
   configPath: string
   providerId: string
@@ -15,6 +28,8 @@ export type LoadedCodexConfig = {
   model?: string
   reasoningEffort?: string
   responseStorage?: boolean
+  webSearchMode?: string
+  webSearch?: MinimalCodexWebSearchConfig
   apiKeyEnvName?: string
   apiKey?: string
 }
@@ -46,11 +61,89 @@ function stripInlineComment(line: string): string {
   return out.trim()
 }
 
-function parseValue(rawValue: string): string | boolean | number {
+function splitDelimitedValues(source: string): string[] {
+  const values: string[] = []
+  let current = ''
+  let inQuote = false
+  let braceDepth = 0
+  let bracketDepth = 0
+  let escaped = false
+
+  for (const char of source) {
+    if (char === '\\' && !escaped) {
+      escaped = true
+      current += char
+      continue
+    }
+
+    if (char === '"' && !escaped) {
+      inQuote = !inQuote
+      current += char
+      continue
+    }
+
+    if (!inQuote) {
+      if (char === '{') braceDepth += 1
+      if (char === '}') braceDepth = Math.max(0, braceDepth - 1)
+      if (char === '[') bracketDepth += 1
+      if (char === ']') bracketDepth = Math.max(0, bracketDepth - 1)
+
+      if (char === ',' && braceDepth === 0 && bracketDepth === 0) {
+        const value = current.trim()
+        if (value) {
+          values.push(value)
+        }
+        current = ''
+        continue
+      }
+    }
+
+    current += char
+    escaped = false
+  }
+
+  const finalValue = current.trim()
+  if (finalValue) {
+    values.push(finalValue)
+  }
+
+  return values
+}
+
+function parseInlineObject(
+  rawValue: string,
+): Record<string, string | boolean | number | string[]> {
+  const inner = rawValue.slice(1, -1).trim()
+  const parsed: Record<string, string | boolean | number | string[]> = {}
+
+  for (const entry of splitDelimitedValues(inner)) {
+    const [key, ...rest] = entry.split('=')
+    if (!key || rest.length === 0) {
+      continue
+    }
+    parsed[key.trim()] = parseValue(rest.join('=').trim())
+  }
+
+  return parsed
+}
+
+function parseValue(
+  rawValue: string,
+): string | boolean | number | string[] | Record<string, string | boolean | number | string[]> {
   const value = rawValue.trim()
 
   if (value.startsWith('"') && value.endsWith('"')) {
     return value.slice(1, -1)
+  }
+
+  if (value.startsWith('[') && value.endsWith(']')) {
+    return splitDelimitedValues(value.slice(1, -1))
+      .map(entry => parseValue(entry))
+      .filter((entry): entry is string => typeof entry === 'string')
+  }
+
+  if (value.startsWith('{') && value.endsWith('}')) {
+    return parseInlineObject(value)
   }
 
   if (value === 'true') {
@@ -88,6 +181,10 @@ function parseMinimalToml(source: string): {
   model_reasoning_effort?: string
   response_storage?: boolean
   disable_response_storage?: boolean
+  web_search?: string
+  tools: {
+    web_search?: MinimalCodexWebSearchConfig
+  }
   model_providers: Record<string, MinimalCodexProvider>
 } {
   const root: {
@@ -96,8 +193,13 @@ function parseMinimalToml(source: string): {
     model_reasoning_effort?: string
     response_storage?: boolean
     disable_response_storage?: boolean
+    web_search?: string
+    tools: {
+      web_search?: MinimalCodexWebSearchConfig
+    }
     model_providers: Record<string, MinimalCodexProvider>
   } = {
+    tools: {},
     model_providers: {},
   }
   let currentSection: string | null = null
@@ -130,6 +232,34 @@ function parseMinimalToml(source: string): {
       continue
     }
 
+    if (currentSection === 'tools.web_search') {
+      root.tools.web_search ??= {}
+
+      if (key === 'context_size' && typeof value === 'string') {
+        root.tools.web_search.context_size = value
+      } else if (
+        key === 'allowed_domains' &&
+        Array.isArray(value)
+      ) {
+        root.tools.web_search.allowed_domains = value
+      } else if (
+        key === 'location' &&
+        value &&
+        typeof value === 'object' &&
+        !Array.isArray(value)
+      ) {
+        root.tools.web_search.location = {
+          country:
+            typeof value.country === 'string' ? value.country : undefined,
+          region: typeof value.region === 'string' ? value.region : undefined,
+          city: typeof value.city === 'string' ? value.city : undefined,
+          timezone:
+            typeof value.timezone === 'string' ? value.timezone : undefined,
+        }
+      }
+      continue
+    }
+
     if (currentSection === null) {
       if (key === 'model_provider') {
         root.model_provider = String(value)
@@ -137,6 +267,8 @@ function parseMinimalToml(source: string): {
         root.model = String(value)
       } else if (key === 'model_reasoning_effort') {
         root.model_reasoning_effort = String(value)
+      } else if (key === 'web_search' && typeof value === 'string') {
+        root.web_search = value
       } else if (key === 'response_storage' && typeof value === 'boolean') {
         root.response_storage = value
       } else if (
@@ -188,6 +320,8 @@ export async function loadCodexConfig(
     model: parsed.model,
     reasoningEffort: parsed.model_reasoning_effort,
     responseStorage,
+    webSearchMode: parsed.web_search,
+    webSearch: parsed.tools.web_search,
     apiKeyEnvName: provider.env_key,
     apiKey: provider.env_key ? process.env[provider.env_key] : undefined,
   }
@@ -228,6 +362,27 @@ export function applyCodexConfigToEnv(config: LoadedCodexConfig): void {
       : '0'
   }
 
+  if (config.webSearchMode) {
+    process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_MODE = config.webSearchMode
+  }
+
+  if (config.webSearch?.context_size) {
+    process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_CONTEXT_SIZE =
+      config.webSearch.context_size
+  }
+
+  if (config.webSearch?.allowed_domains) {
+    process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_ALLOWED_DOMAINS = JSON.stringify(
+      config.webSearch.allowed_domains,
+    )
+  }
+
+  if (config.webSearch?.location) {
+    process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_LOCATION = JSON.stringify(
+      config.webSearch.location,
+    )
+  }
+
   if (config.provider.env_key) {
     process.env.CLAUDE_CODE_CODEX_ENV_KEY = config.provider.env_key
     const apiKey = config.apiKey ?? process.env[config.provider.env_key]
@@ -251,6 +406,67 @@ export function getCodexConfiguredReasoningEffort(): string | undefined {
 
 export function getCodexConfiguredResponseStorage(): boolean | undefined {
   return parseBooleanEnvValue(process.env.CLAUDE_CODE_CODEX_RESPONSE_STORAGE)
+}
+
+export function getCodexConfiguredWebSearchMode():
+  | 'live'
+  | 'cached'
+  | 'disabled'
+  | undefined {
+  const mode = process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_MODE
+  return mode === 'live' || mode === 'cached' || mode === 'disabled'
+    ? mode
+    : undefined
+}
+
+export function getCodexConfiguredWebSearchContextSize(): string | undefined {
+  return process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_CONTEXT_SIZE
+}
+
+export function getCodexConfiguredWebSearchAllowedDomains(): string[] | undefined {
+  const raw = process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_ALLOWED_DOMAINS
+  if (!raw) {
+    return undefined
+  }
+
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed)
+      ? parsed.filter(
+          (entry): entry is string =>
+            typeof entry === 'string' && entry.trim().length > 0,
+        )
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+export function getCodexConfiguredWebSearchLocation():
+  | MinimalCodexWebSearchLocation
+  | undefined {
+  const raw = process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_LOCATION
+  if (!raw) {
+    return undefined
+  }
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return undefined
+    }
+
+    return {
+      country:
+        typeof parsed.country === 'string' ? parsed.country : undefined,
+      region: typeof parsed.region === 'string' ? parsed.region : undefined,
+      city: typeof parsed.city === 'string' ? parsed.city : undefined,
+      timezone:
+        typeof parsed.timezone === 'string' ? parsed.timezone : undefined,
+    }
+  } catch {
+    return undefined
+  }
 }
 
 export function getCodexConfiguredAuthEnvKey(): string | undefined {

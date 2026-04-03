@@ -11,6 +11,7 @@ type ResponsesOutputText = {
 type ResponsesMessageItem = {
   type: 'message'
   role?: string
+  phase?: 'commentary' | 'final_answer'
   content?: ResponsesOutputText[]
 }
 
@@ -21,9 +22,33 @@ type ResponsesFunctionCallItem = {
   arguments?: string | Record<string, unknown>
 }
 
+type ResponsesWebSearchAction =
+  | {
+      type?: 'search'
+      query?: string
+      queries?: string[]
+    }
+  | {
+      type?: 'open_page'
+      url?: string
+    }
+  | {
+      type?: 'find_in_page'
+      url?: string
+      pattern?: string
+    }
+
+type ResponsesWebSearchCallItem = {
+  type: 'web_search_call'
+  id?: string
+  status?: string
+  action?: ResponsesWebSearchAction
+}
+
 export type ResponsesOutputItem =
   | ResponsesMessageItem
   | ResponsesFunctionCallItem
+  | ResponsesWebSearchCallItem
 
 type NormalizeResponsesOutputOptions = {
   allowTextFallbackToolCall?: boolean
@@ -247,6 +272,59 @@ function isProtocolLeakText(text: string): boolean {
   return false
 }
 
+function getWebSearchQuery(
+  action: ResponsesWebSearchAction | undefined,
+): string | null {
+  if (!action) {
+    return null
+  }
+
+  if (action.type === 'search') {
+    if (typeof action.query === 'string' && action.query.trim()) {
+      return action.query.trim()
+    }
+
+    if (Array.isArray(action.queries)) {
+      const queries = action.queries.filter(
+        query => typeof query === 'string' && query.trim().length > 0,
+      ) as string[]
+      if (queries.length > 0) {
+        return queries.join(' | ')
+      }
+    }
+
+    return null
+  }
+
+  if (action.type === 'open_page') {
+    return typeof action.url === 'string' && action.url.trim().length > 0
+      ? action.url.trim()
+      : null
+  }
+
+  if (action.type === 'find_in_page') {
+    if (typeof action.pattern === 'string' && action.pattern.trim().length > 0) {
+      return action.pattern.trim()
+    }
+    return typeof action.url === 'string' && action.url.trim().length > 0
+      ? action.url.trim()
+      : null
+  }
+
+  return null
+}
+
+function buildWebSearchUiMessage(
+  item: ResponsesWebSearchCallItem,
+): string {
+  const query = getWebSearchQuery(item.action)
+  if (item.status === 'completed') {
+    return query ? `联网搜索已完成: ${query}` : '联网搜索已完成'
+  }
+
+  return query ? `正在联网搜索: ${query}` : '正在联网搜索...'
+}
+
 export function normalizeResponsesOutputToTurnItems(
   items: ResponsesOutputItem[],
   options: NormalizeResponsesOutputOptions = {},
@@ -270,6 +348,21 @@ export function normalizeResponsesOutputToTurnItems(
           'structured',
         ),
       )
+      continue
+    }
+
+    if (item.type === 'web_search_call') {
+      const text = buildWebSearchUiMessage(item)
+      turnItems.push({
+        kind: 'ui_message',
+        provider: 'custom',
+        level: 'info',
+        text,
+        source:
+          item.status === 'completed'
+            ? 'web_search_call_completed'
+            : 'web_search_call',
+      })
       continue
     }
 
@@ -322,6 +415,10 @@ export function normalizeResponsesOutputToTurnItems(
         text,
         source: 'protocol_leak_filtered',
       })
+      continue
+    }
+
+    if (item.phase === 'commentary') {
       continue
     }
 

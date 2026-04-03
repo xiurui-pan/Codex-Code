@@ -149,6 +149,10 @@ export const WebSearchTool = buildTool({
     const provider = getAPIProvider()
     const model = getMainLoopModel()
 
+    if (provider === 'custom') {
+      return true
+    }
+
     // Enable for firstParty
     if (provider === 'firstParty') {
       return true

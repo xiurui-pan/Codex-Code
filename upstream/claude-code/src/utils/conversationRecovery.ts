@@ -478,6 +478,7 @@ export async function loadConversationForResume(
   prNumber?: number
   prUrl?: string
   prRepository?: string
+  planSlug?: string
   // Full path to the session file (for cross-directory resume)
   fullPath?: string
 } | null> {
@@ -485,6 +486,7 @@ export async function loadConversationForResume(
     let log: LogOption | null = null
     let messages: Message[] | null = null
     let sessionId: UUID | undefined
+    let planSlug: string | undefined
 
     if (source === undefined) {
       // --continue: most recent session, skipping live --bg/daemon sessions
@@ -542,6 +544,12 @@ export async function loadConversationForResume(
         log = await loadFullLog(log)
       }
 
+      const slugCarrier = log.messages.find(message => {
+        const slug = (message as { slug?: unknown }).slug
+        return typeof slug === 'string' && slug.length > 0
+      }) as { slug?: string } | undefined
+      planSlug = slugCarrier?.slug
+
       // Determine sessionId first so we can pass it to copy functions
       if (!sessionId) {
         sessionId = getSessionIdFromLog(log) as UUID
@@ -593,6 +601,7 @@ export async function loadConversationForResume(
       prNumber: log?.prNumber,
       prUrl: log?.prUrl,
       prRepository: log?.prRepository,
+      planSlug,
       // Include full path for cross-directory resume
       fullPath: log?.fullPath,
     }

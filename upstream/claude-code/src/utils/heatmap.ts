@@ -2,6 +2,12 @@ import chalk from 'chalk'
 import type { DailyActivity } from './stats.js'
 import { toDateString } from './statsCache.js'
 
+const USE_CODEX_BRANDING_COLORS =
+  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+const activityAccent = USE_CODEX_BRANDING_COLORS
+  ? chalk.rgb(0, 179, 219)
+  : chalk.hex('#da7756')
+
 export type HeatmapOptions = {
   terminalWidth?: number // Terminal width in characters
   showMonthLabels?: boolean
@@ -154,10 +160,10 @@ export function generateHeatmap(
   lines.push(
     '    Less ' +
       [
-        claudeOrange('░'),
-        claudeOrange('▒'),
-        claudeOrange('▓'),
-        claudeOrange('█'),
+        activityAccent('░'),
+        activityAccent('▒'),
+        activityAccent('▓'),
+        activityAccent('█'),
       ].join(' ') +
       ' More',
   )
@@ -177,21 +183,18 @@ function getIntensity(
   return 1
 }
 
-// Claude orange color (hex #da7756)
-const claudeOrange = chalk.hex('#da7756')
-
 function getHeatmapChar(intensity: number): string {
   switch (intensity) {
     case 0:
       return chalk.gray('·')
     case 1:
-      return claudeOrange('░')
+      return activityAccent('░')
     case 2:
-      return claudeOrange('▒')
+      return activityAccent('▒')
     case 3:
-      return claudeOrange('▓')
+      return activityAccent('▓')
     case 4:
-      return claudeOrange('█')
+      return activityAccent('█')
     default:
       return chalk.gray('·')
   }

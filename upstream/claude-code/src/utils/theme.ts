@@ -114,10 +114,14 @@ function alignToCodexCliColors(base: Theme): Theme {
   const useAnsi = base.claude.startsWith('ansi:')
   const codexAccent = useAnsi ? 'ansi:cyan' : 'rgb(0,179,219)'
   const codexAccentShimmer = useAnsi ? 'ansi:cyanBright' : 'rgb(102,216,255)'
+  const codexInfo = useAnsi ? 'ansi:blueBright' : 'rgb(88,166,255)'
+  const codexSuccess = useAnsi ? 'ansi:green' : 'rgb(80,200,120)'
   const codexWarning = useAnsi ? 'ansi:yellow' : 'rgb(230,180,0)'
   const codexError = useAnsi ? 'ansi:red' : 'rgb(220,70,70)'
   return {
     ...base,
+    autoAccept: codexAccent,
+    bashBorder: codexAccent,
     claude: codexAccent,
     claudeShimmer: codexAccentShimmer,
     claudeBlue_FOR_SYSTEM_SPINNER: codexAccent,
@@ -129,9 +133,14 @@ function alignToCodexCliColors(base: Theme): Theme {
     planMode: codexAccent,
     clawd_body: codexAccent,
     briefLabelClaude: codexAccent,
+    briefLabelYou: codexInfo,
+    remember: codexInfo,
+    merged: codexAccent,
+    success: codexSuccess,
     warning: codexWarning,
     warningShimmer: codexWarning,
     error: codexError,
+    rate_limit_fill: codexAccent,
   }
 }
 

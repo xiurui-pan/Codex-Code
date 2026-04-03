@@ -1,6 +1,8 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  buildSDKExecutionItemMessages,
+  createSystemMessageFromModelTurnItem,
   createPreferredAssistantResponsePayloadFromTurnItems,
   createSyntheticPayloadFromTurnItems,
   createSyntheticAssistantPayloadFromPreferredContent,
@@ -113,6 +115,59 @@ test('preferred response payload keeps empty distinct from an empty assistant sh
   assert.equal(
     maybeCreateAssistantMessageFromPreferredAssistantResponsePayload(payload),
     null,
+  )
+})
+
+test('warning ui messages are surfaced as system messages for TUI visibility', () => {
+  const message = createSystemMessageFromModelTurnItem({
+    kind: 'ui_message',
+    provider: 'custom',
+    level: 'warn',
+    text: 'Provider emitted a text fallback tool call; filtered out of the execution path.',
+    source: 'text_fallback_filtered',
+  })
+
+  assert.equal(message?.level, 'warn')
+  assert.equal(message?.content.includes('text fallback tool call'), true)
+})
+
+test('tool start ui messages are surfaced as informational system messages', () => {
+  const message = createSystemMessageFromModelTurnItem({
+    kind: 'ui_message',
+    provider: 'custom',
+    level: 'info',
+    text: '准备调用工具: Read',
+    source: 'tool_call_started',
+  })
+
+  assert.equal(message?.level, 'info')
+  assert.equal(message?.content, '准备调用工具: Read')
+})
+
+test('web search ui messages are emitted into SDK execution item stream', () => {
+  const items = buildSDKExecutionItemMessages(
+    [
+      {
+        kind: 'ui_message',
+        provider: 'custom',
+        level: 'info',
+        text: '正在联网搜索: OpenAI Codex CLI',
+        source: 'web_search_call',
+      },
+      {
+        kind: 'ui_message',
+        provider: 'custom',
+        level: 'info',
+        text: '联网搜索已完成: OpenAI Codex CLI',
+        source: 'web_search_call_completed',
+      },
+    ],
+    'session-1',
+  )
+
+  assert.deepEqual(
+    items.map(item => item.item_kind),
+    ['ui_message', 'ui_message'],
   )
 })
 

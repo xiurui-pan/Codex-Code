@@ -1,0 +1,66 @@
+[
+  {
+    "task_id": "model-api-contract",
+    "category": "model",
+    "prompt": "OpenAI API contract stays green",
+    "cwd": "/home/pxr/workspace/CodingAgent/co-claw-dex",
+    "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/model/openaiApi.test.ts",
+    "timeout_ms": 120000
+  },
+  {
+    "task_id": "model-config",
+    "category": "model",
+    "prompt": "Codex config resolution stays green",
+    "cwd": "/home/pxr/workspace/CodingAgent/co-claw-dex",
+    "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/model/openaiCodexConfig.test.ts",
+    "timeout_ms": 120000
+  },
+  {
+    "task_id": "responses-backend",
+    "category": "headless",
+    "prompt": "Responses backend streaming contracts stay green",
+    "cwd": "/home/pxr/workspace/CodingAgent/co-claw-dex",
+    "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/model/openaiResponsesBackend.test.ts",
+    "timeout_ms": 120000
+  },
+  {
+    "task_id": "remote-permission-bridge",
+    "category": "permissions",
+    "prompt": "Remote permission bridge contracts stay green",
+    "cwd": "/home/pxr/workspace/CodingAgent/co-claw-dex",
+    "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/protocol/remotePermissionBridge.test.ts",
+    "timeout_ms": 120000
+  },
+  {
+    "task_id": "sdk-message-adapter",
+    "category": "protocol",
+    "prompt": "SDK message adapter contracts stay green",
+    "cwd": "/home/pxr/workspace/CodingAgent/co-claw-dex",
+    "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/protocol/sdkMessageAdapter.test.ts",
+    "timeout_ms": 120000
+  },
+  {
+    "task_id": "remote-session-manager",
+    "category": "session",
+    "prompt": "Remote session lifecycle stays green",
+    "cwd": "/home/pxr/workspace/CodingAgent/co-claw-dex",
+    "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/protocol/RemoteSessionManager.test.ts",
+    "timeout_ms": 120000
+  },
+  {
+    "task_id": "tool-execution",
+    "category": "tool",
+    "prompt": "Tool execution contracts stay green",
+    "cwd": "/home/pxr/workspace/CodingAgent/co-claw-dex",
+    "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/tool/toolExecution.test.ts",
+    "timeout_ms": 120000
+  },
+  {
+    "task_id": "tool-orchestration",
+    "category": "tool",
+    "prompt": "Tool orchestration contracts stay green",
+    "cwd": "/home/pxr/workspace/CodingAgent/co-claw-dex",
+    "command": "npx vitest run --config vitest.config.ts --reporter=dot tests/p0/tool/toolOrchestration.test.ts",
+    "timeout_ms": 120000
+  }
+]

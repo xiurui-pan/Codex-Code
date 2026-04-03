@@ -165,11 +165,13 @@ function* yieldMissingToolResultBlocks(
   }
 }
 
-function assistantMessageContainsRenderableText(
+function assistantMessageHasRenderableContent(
   message: AssistantMessage,
 ): boolean {
   return message.message.content.some(
-    block => block.type === 'text' && typeof block.text === 'string',
+    block =>
+      (block.type === 'text' && typeof block.text === 'string') ||
+      block.type === 'tool_use',
   )
 }
 
@@ -775,7 +777,7 @@ async function* queryLoop(
                 )
               if (assistantCandidate.message.content.length > 0) {
                 internalAssistantMessage = assistantCandidate
-                if (assistantMessageContainsRenderableText(assistantCandidate)) {
+                if (assistantMessageHasRenderableContent(assistantCandidate)) {
                   message = assistantCandidate
                 }
               }

@@ -2010,7 +2010,6 @@ async function run(): Promise<CommanderCommand> {
     // Callers who inject and also want those injections visible in the
     // stream pass --messaging-socket-path explicitly (or --replay-user-messages).
     writeStartupProbe('action:after-setup-pre-replay');
-    process.stderr.write('[PROBE] after-setup-pre-replay\n');
     let effectiveReplayUserMessages = !!options.replayUserMessages;
     if (feature('UDS_INBOX')) {
       if (!effectiveReplayUserMessages && outputFormat === 'stream-json') {
@@ -2019,7 +2018,7 @@ async function run(): Promise<CommanderCommand> {
         }).messagingSocketPath;
       }
     }
-    process.stderr.write('[PROBE] after-replay-flags\n');
+    writeStartupProbe('action:after-replay-flags');
     if (getIsNonInteractiveSession() && !currentPhaseCustomCodexProvider) {
       // Apply full merged settings env now (including project-scoped
       // .claude/settings.json PATH/GIT_DIR/GIT_WORK_TREE) so gitExe() and
@@ -2059,7 +2058,7 @@ async function run(): Promise<CommanderCommand> {
       // early-return (zero-cost).
       void ensureModelStringsInitialized();
     }
-    process.stderr.write('[PROBE] after-noninteractive-block\n');
+    writeStartupProbe('action:after-noninteractive-block');
 
     // Apply --name: cache-only so no orphan file is created before the
     // session ID is finalized by --continue/--resume. materializeSessionFile
@@ -2684,7 +2683,7 @@ async function run(): Promise<CommanderCommand> {
       // Resolve fast mode org status from cache (no network)
       resolveFastModeStatusFromCache();
     }
-    process.stderr.write('[PROBE] after-startup-prefetch-section\n');
+    writeStartupProbe('action:after-startup-prefetch-section');
     if (!isNonInteractiveSession) {
       void refreshExampleCommands(); // Pre-fetch example commands (runs git log, no API call)
     }
@@ -2693,7 +2692,7 @@ async function run(): Promise<CommanderCommand> {
     const {
       servers: existingMcpConfigs
     } = await mcpConfigPromise;
-    process.stderr.write('[PROBE] after-mcp-config-await\n');
+    writeStartupProbe('action:after-mcp-config-await');
     logForDebugging(`[STARTUP] MCP configs resolved in ${mcpConfigResolvedMs}ms (awaited at +${Date.now() - mcpConfigStart}ms)`);
     // CLI flag (--mcp-config) should override file-based configs, matching settings precedence
     const allMcpConfigs = {
@@ -2898,7 +2897,7 @@ async function run(): Promise<CommanderCommand> {
 
     // --print mode
     if (isNonInteractiveSession) {
-      process.stderr.write('[PROBE] headless-branch-enter\n');
+      writeStartupProbe('action:headless-branch-enter');
       if (outputFormat === 'stream-json' || outputFormat === 'json') {
         setHasFormattedOutput(true);
       }
@@ -2928,7 +2927,7 @@ async function run(): Promise<CommanderCommand> {
       // rejection — this just prevents the spurious global handler fire.
       sessionStartHooksPromise?.catch(() => {});
       profileCheckpoint('before_validateForceLoginOrg');
-      process.stderr.write('[PROBE] before-validateForceLoginOrg\n');
+      writeStartupProbe('action:before-validateForceLoginOrg');
       if (!currentPhaseBareLocalMode) {
         // Validate org restriction for non-interactive sessions
         const orgValidation = await validateForceLoginOrg();
@@ -2937,7 +2936,7 @@ async function run(): Promise<CommanderCommand> {
           process.exit(1);
         }
       }
-      process.stderr.write('[PROBE] after-validateForceLoginOrg\n');
+      writeStartupProbe('action:after-validateForceLoginOrg');
 
       // Headless mode supports all prompt commands and some local commands
       // If disableSlashCommands is true, return empty array
@@ -3107,7 +3106,7 @@ async function run(): Promise<CommanderCommand> {
       if (!currentPhaseBareLocalMode) {
         setSdkBetas(filterAllowedSdkBetas(betas));
       }
-      process.stderr.write('[PROBE] after-setSdkBetas\n');
+      writeStartupProbe('action:after-setSdkBetas');
 
       // Print-mode MCP: per-server incremental push into headlessStore.
       // Mirrors useManageMCPConnections — push pending first (so ToolSearch's
@@ -3237,22 +3236,22 @@ async function run(): Promise<CommanderCommand> {
           void import('./utils/sdkHeapDumpMonitor.js').then(m => m.startSdkMemoryMonitor());
         }
       }
-      process.stderr.write('[PROBE] before-headless-telemetry\n');
+      writeStartupProbe('action:before-headless-telemetry');
       if (!currentPhaseBareLocalMode) {
         logSessionTelemetry();
       }
-      process.stderr.write('[PROBE] after-headless-telemetry\n');
+      writeStartupProbe('action:after-headless-telemetry');
       logForDebugging('[STARTUP] before print import');
       profileCheckpoint('before_print_import');
-      process.stderr.write('[PROBE] before-headless-import\n');
+      writeStartupProbe('action:before-headless-import');
       const {
         runHeadless
       } = await import('src/cli/print.js');
-      process.stderr.write('[PROBE] after-headless-import\n');
+      writeStartupProbe('action:after-headless-import');
       logForDebugging('[STARTUP] after print import');
       profileCheckpoint('after_print_import');
       logForDebugging('[STARTUP] before runHeadless');
-      process.stderr.write('[PROBE] before-runHeadless-call\n');
+      writeStartupProbe('action:before-runHeadless-call');
       void runHeadless(inputPrompt, () => headlessStore.getState(), headlessStore.setState, commandsHeadless, tools, sdkMcpConfigs, agentDefinitions.activeAgents, {
         continue: options.continue,
         resume: options.resume,
@@ -3283,8 +3282,13 @@ async function run(): Promise<CommanderCommand> {
         workload: options.workload,
         setupTrigger: setupTrigger ?? undefined,
         sessionStartHooksPromise
+      }).catch(error => {
+        process.stderr.write(
+          `Headless runtime failed: ${error instanceof Error ? error.stack || error.message : String(error)}\n`,
+        );
+        gracefulShutdownSync(1);
       });
-      process.stderr.write('[PROBE] after-runHeadless-call\n');
+      writeStartupProbe('action:after-runHeadless-call');
       return;
     }
 
@@ -3298,11 +3302,11 @@ async function run(): Promise<CommanderCommand> {
         agent: agentSetting as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
       });
     }
-    process.stderr.write('[PROBE] after-startup-manual-model-config\n');
+    writeStartupProbe('action:after-startup-manual-model-config');
 
     // Get deprecation warning for the initial model (resolvedInitialModel computed earlier for hooks parallelization)
     const deprecationWarning = currentPhaseBareLocalMode ? null : getModelDeprecationWarning(resolvedInitialModel);
-    process.stderr.write('[PROBE] after-deprecation-warning\n');
+    writeStartupProbe('action:after-deprecation-warning');
 
     // Build initial notification queue
     const initialNotifications: Array<{
@@ -3338,7 +3342,7 @@ async function run(): Promise<CommanderCommand> {
         priority: 'high'
       });
     }
-    process.stderr.write('[PROBE] after-initial-notifications\n');
+    writeStartupProbe('action:after-initial-notifications');
     const effectiveToolPermissionContext = currentPhaseBareLocalMode ? toolPermissionContext : {
       ...toolPermissionContext,
       mode: isAgentSwarmsEnabled() && getTeammateUtils().isPlanModeRequired() ? 'plan' as const : toolPermissionContext.mode
@@ -3572,7 +3576,7 @@ async function run(): Promise<CommanderCommand> {
       // teammates reading their own identity, not the assistant-mode leader.
       teamContext: feature('KAIROS') ? assistantTeamContext ?? computeInitialTeamContext?.() : computeInitialTeamContext?.()
     };
-    process.stderr.write('[PROBE] after-initial-state\n');
+    writeStartupProbe('action:after-initial-state');
     logForDebugging(`[STARTUP] initialState prepared (currentPhaseBareLocalMode=${currentPhaseBareLocalMode})`);
 
     // Add CLI initial prompt to history

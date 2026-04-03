@@ -42,7 +42,7 @@ import type { FileHistorySnapshot } from './fileHistory.js'
 import { fileHistoryRestoreStateFromLog } from './fileHistory.js'
 import { createSystemMessage } from './messages.js'
 import { parseUserSpecifiedModel } from './model/model.js'
-import { getPlansDirectory } from './plans.js'
+import { getPlansDirectory, setPlanSlug } from './plans.js'
 import { setCwd } from './Shell.js'
 import {
   adoptResumedSessionFile,
@@ -90,6 +90,16 @@ function extractTodosFromTranscript(messages: Message[]): TodoList {
     return parsed.success ? parsed.data : []
   }
   return []
+}
+
+function extractPlanSlugFromTranscript(messages: Message[]): string | undefined {
+  for (const message of messages) {
+    const slug = (message as { slug?: unknown }).slug
+    if (typeof slug === 'string' && slug.length > 0) {
+      return slug
+    }
+  }
+  return undefined
 }
 
 /**
@@ -312,6 +322,7 @@ type ResumeLoadResult = {
   prNumber?: number
   prUrl?: string
   prRepository?: string
+  planSlug?: string
 }
 
 /**
@@ -436,6 +447,8 @@ export async function processResumedConversation(
   if (!opts.forkSession) {
     const sid = opts.sessionIdOverride ?? result.sessionId
     if (sid) {
+      const restoredPlanSlug =
+        result.planSlug ?? extractPlanSlugFromTranscript(result.messages)
       // When resuming from a different project directory (git worktrees,
       // cross-project), transcriptPath points to the actual file; its dirname
       // is the project dir. Otherwise the session lives in the current project.
@@ -443,6 +456,9 @@ export async function processResumedConversation(
         asSessionId(sid),
         opts.transcriptPath ? dirname(opts.transcriptPath) : null,
       )
+      if (restoredPlanSlug) {
+        setPlanSlug(asSessionId(sid), restoredPlanSlug)
+      }
       // Rename asciicast recording to match the resumed session ID so
       // getSessionRecordingPaths() can discover it during /share
       await renameRecordingForSession()

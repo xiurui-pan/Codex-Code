@@ -179,7 +179,13 @@ type Theme = {
   scopes: Record<string, Color>
 }
 
+const USE_CODEX_BRANDING_COLORS =
+  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+
 function defaultSyntaxThemeName(themeName: string): string {
+  if (USE_CODEX_BRANDING_COLORS) {
+    return themeName.includes('dark') ? 'Codex Dark' : 'Codex Light'
+  }
   if (themeName.includes('ansi')) return 'ansi'
   if (themeName.includes('dark')) return 'Monokai Extended'
   return 'GitHub'
@@ -279,6 +285,68 @@ const ANSI_SCOPES: Record<string, Color> = {
   meta: ansiIdx(8),
 }
 
+const CODEX_ANSI_SCOPES: Record<string, Color> = {
+  keyword: ansiIdx(14),
+  operator: ansiIdx(14),
+  _storage: ansiIdx(14),
+  built_in: ansiIdx(11),
+  type: ansiIdx(11),
+  literal: ansiIdx(12),
+  number: ansiIdx(12),
+  string: ansiIdx(10),
+  regexp: ansiIdx(10),
+  symbol: ansiIdx(12),
+  title: ansiIdx(11),
+  'title.function': ansiIdx(11),
+  'title.class': ansiIdx(11),
+  'title.class.inherited': ansiIdx(11),
+  params: ansiIdx(14),
+  attr: ansiIdx(14),
+  attribute: ansiIdx(14),
+  variable: ansiIdx(7),
+  'variable.language': ansiIdx(7),
+  property: ansiIdx(7),
+  punctuation: ansiIdx(7),
+  comment: ansiIdx(8),
+  meta: ansiIdx(8),
+  subst: ansiIdx(7),
+}
+
+function codexScopePalette(
+  base: Record<string, Color>,
+  isDark: boolean,
+): Record<string, Color> {
+  const keyword = isDark ? rgb(0, 179, 219) : rgb(0, 126, 155)
+  const storage = isDark ? rgb(102, 216, 255) : rgb(0, 109, 168)
+  const type = isDark ? rgb(230, 180, 0) : rgb(148, 108, 0)
+  const literal = isDark ? rgb(122, 172, 255) : rgb(0, 92, 153)
+  const string = isDark ? rgb(139, 208, 139) : rgb(24, 125, 72)
+  const comment = isDark ? rgb(126, 134, 142) : rgb(128, 128, 128)
+
+  return {
+    ...base,
+    keyword,
+    operator: keyword,
+    _storage: storage,
+    built_in: type,
+    type,
+    title: type,
+    'title.function': type,
+    'title.class': type,
+    'title.class.inherited': type,
+    params: storage,
+    attr: storage,
+    attribute: storage,
+    literal,
+    number: literal,
+    symbol: literal,
+    string,
+    regexp: string,
+    comment,
+    meta: comment,
+  }
+}
+
 function buildTheme(themeName: string, mode: ColorMode): Theme {
   const isDark = themeName.includes('dark')
   const isAnsi = themeName.includes('ansi')
@@ -295,7 +363,7 @@ function buildTheme(themeName: string, mode: ColorMode): Theme {
       deleteDecoration: ansiIdx(9),
       foreground: ansiIdx(7),
       background: DEFAULT_BG,
-      scopes: ANSI_SCOPES,
+      scopes: USE_CODEX_BRANDING_COLORS ? CODEX_ANSI_SCOPES : ANSI_SCOPES,
     }
   }
 
@@ -314,7 +382,9 @@ function buildTheme(themeName: string, mode: ColorMode): Theme {
         deleteDecoration,
         foreground: fg,
         background: DEFAULT_BG,
-        scopes: MONOKAI_SCOPES,
+        scopes: USE_CODEX_BRANDING_COLORS
+          ? codexScopePalette(MONOKAI_SCOPES, true)
+          : MONOKAI_SCOPES,
       }
     }
     return {
@@ -326,7 +396,9 @@ function buildTheme(themeName: string, mode: ColorMode): Theme {
       deleteDecoration,
       foreground: fg,
       background: DEFAULT_BG,
-      scopes: MONOKAI_SCOPES,
+      scopes: USE_CODEX_BRANDING_COLORS
+        ? codexScopePalette(MONOKAI_SCOPES, true)
+        : MONOKAI_SCOPES,
     }
   }
 
@@ -345,7 +417,9 @@ function buildTheme(themeName: string, mode: ColorMode): Theme {
       deleteDecoration,
       foreground: fg,
       background: DEFAULT_BG,
-      scopes: GITHUB_SCOPES,
+      scopes: USE_CODEX_BRANDING_COLORS
+        ? codexScopePalette(GITHUB_SCOPES, false)
+        : GITHUB_SCOPES,
     }
   }
   return {
@@ -357,7 +431,9 @@ function buildTheme(themeName: string, mode: ColorMode): Theme {
     deleteDecoration,
     foreground: fg,
     background: DEFAULT_BG,
-    scopes: GITHUB_SCOPES,
+    scopes: USE_CODEX_BRANDING_COLORS
+      ? codexScopePalette(GITHUB_SCOPES, false)
+      : GITHUB_SCOPES,
   }
 }
 
@@ -996,4 +1072,5 @@ export const __test = {
   colorToEscape,
   detectColorMode,
   detectLanguage,
+  buildTheme,
 }

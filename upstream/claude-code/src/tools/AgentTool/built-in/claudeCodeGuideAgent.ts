@@ -6,6 +6,7 @@ import { SEND_MESSAGE_TOOL_NAME } from 'src/tools/SendMessageTool/constants.js'
 import { WEB_FETCH_TOOL_NAME } from 'src/tools/WebFetchTool/prompt.js'
 import { WEB_SEARCH_TOOL_NAME } from 'src/tools/WebSearchTool/prompt.js'
 import { isUsing3PServices } from 'src/utils/auth.js'
+import { isCurrentPhaseCustomCodexProvider } from 'src/utils/currentPhase.js'
 import { hasEmbeddedSearchTools } from 'src/utils/embeddedTools.js'
 import { getSettings_DEPRECATED } from 'src/utils/settings/settings.js'
 import { jsonStringify } from '../../../utils/slowOperations.js'
@@ -116,7 +117,7 @@ export const CLAUDE_CODE_GUIDE_AGENT: BuiltInAgentDefinition = {
       ],
   source: 'built-in',
   baseDir: 'built-in',
-  model: 'haiku',
+  model: isCurrentPhaseCustomCodexProvider() ? 'inherit' : 'haiku',
   permissionMode: 'dontAsk',
   getSystemPrompt({ toolUseContext }) {
     const commands = toolUseContext.options.commands

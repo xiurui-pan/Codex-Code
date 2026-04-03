@@ -3,17 +3,17 @@ import figures from 'figures';
 import * as React from 'react';
 import { useMemo, useRef } from 'react';
 import { stringWidth } from '../../ink/stringWidth.js';
-import { Box, Text, useAnimationFrame } from '../../ink.js';
+import { Box, Text, useAnimationFrame, useTheme } from '../../ink.js';
 import type { InProcessTeammateTaskState } from '../../tasks/InProcessTeammateTask/types.js';
 import { formatDuration, formatNumber } from '../../utils/format.js';
 import { toInkColor } from '../../utils/ink.js';
-import type { Theme } from '../../utils/theme.js';
+import { getTheme, type Theme } from '../../utils/theme.js';
 import { Byline } from '../design-system/Byline.js';
 import { GlimmerMessage } from './GlimmerMessage.js';
 import { SpinnerGlyph } from './SpinnerGlyph.js';
 import type { SpinnerMode } from './types.js';
 import { useStalledAnimation } from './useStalledAnimation.js';
-import { interpolateColor, toRGBColor } from './utils.js';
+import { interpolateColor, parseRGB, toRGBColor } from './utils.js';
 const SEP_WIDTH = stringWidth(' · ');
 const THINKING_BARE_WIDTH = stringWidth('thinking');
 const SHOW_TOKENS_AFTER_MS = 30_000;
@@ -21,12 +21,12 @@ const SHOW_TOKENS_AFTER_MS = 30_000;
 // Thinking shimmer constants. Previously lived in a separate ThinkingShimmerText
 // component with its own useAnimationFrame(50) — inlined here to reuse our
 // existing 50ms clock and eliminate the redundant subscriber.
-const THINKING_INACTIVE = {
+const THINKING_FALLBACK_INACTIVE = {
   r: 153,
   g: 153,
   b: 153
 };
-const THINKING_INACTIVE_SHIMMER = {
+const THINKING_FALLBACK_SHIMMER = {
   r: 185,
   g: 185,
   b: 185
@@ -101,6 +101,8 @@ export function SpinnerAnimationRow({
   effortSuffix
 }: SpinnerAnimationRowProps): React.ReactNode {
   const [viewportRef, time] = useAnimationFrame(reducedMotion ? null : 50);
+  const [themeName] = useTheme();
+  const theme = getTheme(themeName);
 
   // === Elapsed time (wall-clock, derived from refs each frame) ===
   const now = Date.now();
@@ -197,7 +199,17 @@ export function SpinnerAnimationRow({
   // second useAnimationFrame(50) subscription.
   const thinkingElapsedSec = (time - THINKING_DELAY_MS) / 1000;
   const thinkingOpacity = time < THINKING_DELAY_MS ? 0 : (Math.sin(thinkingElapsedSec * Math.PI * 2 / THINKING_GLOW_PERIOD_S) + 1) / 2;
-  const thinkingShimmerColor = toRGBColor(interpolateColor(THINKING_INACTIVE, THINKING_INACTIVE_SHIMMER, thinkingOpacity));
+  const thinkingBaseColor =
+    parseRGB(theme[messageColor]) ??
+    parseRGB(theme.inactive) ??
+    THINKING_FALLBACK_INACTIVE;
+  const thinkingShimmerTarget =
+    parseRGB(theme[shimmerColor]) ??
+    parseRGB(theme.inactiveShimmer) ??
+    THINKING_FALLBACK_SHIMMER;
+  const thinkingShimmerColor = toRGBColor(
+    interpolateColor(thinkingBaseColor, thinkingShimmerTarget, thinkingOpacity),
+  );
 
   // === Build status parts ===
   const parts = [...(spinnerSuffix ? [<Text dimColor key="suffix">

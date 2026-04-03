@@ -32,16 +32,16 @@ Per task:
 
 Using the current sample values:
 
-- `pass_rate = 0.5`
-  - 1 of 2 tasks succeeded.
+- `pass_rate = 1`
+  - 8 of 8 tasks succeeded.
   - Higher is better.
-- `timeout_rate = 0.5`
-  - 1 of 2 tasks hit timeout.
+- `timeout_rate = 0`
+  - 0 of 8 tasks hit timeout.
   - Lower is better.
-- `latency_p50_ms = 34`
-  - Typical completion time (median) is fast.
-- `latency_p95_ms = 502`
-  - Tail latency is much higher than p50 in this tiny sample.
+- `latency_p50_ms = 56589`
+  - Typical completion time (median) reflects real end-to-end acceptance commands, not toy smoke commands.
+- `latency_p95_ms = 80769`
+  - Tail latency is still bounded inside the current task timeouts on this 8-task pack.
 
 When comparing against `co-claw-dex`, use the same tasks and read metrics together:
 

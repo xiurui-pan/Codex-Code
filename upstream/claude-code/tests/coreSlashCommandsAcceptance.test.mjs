@@ -711,7 +711,7 @@ test('/plan TUI: enables plan mode and then reports empty current plan without p
   })
 })
 
-test.skip('/plan TUI: resume restores existing plan content, allows re-enter status, then exits (blocked by plan-slug restore timing/association)', SERIAL_TEST, async () => {
+test('/plan TUI: resume restores existing plan content, allows re-enter status, then exits', SERIAL_TEST, async () => {
   await withResponsesServer([], async ({ port, requestBodies }) => {
     const tempHome = await mkdtemp(join(tmpdir(), 'codex-plan-resume-tui-'))
     const resumedCwd = join(CLI_CWD, '..')
@@ -744,11 +744,7 @@ test.skip('/plan TUI: resume restores existing plan content, allows re-enter sta
       })
 
       assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
-      assert.deepEqual(result.sent, [
-        'enter-plan',
-        'show-existing-plan',
-        'exit',
-      ])
+      assert.deepEqual(result.sent, ['enter-plan', 'show-existing-plan', 'exit'])
       assert.match(result.normalizedTranscript, /Enabledplanmode/)
       assert.match(result.normalizedTranscript, /CurrentPlan/)
       assert.match(result.normalizedTranscript, /Planfromresumedsession/)
@@ -1344,6 +1340,129 @@ test('/terminal-setup TUI: shows local setup guidance and stays provider-free', 
       await rm(tempHome, { recursive: true, force: true })
     }
   })
+})
+
+test('local slash multi-state TUI: repeated local slash commands stay provider-free in one session', SERIAL_TEST, async () => {
+  await withResponsesServer([], async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-slash-multi-state-tui-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'open-help', waitFor: ['❯'], send: '/help\r' },
+          {
+            name: 'dismiss-help',
+            waitFor: ['For more help:', 'commands'],
+            send: '\u001b',
+          },
+          {
+            name: 'open-skills',
+            waitFor: ['Help dialog dismissed'],
+            preDelayMs: 500,
+            send: '/skills\r',
+          },
+          {
+            name: 'dismiss-skills',
+            waitFor: ['Skills'],
+            send: '\u001b',
+          },
+          {
+            name: 'open-tasks',
+            waitFor: ['Skills dialog dismissed'],
+            preDelayMs: 500,
+            send: '/tasks\r',
+          },
+          {
+            name: 'dismiss-tasks',
+            waitFor: ['Background tasks'],
+            send: '\u001b',
+          },
+          {
+            name: 'exit',
+            waitFor: ['Background tasks dialog dismissed'],
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(result.sent, [
+        'open-help',
+        'dismiss-help',
+        'open-skills',
+        'dismiss-skills',
+        'open-tasks',
+        'dismiss-tasks',
+        'exit',
+      ])
+      assert.match(result.normalizedTranscript, /Formorehelp:/)
+      assert.match(result.normalizedTranscript, /Helpdialogdismissed/)
+      assert.match(result.normalizedTranscript, /\/skills/)
+      assert.match(result.normalizedTranscript, /Skillsdialogdismissed/)
+      assert.match(result.normalizedTranscript, /\/tasks/)
+      assert.match(result.normalizedTranscript, /Backgroundtasksdialogdismissed/)
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('local slash TUI: local slash commands can be followed by a normal provider turn', SERIAL_TEST, async () => {
+  await withResponsesServer(
+    [[
+      responseDoneItem({
+        type: 'message',
+        role: 'assistant',
+        content: [{ type: 'output_text', text: 'SLASH_CHAIN_DONE' }],
+      }),
+      responseCompleted('resp-slash-followup-1'),
+      responseDone(),
+    ]],
+    async ({ port, requestBodies }) => {
+      const tempHome = await mkdtemp(join(tmpdir(), 'codex-slash-followup-tui-'))
+      try {
+        await writeCodexConfig(tempHome, port)
+        const result = await runTuiFlow({
+          tempHome,
+          actions: [
+            { name: 'open-help', waitFor: ['❯'], send: '/help\r' },
+            {
+              name: 'dismiss-help',
+              waitFor: ['For more help:', 'commands'],
+              send: '\u001b',
+            },
+            {
+              name: 'ask-normal-prompt',
+              waitFor: ['Help dialog dismissed'],
+              preDelayMs: 500,
+              sendParts: ['请只回复 SLASH_CHAIN_DONE。\r', '/exit\r'],
+              delayMs: 3000,
+              settleMs: 800,
+            },
+          ],
+        })
+
+        assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+        assert.deepEqual(result.sent, [
+          'open-help',
+          'dismiss-help',
+          'ask-normal-prompt',
+        ])
+        assert.match(result.normalizedTranscript, /Formorehelp:/)
+        assert.match(result.normalizedTranscript, /Helpdialogdismissed/)
+        assert.equal(requestBodies.length, 1)
+        const firstRequest = JSON.stringify(requestBodies[0])
+        assert.match(firstRequest, /SLASH_CHAIN_DONE/)
+        assert.match(firstRequest, /<command-name>\/help<\/command-name>/)
+        assert.match(firstRequest, /<local-command-stdout>Help dialog dismissed<\/local-command-stdout>/)
+      } finally {
+        await rm(tempHome, { recursive: true, force: true })
+      }
+    },
+  )
 })
 
 test('/compact TUI: resume compacts locally, returns to input, and the next prompt uses the resumed summary', SERIAL_TEST, async () => {

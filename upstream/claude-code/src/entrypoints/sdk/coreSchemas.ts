@@ -1524,6 +1524,7 @@ export const SDKModelTurnItemMessageSchema = lazySchema(() =>
       'permission_decision',
       'tool_output',
       'execution_result',
+      'ui_message',
     ]),
     item: z.record(z.string(), z.unknown()),
     parent_tool_use_id: z.string().nullable(),
