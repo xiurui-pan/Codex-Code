@@ -13,6 +13,10 @@ What this means in practice:
 - 2026-04-03 当前代码再次实测后，自然语言联网搜索也已收口：正常对话直接走 Codex 原生 `web_search`，并能看到搜索开始/完成进度。
 - 2026-04-04 真实 PTY TUI 再次实测后，`/sandbox` 已不再误报 “only supported on macOS, Linux, and WSL2”；放开 Linux 路径后暴露出的 fallback `checkDependencies()` 异步返回崩溃也已修掉。
 - 2026-04-04 真实 Codex TUI 发任务再次确认：普通开发型输入会被会话接收并进入工作态，不再在提交后立刻掉回假本地提示或直接崩溃。
+- 2026-04-04 `/init` 真实 PTY 双验证收口：mock provider 25s 完成，real provider 120s 内进入 AskUserQuestion 多阶段流程；新增自动化测试 `tuiInit.test.mjs` + `tuiInitRealProvider.smoke.mjs`。
+- 2026-04-04 长任务完整闭环收口：真实 Codex provider PTY 测试 27s 完成 `submit → tool calls → locate ToolSelector.tsx bug → summarize`；新增自动化测试 `tuiLongTaskCompleteLoop.smoke.mjs`。
+- 2026-04-04 代码清理确认：`isCurrentPhaseCustomCodexProvider()` 已全面覆盖 command、tool、auth、analytics、plugin、agent 各层；`USER_TYPE === 'ant'` 是上游 Anthropic 内部功能标志，不应删除。
+- 2026-04-04 headless `-p` 模式 prompt-type slash command 展开问题确认：这是 headless 路径的已知限制（input 作为 raw user message 不经过 slash command expander），非 `/init` 自身 bug。
 - 2026-04-04 真实 PTY 命令清扫继续推进：Codex 模式下 `/mobile`、`/chrome`、`/usage`、`/install-github-app`、`/web-setup`、`/remote-control` 已确认不再落入旧业务页面，而是统一表现为不可用命令。
 - 2026-04-04 真实 PTY 命令清扫第二轮已补到 `/help`、`/model`、`/effort`、`/memory`、`/status`、`/doctor`、`/mcp`；其中 `/statusline` 在确认真实报错后已从 Codex 模式命令面移除，`/agents` 的“进入加载后又空白回落”也已确认并修复。
 - 2026-04-04 新的真实长任务已再次证明 Codex TUI 会进入真工具链和真权限流：针对 `/agents` 问题的修复任务会先申请 `Bash` 权限、等待用户确认，再继续追加搜索命令，而不是停留在聊天式空转。

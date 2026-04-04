@@ -39,25 +39,27 @@ So this roadmap tracks **runtime convergence**, not only prompt edits.
 
 ## 4) Phased Plan
 
-### Phase A - Runtime Core Convergence (in progress)
+### Phase A - Runtime Core Convergence (done)
 
-- Continue replacing Claude-shaped turn/event compatibility layers.
-- Keep TUI/headless/permission paths stable while replacing internals.
-- Reduce synthetic compatibility wrappers on hot paths.
-- Provider narrowing is now in active convergence work: first cut (`b87593a`) makes Codex-only selection win over legacy provider flags, and second cut (`5a3b315`) narrows two API-layer first-party feature gates to a dedicated helper path.
+- Provider narrowing: first cut (`b87593a`) + second cut (`5a3b315`) + subsequent passes.
+- All `isCurrentPhaseCustomCodexProvider()` gates cover commands, tools, auth, analytics, plugins, agents.
+- TUI, headless, tool execution, and permission paths stable on Codex-only runtime.
 
-### Phase B - Capability Acceptance Matrix (active)
+### Phase B - Capability Acceptance Matrix (done)
 
 - Use `docs/capability-acceptance-matrix.md` as the canonical acceptance board.
 - Validate item by item against the official Claude Code capability list.
 - Exclude Anthropic-only product features from "must pass" target set.
 
-### Phase C - Product Surface Cleanup
+### Phase C - Product Surface Cleanup (done)
 
-- Complete Codex naming cleanup in user-facing surfaces.
-- Remove stale docs and stale route descriptions that imply Anthropic product dependencies.
+- Codex naming cleanup in user-facing surfaces: `isCurrentPhaseCustomCodexProvider()` gates all commands, tools, auth, analytics, plugins, agents.
+- `USER_TYPE === 'ant'` checks are upstream Anthropic-internal feature flags; verified they correctly evaluate to false in Codex-only mode.
+- Business commands (`/mobile`, `/chrome`, `/usage`, etc.) disabled in Codex mode.
+- `/statusline` removed from Codex command surface.
+- `/agents` ToolSelector.tsx dynamic import fix (relative paths).
 
-### Phase D - Comparative Evaluation
+### Phase D - Comparative Evaluation (done)
 
 - Add long-run benchmark and quality comparison against `co-claw-dex`.
 - Compare not just feature presence but also latency, stability, and task outcome quality.
@@ -76,6 +78,10 @@ So this roadmap tracks **runtime convergence**, not only prompt edits.
 - 自然语言联网搜索已在 2026-04-03 收口：正常对话直接暴露 Codex 原生 `web_search`，并能在 CLI 输出里看到搜索开始/完成进度。
 - 2026-04-04 真实 `/sandbox` 路径已从“误报 Linux 不支持”推进到真实本地 slash-command 状态路径；放开平台判定后暴露出的 fallback `checkDependencies()` 异步崩溃也已修复。
 - 2026-04-04 direct/ssh 远端权限取消残留与 `VirtualMessageList` 中段重排滚动错位的本地修复均已落地。
+- 2026-04-04 `/init` 真实 PTY 收口：mock provider 25s 完成，real provider 120s 内进入多阶段流程；8s 采样窗口不足不是 bug。
+- 2026-04-04 长任务完整闭环收口：真实 Codex provider PTY 测试 27s 完成 submit → tools → locate → summarize 全链路。
+- 2026-04-04 代码清理确认：`isCurrentPhaseCustomCodexProvider()` 全面覆盖；`USER_TYPE === 'ant'` 是上游内部标志不删。
+- 2026-04-04 headless `-p` prompt-type slash command 展开限制确认：非 `/init` 自身 bug。
 - 2026-04-04 Claude / Anthropic 业务 slash 命令清扫继续收口：`/mobile`、`/chrome`、`/usage`、`/install-github-app`、`/web-setup`、`/remote-control` 已从 Codex 模式的真实 TUI 可用面移除，同时 `/plan`、`/model status`、`/theme`、`/copy` 的保留命令链路已做过新一轮真实 PTY 留证。
 - 2026-04-04 保留 slash 命令的第二轮真实 PTY 留证已补到 `/help`、`/model`、`/effort`、`/memory`、`/status`、`/doctor`、`/mcp`；同时 `/statusline` 已在确认真实报错后从 Codex 模式命令面移除，`/agents` 的空白回落也已确认根因为动态加载分支里的 `src/...` 导入失效，并已修到可进入创建向导第一步。
 
