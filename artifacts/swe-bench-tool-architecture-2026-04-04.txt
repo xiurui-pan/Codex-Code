@@ -1,0 +1,42 @@
+                                                               *Channelg…                    
+
+────────────────────────────────────────────────────────────────────────────────
+❯ 
+────────────────────────────────────────────────────────────────────────────────
+esctointerrupt◐medium·/effort
+●ing for 1 patern… (ctrl+o to expand)
+
+
+
+
+
+
+
+
+
+
+
+
+✢
+
+
+
+
+
+·
+
+
+
+
+
+ ed for 1 patern (ctrl+o to expand)  Runn已结束 Bash: call_dyYP3wvW2hzt60dtWUGN6H9g● Bash 执行完成                                                                   Bahcmmand                    
+
+pwd&&rg--files.|rg"(tool|provider|phase)"
+Showworkspacepathandrelatedfiles
+
+Doyouwanttoproceed?
+❯1.Yes
+2.Yes,anddon’taskagainfor:rg--files.
+3.No
+
+Esctocancel·Tabtoamend·ctrl+etoexplain
