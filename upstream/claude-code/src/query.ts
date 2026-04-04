@@ -810,6 +810,20 @@ async function* queryLoop(
               } catch {
                 // Silently ignore usage tracking errors
               }
+              // Attach usage to the last assistant message so context window
+              // percentage can be calculated by getCurrentUsage()
+              const lastAsst = assistantMessages.at(-1)
+              if (lastAsst) {
+                const u = usageChunk.usage
+                lastAsst.message.usage = {
+                  input_tokens: u.input_tokens ?? 0,
+                  output_tokens: u.output_tokens ?? 0,
+                  cache_creation_input_tokens: 0,
+                  cache_read_input_tokens:
+                    u.input_tokens_details?.cached_tokens ?? 0,
+                }
+                lastAsst.message.stop_reason = 'end_turn'
+              }
               continue
             } else {
               continue

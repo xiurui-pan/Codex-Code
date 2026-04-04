@@ -25,24 +25,18 @@ export function createSystemMessageFromModelTurnItem(
         level: 'info',
         content:
           item.phase === 'requested'
-            ? `准备执行 ${item.toolName}: ${item.command}`
-            : `已结束 ${item.toolName}: ${item.command || item.toolUseId}`,
+            ? `${item.toolName}: ${item.command}`
+            : ``,
         modelTurnItem: item,
       }
     case 'permission_request':
-      return {
-        type: 'system',
-        subtype: 'informational',
-        level: 'info',
-        content: `等待权限确认: ${item.toolName}`,
-        modelTurnItem: item,
-      }
+      return null
     case 'permission_decision':
       return {
         type: 'system',
         subtype: 'informational',
         level: item.decision === 'deny' ? 'warn' : 'info',
-        content: `权限${item.decision === 'deny' ? '已拒绝' : item.decision === 'allow' ? '已允许' : '待确认'}: ${item.toolName}`,
+        content: item.decision === 'deny' ? `Permission denied: ${item.toolName}` : ``,
         modelTurnItem: item,
       }
     case 'execution_result':
@@ -50,7 +44,7 @@ export function createSystemMessageFromModelTurnItem(
         type: 'system',
         subtype: 'informational',
         level: item.status === 'success' ? 'success' : 'warn',
-        content: `${item.toolName} 执行${item.status === 'success' ? '完成' : item.status === 'denied' ? '被拒绝' : '失败'}`,
+        content: item.status === 'success' ? `` : `${item.toolName} ${item.status === 'denied' ? 'denied' : 'failed'}`,
         modelTurnItem: item,
       }
     case 'tool_output':

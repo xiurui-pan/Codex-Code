@@ -419,10 +419,10 @@ function buildWebSearchUiMessage(
 ): string {
   const query = getWebSearchQuery(item.action)
   if (item.status === 'completed') {
-    return query ? `联网搜索已完成: ${query}` : '联网搜索已完成'
+    return query ? `Web search completed: ${query}` : 'Web search completed'
   }
 
-  return query ? `正在联网搜索: ${query}` : '正在联网搜索...'
+  return query ? `Searching: ${query}` : 'Searching...'
 }
 
 export function normalizeResponsesOutputToTurnItems(
@@ -448,6 +448,19 @@ export function normalizeResponsesOutputToTurnItems(
           'structured',
         ),
       )
+      continue
+    }
+
+    // Handle function_call_output (agent/subagent results) so the
+    // main model can see them in subsequent turns instead of re-searching.
+    if (item.type === 'function_call_output' && item.call_id) {
+      turnItems.push({
+        kind: 'tool_output',
+        provider: 'custom',
+        toolUseId: item.call_id,
+        outputText: typeof item.output === 'string' ? item.output : '',
+        source: 'provider',
+      })
       continue
     }
 
