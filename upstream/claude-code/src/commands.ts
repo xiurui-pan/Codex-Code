@@ -100,6 +100,7 @@ const disabledClaudeBusinessCommandNames = new Set([
   'remote-control',
   'remote-env',
   'stickers',
+  'statusline',
   'think-back',
   'think-back-play',
   'upgrade',

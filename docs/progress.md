@@ -14,6 +14,8 @@ What this means in practice:
 - 2026-04-04 真实 PTY TUI 再次实测后，`/sandbox` 已不再误报 “only supported on macOS, Linux, and WSL2”；放开 Linux 路径后暴露出的 fallback `checkDependencies()` 异步返回崩溃也已修掉。
 - 2026-04-04 真实 Codex TUI 发任务再次确认：普通开发型输入会被会话接收并进入工作态，不再在提交后立刻掉回假本地提示或直接崩溃。
 - 2026-04-04 真实 PTY 命令清扫继续推进：Codex 模式下 `/mobile`、`/chrome`、`/usage`、`/install-github-app`、`/web-setup`、`/remote-control` 已确认不再落入旧业务页面，而是统一表现为不可用命令。
+- 2026-04-04 真实 PTY 命令清扫第二轮已补到 `/help`、`/model`、`/effort`、`/memory`、`/status`、`/doctor`、`/mcp`；其中 `/statusline` 在确认真实报错后已从 Codex 模式命令面移除，`/agents` 的“进入加载后又空白回落”也已确认并修复。
+- 2026-04-04 新的真实长任务已再次证明 Codex TUI 会进入真工具链和真权限流：针对 `/agents` 问题的修复任务会先申请 `Bash` 权限、等待用户确认，再继续追加搜索命令，而不是停留在聊天式空转。
 
 ## Recent Convergence Commits (04995ec, b87593a, 5a3b315)
 
@@ -56,6 +58,10 @@ Current behavior:
 - `/sandbox` 的本地 fallback 现在会把真实缺失原因放进依赖检查结果里，并且 Linux / WSL / macOS 会走支持平台判定；当前真实 PTY 证据见 `artifacts/manual-tui-sandbox-2026-04-04.md`。
 - 真实 Codex provider TUI 的开发型输入已再次确认能进入工作态；当前工件见 `artifacts/manual-tui-real-task-2026-04-04.md`。但这套 PTY 驱动对长任务中途工具流的抓取还不够稳定，仍需继续改进。
 - 新一轮真实 PTY slash 命令清扫已留下工件 `artifacts/manual-tui-command-sweep-2026-04-04.md`：一方面确认 Claude / Anthropic 业务命令已从 Codex 模式移除，另一方面确认 `/plan`、`/model status`、`/theme`、`/copy` 仍能在真实 TUI 中工作。
+- 第二轮真实 PTY slash 命令清扫工件已补到 `artifacts/manual-tui-command-sweep-round2-2026-04-04.md`：确认 `/help`、`/model`、`/effort`、`/memory`、`/status`、`/doctor`、`/mcp` 可用，`/statusline` 已移除；随后又在真实 PTY 中定位并修掉了 `/agents` 的空白回落问题，根因不是命令本身被改坏，而是 `src/components/agents/ToolSelector.tsx` 这一支在本地 JSX 动态加载时仍带着 `src/...` 绝对导入，运行时直接抛 `ERR_MODULE_NOT_FOUND`。
+- `/agents` 当前的真实 PTY 验收已经补到更深一层：命令页能稳定显示 `No agents found` / `Create new agent` / built-in agents 列表，继续回车后还能进入 `Choose location`，显示 `Project (.claude/agents/)` 与 `Personal (~/.claude/agents/)` 两项。
+- 新的真实长任务工件已补到 `artifacts/manual-tui-long-task-agents-2026-04-04.txt` 和 `artifacts/manual-tui-long-task-agents-after-permission-2026-04-04.txt`：当前可稳定看到真实 `Bash` 权限弹窗和后续继续搜索，但在采样窗口内尚未走到改文件与总结阶段。
+- 新增工件 `artifacts/manual-tui-long-task-fuller-round3-2026-04-04.txt`：再次证明真实长任务会先说明“暂不编辑”，再给出更具体的一组只读检查命令，并进入权限确认界面；当前脚本已成功自动批准一次，但采样窗口内仍未走到最终 bug 定位总结。
 
 ## Done (Scope and Direction)
 
@@ -108,13 +114,13 @@ Still pending:
 - 远端 direct/ssh 两条链路还没有做完对应的真实 TUI / 真实远端会话验收；当前只完成了本地代码修复和主链 PTY 复查。
 - `/sandbox` 当前已从误报/崩溃收口到可识别命令，但完整配置界面的端到端 PTY 留证还没补齐。
 - 真实 Codex provider 长任务的中途工具流在当前 PTY harness 里仍然不够容易完整抓取；现有工件只能稳定证明“提交成功并进入工作态”。
-- 保留下来的 slash 命令还没有按真实 PTY 全量逐条扫完；当前只新增补到 `/plan`、`/model status`、`/theme`、`/copy` 和前一轮的 `/sandbox`。
+- 保留下来的 slash 命令还没有按真实 PTY 全量逐条扫完；当前已新增补到 `/help`、`/model`、`/effort`、`/memory`、`/status`、`/doctor`、`/mcp`、`/permissions`、`/config`、`/files`、`/branch`，其中 `/agents` 已推进到“真实 PTY 可用，已进入创建向导第一步”，`/branch` 在空会话下会自然提示 `No conversation to branch`。
 
 Next command set:
 
 本轮已复验通过：
 
-- 真实 PTY：继续逐条扫保留 slash 命令，优先 `/help`、`/model`、`/effort`、`/memory`、`/status`
+- 真实 PTY：继续逐条扫剩余保留 slash 命令，下一批优先补 `/clear`、`/compact`、`/review`、`/init` 的真实界面行为
 - 真实 PTY：继续做 direct/ssh 远端链路，重点看“远端取消权限请求后本地弹窗是否消失”
 - `cd upstream/claude-code && node --test tests/tuiKeyboardInputAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`

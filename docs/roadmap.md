@@ -77,6 +77,7 @@ So this roadmap tracks **runtime convergence**, not only prompt edits.
 - 2026-04-04 真实 `/sandbox` 路径已从“误报 Linux 不支持”推进到真实本地 slash-command 状态路径；放开平台判定后暴露出的 fallback `checkDependencies()` 异步崩溃也已修复。
 - 2026-04-04 direct/ssh 远端权限取消残留与 `VirtualMessageList` 中段重排滚动错位的本地修复均已落地。
 - 2026-04-04 Claude / Anthropic 业务 slash 命令清扫继续收口：`/mobile`、`/chrome`、`/usage`、`/install-github-app`、`/web-setup`、`/remote-control` 已从 Codex 模式的真实 TUI 可用面移除，同时 `/plan`、`/model status`、`/theme`、`/copy` 的保留命令链路已做过新一轮真实 PTY 留证。
+- 2026-04-04 保留 slash 命令的第二轮真实 PTY 留证已补到 `/help`、`/model`、`/effort`、`/memory`、`/status`、`/doctor`、`/mcp`；同时 `/statusline` 已在确认真实报错后从 Codex 模式命令面移除，`/agents` 的空白回落也已确认根因为动态加载分支里的 `src/...` 导入失效，并已修到可进入创建向导第一步。
 
 ## 4.2 Current Remaining Gap
 
@@ -84,7 +85,7 @@ So this roadmap tracks **runtime convergence**, not only prompt edits.
 - `/sandbox` 还缺完整配置界面的真实 TUI 留证。
 - direct/ssh 远端权限取消这条还缺真实远端会话验收，当前只完成了代码修复。
 - 真实 Codex provider 长任务虽然已再次证明“可提交并进入工作态”，但 PTY 工具流转录还需要继续收紧。
-- slash 命令的真实 PTY 扫描还没做完全部保留命令；当前新补的留证只覆盖 `/plan`、`/model status`、`/theme`、`/copy` 和业务命令移除面。
+- slash 命令的真实 PTY 扫描还没做完全部保留命令；当前已补到 `/help`、`/model`、`/effort`、`/memory`、`/status`、`/doctor`、`/mcp`、`/permissions`、`/config`、`/files`、`/branch`，`/agents` 也已修到可进入创建向导第一步；下一批应继续扫 `/clear`、`/compact`、`/review`、`/init`。
 
 ## 5) Definition of Done for This Roadmap Track
 

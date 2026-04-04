@@ -31,14 +31,17 @@ Rule:
 | Slash commands | plan mode resume existing plan subcase | done | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | 2026-04-03 已放开并通过：`/plan` 在 `--resume <jsonl>` 后可读取已存在计划内容 |
 | Slash commands | `/sandbox` local TUI path no longer false-denies Linux or crashes | in-progress | `artifacts/manual-tui-sandbox-2026-04-04.md` | 2026-04-04 真实 PTY transcript 已证明命令可识别并回到本地状态行；完整配置界面端到端留证仍待补齐 |
 | Slash commands | Claude / Anthropic business commands are absent in Codex mode (`/mobile`, `/chrome`, `/usage`, `/install-github-app`, `/web-setup`, `/remote-control`) | done | `artifacts/manual-tui-command-sweep-2026-04-04.md` | 2026-04-04 真实 PTY transcript 已证明这些命令在 Codex 模式下统一表现为 `Unknown skill`，不再打开旧业务页面 |
-| Slash commands | kept local commands still work after the business-command cleanup (`/plan`, `/model status`, `/theme`, `/copy`) | in-progress | `artifacts/manual-tui-command-sweep-2026-04-04.md` | 当前真实 PTY 已补到这四条；其余保留命令仍需继续逐条扫 |
+| Slash commands | kept local commands still work after the business-command cleanup (`/plan`, `/model status`, `/theme`, `/copy`) | in-progress | `artifacts/manual-tui-command-sweep-2026-04-04.md` | 第一轮真实 PTY 已补到这四条；第二轮继续往下补 |
+| Slash commands | kept local commands second sweep (`/help`, `/model`, `/effort`, `/memory`, `/status`, `/doctor`, `/mcp`, `/permissions`, `/config`, `/files`, `/branch`) | done | `artifacts/manual-tui-command-sweep-round2-2026-04-04.md` | 2026-04-04 真实 PTY transcript 已证明这些命令当前都能进入对应页面或返回符合语义的本地状态文本；其中 `/branch` 在空会话下返回 `No conversation to branch` |
+| Slash commands | `/statusline` is no longer exposed in Codex mode | done | `artifacts/manual-tui-command-sweep-round2-2026-04-04.md`, `upstream/claude-code/src/commands.ts` | 先在真实 TUI 复现“会话不暴露 Agent 工具”的真问题，再将该命令从 Codex 模式命令面移除；当前真实 TUI 返回 `Unknown skill: statusline` |
+| Slash commands | `/agents` local TUI acceptance | done | `artifacts/manual-tui-command-sweep-round2-2026-04-04.md` | 2026-04-04 真实 PTY 已证明 `/agents` 页面可稳定显示，继续回车会进入 `Create new agent -> Choose location`；空白回落根因是 `src/components/agents/ToolSelector.tsx` 动态加载时仍使用 `src/...` 导入，已改为相对路径 |
 | TUI stability | interrupt 后 `/exit` 仍可正常退出 | done | `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs` | fixed by `9afabd4`; new regression covers the post-interrupt `/exit` path |
 | TUI stability | 多轮稳定性：round1 成功 + round2 中断 + `/exit` 退出 | done | `upstream/claude-code/tests/tuiMultiTurnStabilityAcceptance.test.mjs` | fixed by `b21ff65`; current evidence stops at interrupt then exit, not third-round auto coverage |
 | TUI stability | `/help` Esc dismiss restores footer state | done | `upstream/claude-code/tests/helpDismissTuiAcceptance.test.mjs` | fixed by `fbc85e3` |
 | TUI stability | auto-update fallback message when package URL is missing | done | `upstream/claude-code/tests/autoUpdaterMessages.test.ts` | fixed by `ca7b9d3` |
 | TUI stability | narrow terminal mixed-language input keeps completion focus stable | done | `upstream/claude-code/tests/tuiDisplayInteractionAcceptance.test.mjs` | added by `b4cebc3`, stabilized by `c7d136c` |
 | TUI stability | long output + transcript toggle returns focus for next submit | done | `upstream/claude-code/tests/tuiDisplayInteractionAcceptance.test.mjs` | added by `b4cebc3`, stabilized by `c7d136c` |
-| TUI stability | real Codex provider task submit enters working state without immediate local fallback/crash | in-progress | `artifacts/manual-tui-real-task-2026-04-04.md` | 2026-04-04 真实 PTY transcript 证明开发型输入能进入工作态；中途工具流转录仍待补强 |
+| TUI stability | real Codex provider task submit enters working state without immediate local fallback/crash | in-progress | `artifacts/manual-tui-real-task-2026-04-04.md`, `artifacts/manual-tui-long-task-agents-2026-04-04.txt`, `artifacts/manual-tui-long-task-agents-after-permission-2026-04-04.txt`, `artifacts/manual-tui-long-task-fuller-round3-2026-04-04.txt` | 2026-04-04 真实 PTY transcript 已补到“进入工作态 -> 明确声明暂不编辑 -> 请求只读 shell 权限 -> 用户允许”的链路；目前仍缺后续完整 bug 定位、改码与总结闭环 |
 | Provider chain | silent stream timeout gives explicit error (no silent hang) | done | `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs` | fixed by `c7e97ed` |
 | Provider chain | request-stage timeout gives explicit error | done | `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs` | fixed by `bf0555e` |
 | Provider chain | Codex-only provider selection wins over legacy provider flags | done | `upstream/claude-code/tests/providersBehavior.test.mjs` | first cut landed in `b87593a` |
@@ -64,7 +67,7 @@ Rule:
 
 ## Next Acceptance Commands
 
-- 真实 PTY：继续逐条扫保留 slash 命令，优先 `/help`、`/model`、`/effort`、`/memory`、`/status`
+- 真实 PTY：继续逐条扫剩余保留 slash 命令，下一批补 `/clear`、`/compact`、`/review`、`/init`
 - 真实 PTY：继续 direct/ssh 远端链路验收，重点观察“远端取消权限请求后本地弹窗是否立即清掉”
 - `cd upstream/claude-code && node --test tests/tuiKeyboardInputAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`

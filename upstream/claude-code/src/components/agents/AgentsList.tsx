@@ -1,7 +1,7 @@
 import { c as _c } from "react/compiler-runtime";
 import figures from 'figures';
 import * as React from 'react';
-import type { SettingSource } from 'src/utils/settings/constants.js';
+import type { SettingSource } from '../../utils/settings/constants.js';
 import type { KeyboardEvent } from '../../ink/events/keyboard-event.js';
 import { Box, Text } from '../../ink.js';
 import type { ResolvedAgent } from '../../tools/AgentTool/agentDisplay.js';
@@ -242,7 +242,7 @@ export function AgentsList(t0) {
         let t25;
         let t26;
         if ($[58] === Symbol.for("react.memo_cache_sentinel")) {
-          t24 = <Text dimColor={true}>No agents found. Create specialized subagents that Claude can delegate to.</Text>;
+          t24 = <Text dimColor={true}>No agents found. Create specialized subagents that Codex Code can delegate to.</Text>;
           t25 = <Text dimColor={true}>Each subagent has its own context window, custom system prompt, and specific tools.</Text>;
           t26 = <Text dimColor={true}>Try creating: Code Reviewer, Code Simplifier, Security Reviewer, Tech Lead, or UX Reviewer.</Text>;
           $[58] = t24;
