@@ -196,9 +196,7 @@ export function AutoUpdater({
           </Text>}
       {(autoUpdaterResult?.status === 'install_failed' || autoUpdaterResult?.status === 'no_permissions') && <Text color="error" wrap="truncate">
           ✗ Auto-update failed &middot; Try <Text bold>/doctor</Text> or{' '}
-          <Text bold>
-            {recoveryCommand}
-          </Text>
+          <Text bold>{recoveryCommand}</Text>
           {failureHint ? ` · ${failureHint}` : ''}
         </Text>}
     </Box>;

@@ -1,6 +1,9 @@
 import { randomUUID } from 'crypto'
+import { dirname } from 'path'
 import type { ModelTurnItem } from './modelTurnItems.js'
+import { getOriginalCwd } from '../../bootstrap/state.js'
 import { BASH_TOOL_NAME } from '../../tools/BashTool/toolName.js'
+import { getFsImplementation } from '../../utils/fsOperations.js'
 import { buildToolCallItemsForLocalExecution } from './localExecutionItems.js'
 
 type ResponsesOutputText = {
@@ -69,6 +72,101 @@ const TOOL_PROTOCOL_LEAK_MARKERS = [
   'to=functions.',
 ]
 
+const CODEX_VIRTUAL_WORKSPACE_ROOT = '/workspace'
+const PATH_LIKE_ARGUMENT_KEYS = new Set([
+  'file_path',
+  'path',
+  'cwd',
+  'directory',
+  'notebook_path',
+])
+const COMMAND_LIKE_ARGUMENT_KEYS = new Set(['command', 'cmd'])
+
+function shouldRewriteCodexWorkspacePaths(): boolean {
+  return (
+    process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1' &&
+    getOriginalCwd() !== CODEX_VIRTUAL_WORKSPACE_ROOT
+  )
+}
+
+function rewriteCodexWorkspacePath(pathValue: string): string {
+  if (!shouldRewriteCodexWorkspacePaths()) {
+    return pathValue
+  }
+
+  if (
+    pathValue !== CODEX_VIRTUAL_WORKSPACE_ROOT &&
+    !pathValue.startsWith(`${CODEX_VIRTUAL_WORKSPACE_ROOT}/`)
+  ) {
+    return pathValue
+  }
+
+  const originalCwd = getOriginalCwd()
+  const suffix = pathValue.slice(CODEX_VIRTUAL_WORKSPACE_ROOT.length)
+  const mappedPath = `${originalCwd}${suffix}`
+  const fs = getFsImplementation()
+
+  try {
+    if (fs.existsSync(pathValue) && !fs.existsSync(mappedPath)) {
+      return pathValue
+    }
+
+    if (fs.existsSync(mappedPath) || fs.existsSync(dirname(mappedPath))) {
+      return mappedPath
+    }
+  } catch {
+    // Fall through to the mapped path when filesystem probing fails.
+  }
+
+  return mappedPath
+}
+
+function rewriteCodexWorkspacePathsInCommand(command: string): string {
+  if (!shouldRewriteCodexWorkspacePaths()) {
+    return command
+  }
+
+  const originalCwd = getOriginalCwd()
+  return command.replace(
+    /(^|[\s"'`(=,:])\/workspace(?=\/|$)/g,
+    (_match, prefix: string) => `${prefix}${originalCwd}`,
+  )
+}
+
+function normalizeCodexToolArgumentValue(
+  value: unknown,
+  parentKey?: string,
+): unknown {
+  if (typeof value === 'string') {
+    if (parentKey && PATH_LIKE_ARGUMENT_KEYS.has(parentKey)) {
+      return rewriteCodexWorkspacePath(value)
+    }
+
+    if (parentKey && COMMAND_LIKE_ARGUMENT_KEYS.has(parentKey)) {
+      return rewriteCodexWorkspacePathsInCommand(value)
+    }
+
+    return value
+  }
+
+  if (Array.isArray(value)) {
+    return value.map(entry =>
+      normalizeCodexToolArgumentValue(entry, parentKey),
+    )
+  }
+
+  if (!value || typeof value !== 'object') {
+    return value
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [
+      key,
+      normalizeCodexToolArgumentValue(entry, key),
+    ]),
+  )
+}
+
 function normalizeToolArguments(
   argumentsValue: string | Record<string, unknown> | undefined,
 ): Record<string, unknown> {
@@ -83,7 +181,9 @@ function normalizeToolArguments(
   try {
     const parsed = JSON.parse(argumentsValue) as unknown
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-      return parsed as Record<string, unknown>
+      return normalizeCodexToolArgumentValue(
+        parsed,
+      ) as Record<string, unknown>
     }
   } catch {
     return {}

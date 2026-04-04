@@ -68,6 +68,19 @@ export function useSSHSession({
   useEffect(() => {
     if (!session) return
 
+    const removePermissionPrompt = (
+      toolUseId: string | undefined,
+      requestId: string,
+    ) => {
+      const idToRemove = toolUseId ?? requestId
+      setToolUseConfirmQueue(queue =>
+        queue.filter(item => item.toolUseID !== idToRemove),
+      )
+    }
+    const clearPermissionPrompts = () => {
+      setToolUseConfirmQueue(queue => (queue.length > 0 ? [] : queue))
+    }
+
     hasReceivedInitRef.current = false
     logForDebugging('[useSSHSession] wiring SSH session manager')
 
@@ -130,18 +143,14 @@ export function useSSHSession({
               behavior: 'deny',
               message: 'User aborted',
             })
-            setToolUseConfirmQueue(q =>
-              q.filter(i => i.toolUseID !== request.tool_use_id),
-            )
+            removePermissionPrompt(request.tool_use_id, requestId)
           },
           onAllow(updatedInput) {
             manager.respondToPermissionRequest(requestId, {
               behavior: 'allow',
               updatedInput,
             })
-            setToolUseConfirmQueue(q =>
-              q.filter(i => i.toolUseID !== request.tool_use_id),
-            )
+            removePermissionPrompt(request.tool_use_id, requestId)
             setIsLoading(true)
           },
           onReject(feedback) {
@@ -149,15 +158,20 @@ export function useSSHSession({
               behavior: 'deny',
               message: feedback ?? 'User denied permission',
             })
-            setToolUseConfirmQueue(q =>
-              q.filter(i => i.toolUseID !== request.tool_use_id),
-            )
+            removePermissionPrompt(request.tool_use_id, requestId)
           },
           async recheckPermission() {},
         }
 
         setToolUseConfirmQueue(q => [...q, toolUseConfirm])
         setIsLoading(false)
+      },
+      onPermissionCancelled: (requestId, toolUseId) => {
+        logForDebugging(
+          `[useSSHSession] permission request cancelled: ${requestId}`,
+        )
+        removePermissionPrompt(toolUseId, requestId)
+        setIsLoading(true)
       },
       onConnected: () => {
         logForDebugging('[useSSHSession] connected')
@@ -172,6 +186,7 @@ export function useSSHSession({
         // knows what's happening — the next onConnected clears the state.
         // Any in-flight request is lost; the remote's --continue reloads
         // history but there's no turn in progress to resume.
+        clearPermissionPrompts()
         setIsLoading(false)
         const msg: MessageType = {
           type: 'system',
@@ -189,6 +204,7 @@ export function useSSHSession({
         const connected = isConnectedRef.current
         const exitCode = session.proc.exitCode
         isConnectedRef.current = false
+        clearPermissionPrompts()
         setIsLoading(false)
 
         let msg = connected
@@ -213,6 +229,7 @@ export function useSSHSession({
       logForDebugging('[useSSHSession] cleanup')
       manager.disconnect()
       session.proxy.stop()
+      clearPermissionPrompts()
       managerRef.current = null
     }
   }, [session, setMessages, setIsLoading, setToolUseConfirmQueue])

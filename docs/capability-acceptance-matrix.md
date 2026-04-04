@@ -29,12 +29,16 @@ Rule:
 | Slash commands | `/files` and `/plan` local TUI acceptance | done | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | covers minimal local feedback paths without provider traffic |
 | Slash commands | plan mode minimal TUI chain | done | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | fixed by `45949c3`; current evidence is enter plan mode then re-run `/plan` to read empty current-plan status |
 | Slash commands | plan mode resume existing plan subcase | done | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | 2026-04-03 已放开并通过：`/plan` 在 `--resume <jsonl>` 后可读取已存在计划内容 |
+| Slash commands | `/sandbox` local TUI path no longer false-denies Linux or crashes | in-progress | `artifacts/manual-tui-sandbox-2026-04-04.md` | 2026-04-04 真实 PTY transcript 已证明命令可识别并回到本地状态行；完整配置界面端到端留证仍待补齐 |
+| Slash commands | Claude / Anthropic business commands are absent in Codex mode (`/mobile`, `/chrome`, `/usage`, `/install-github-app`, `/web-setup`, `/remote-control`) | done | `artifacts/manual-tui-command-sweep-2026-04-04.md` | 2026-04-04 真实 PTY transcript 已证明这些命令在 Codex 模式下统一表现为 `Unknown skill`，不再打开旧业务页面 |
+| Slash commands | kept local commands still work after the business-command cleanup (`/plan`, `/model status`, `/theme`, `/copy`) | in-progress | `artifacts/manual-tui-command-sweep-2026-04-04.md` | 当前真实 PTY 已补到这四条；其余保留命令仍需继续逐条扫 |
 | TUI stability | interrupt 后 `/exit` 仍可正常退出 | done | `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs` | fixed by `9afabd4`; new regression covers the post-interrupt `/exit` path |
 | TUI stability | 多轮稳定性：round1 成功 + round2 中断 + `/exit` 退出 | done | `upstream/claude-code/tests/tuiMultiTurnStabilityAcceptance.test.mjs` | fixed by `b21ff65`; current evidence stops at interrupt then exit, not third-round auto coverage |
 | TUI stability | `/help` Esc dismiss restores footer state | done | `upstream/claude-code/tests/helpDismissTuiAcceptance.test.mjs` | fixed by `fbc85e3` |
 | TUI stability | auto-update fallback message when package URL is missing | done | `upstream/claude-code/tests/autoUpdaterMessages.test.ts` | fixed by `ca7b9d3` |
 | TUI stability | narrow terminal mixed-language input keeps completion focus stable | done | `upstream/claude-code/tests/tuiDisplayInteractionAcceptance.test.mjs` | added by `b4cebc3`, stabilized by `c7d136c` |
 | TUI stability | long output + transcript toggle returns focus for next submit | done | `upstream/claude-code/tests/tuiDisplayInteractionAcceptance.test.mjs` | added by `b4cebc3`, stabilized by `c7d136c` |
+| TUI stability | real Codex provider task submit enters working state without immediate local fallback/crash | in-progress | `artifacts/manual-tui-real-task-2026-04-04.md` | 2026-04-04 真实 PTY transcript 证明开发型输入能进入工作态；中途工具流转录仍待补强 |
 | Provider chain | silent stream timeout gives explicit error (no silent hang) | done | `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs` | fixed by `c7e97ed` |
 | Provider chain | request-stage timeout gives explicit error | done | `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs` | fixed by `bf0555e` |
 | Provider chain | Codex-only provider selection wins over legacy provider flags | done | `upstream/claude-code/tests/providersBehavior.test.mjs` | first cut landed in `b87593a` |
@@ -42,6 +46,7 @@ Rule:
 | Provider chain | 联网搜索真实自然语言场景 | done | `timeout 140s env OPENAI_API_KEY=\"$CRS_OAI_KEY\" node dist/cli.js -p --verbose --output-format stream-json --include-partial-messages '请联网搜索 OpenAI Codex CLI 官方文档，并用中文给我三点总结。' </dev/null` | 2026-04-03 复验通过：正常对话已改为暴露 Codex 原生 `web_search`，不再先走本地 `WebSearch` 权限链；输出里可见 `正在联网搜索...` / `联网搜索已完成...` 进度，再返回最终总结 |
 | Permissions | Tool permission request/decision flow | done | `upstream/claude-code/tests/tuiPermissionTranscriptAcceptance.test.mjs` | 2026-04-03 复验通过：Bash allow / deny / Esc 取消，以及 transcript 进出后的焦点恢复 |
 | Permissions | Host permission request/decision flow | out-of-scope | `upstream/claude-code/src/utils/sandbox/sandbox-adapter.ts` | 当前阶段未包含 `@anthropic-ai/sandbox-runtime`；Codex-only 本地链路不启用该 Anthropic 沙箱运行时 |
+| Permissions | direct/ssh remote permission cancel clears stale local prompts | in-progress | `upstream/claude-code/src/server/directConnectManager.ts`, `upstream/claude-code/src/hooks/useDirectConnect.ts`, `upstream/claude-code/src/hooks/useSSHSession.ts` | 2026-04-04 代码修复已落地；真实远端会话留证仍待补齐 |
 | Memory | Session memory inject + compact/resume | done | `upstream/claude-code/tests/sessionMemoryContext.behavior.mjs` | 2026-04-03 复验通过：主查询注入、resume-like compact、cross-project compact、防递归回灌 |
 | Memory | Auto memory injection | done | `upstream/claude-code/tests/autoMemoryAcceptance.test.mjs` | 2026-04-03 复验通过：默认注入、override、显式关闭三条主链路 |
 | Context docs | CLAUDE.md / @import / @文件引用 enter the real request body | done | `upstream/claude-code/tests/claudeMdAcceptance.test.mjs` | `f35380d` fixed the Codex request-body path so file refs are no longer dropped |
@@ -59,6 +64,8 @@ Rule:
 
 ## Next Acceptance Commands
 
+- 真实 PTY：继续逐条扫保留 slash 命令，优先 `/help`、`/model`、`/effort`、`/memory`、`/status`
+- 真实 PTY：继续 direct/ssh 远端链路验收，重点观察“远端取消权限请求后本地弹窗是否立即清掉”
 - `cd upstream/claude-code && node --test tests/tuiKeyboardInputAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`

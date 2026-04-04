@@ -83,13 +83,10 @@ export async function assertMinVersion(): Promise<void> {
     ) {
       // biome-ignore lint/suspicious/noConsole:: intentional console output
       console.error(`
-It looks like your version of Claude Code (${MACRO.VERSION}) needs an update.
+It looks like your version of Codex Code (${MACRO.VERSION}) needs an update.
 A newer version (${versionConfig.minVersion} or higher) is required to continue.
 
-To update, please run:
-    claude update
-
-This will ensure you have access to the latest features and improvements.
+Please reinstall Codex Code with the current installer flow before continuing.
 `)
       gracefulShutdownSync(1)
     }
@@ -482,13 +479,13 @@ export async function installGlobalPackage(
       console.error(`
 Error: Windows NPM detected in WSL
 
-You're running Claude Code in WSL but using the Windows NPM installation from /mnt/c/.
+You're running Codex Code in WSL but using the Windows NPM installation from /mnt/c/.
 This configuration is not supported for updates.
 
 To fix this issue:
   1. Install Node.js within your Linux distribution: e.g. sudo apt install nodejs npm
   2. Make sure Linux NPM is in your PATH before the Windows version
-  3. Try updating again with 'claude update'
+  3. Reinstall Codex Code with the current installer flow
 `)
       return 'install_failed'
     }
@@ -513,7 +510,7 @@ To fix this issue:
     )
     if (installResult.code !== 0) {
       const error = new AutoUpdaterError(
-        `Failed to install new version of claude: ${installResult.stdout} ${installResult.stderr}`,
+        `Failed to install a new Codex Code version: ${installResult.stdout} ${installResult.stderr}`,
       )
       logError(error)
       return 'install_failed'

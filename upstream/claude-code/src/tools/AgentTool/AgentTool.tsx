@@ -52,7 +52,7 @@ import { buildForkedMessages, buildWorktreeNotice, FORK_AGENT, isForkSubagentEna
 import type { AgentDefinition } from './loadAgentsDir.js';
 import { filterAgentsByMcpRequirements, hasRequiredMcpServers, isBuiltInAgent } from './loadAgentsDir.js';
 import { getPrompt } from './prompt.js';
-import { runAgent } from './runAgent.js';
+import { IncompleteAgentExecutionError, runAgent } from './runAgent.js';
 import { renderGroupedAgentToolUse, renderToolResultMessage, renderToolUseErrorMessage, renderToolUseMessage, renderToolUseProgressMessage, renderToolUseRejectedMessage, renderToolUseTag, userFacingName, userFacingNameBackgroundColor } from './UI.js';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -1221,6 +1221,10 @@ export const AgentTool = buildTool({
         // whatever messages we have. If we have no assistant messages,
         // re-throw the error so it's properly handled by the tool framework.
         if (syncAgentError) {
+          if (syncAgentError instanceof IncompleteAgentExecutionError) {
+            throw syncAgentError;
+          }
+
           // Check if we have any assistant messages to return
           const hasAssistantMessages = agentMessages.some(msg => msg.type === 'assistant');
           if (!hasAssistantMessages) {

@@ -5,11 +5,20 @@ import { readFile } from 'node:fs/promises'
 const SOURCE_PATH =
   '/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code/src/services/api/codexResponses.ts'
 
-test('codex responses stream surfaces tool-start progress for function_call added events', async () => {
+test('codex responses stream consumes output_text delta events for live text streaming', async () => {
   const source = await readFile(SOURCE_PATH, 'utf8')
 
-  assert.equal(source.includes("source: 'tool_call_started'"), true)
-  assert.match(source, /event\.item\.type === 'function_call'/)
+  assert.match(source, /event\.type === 'response\.output_text\.delta'/)
+  assert.match(source, /type: 'content_block_delta'/)
+  assert.match(source, /type: 'text_delta'/)
+})
+
+test('codex responses stream starts text rendering from content_part added events', async () => {
+  const source = await readFile(SOURCE_PATH, 'utf8')
+
+  assert.match(source, /event\.type === 'response\.content_part\.added'/)
+  assert.match(source, /type: 'content_block_start'/)
+  assert.match(source, /type: 'text'/)
 })
 
 test('codex responses stream normalizes status-less web search done events to completed', async () => {
@@ -35,4 +44,11 @@ test('codex responses adapter replaces local WebSearch function tool with native
   assert.match(source, /tools\.filter\(tool => tool\.name !== 'WebSearch'\)/)
   assert.match(source, /type: 'web_search'/)
   assert.match(source, /external_web_access: mode === 'live'/)
+})
+
+test('codex responses adapter sends function_call_output as plain text output', async () => {
+  const source = await readFile(SOURCE_PATH, 'utf8')
+
+  assert.match(source, /type: 'function_call_output'/)
+  assert.match(source, /output: getLocalExecutionOutputText\(turnItems\)/)
 })

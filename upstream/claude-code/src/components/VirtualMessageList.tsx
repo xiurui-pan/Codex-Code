@@ -312,7 +312,17 @@ export function VirtualMessageList({
   const keysRef = useRef<string[]>([]);
   const prevMessagesRef = useRef<typeof messages>(messages);
   const prevItemKeyRef = useRef(itemKey);
-  if (prevItemKeyRef.current !== itemKey || messages.length < keysRef.current.length || messages[0] !== prevMessagesRef.current[0]) {
+  const prevMessages = prevMessagesRef.current;
+  let shouldRebuildKeys = prevItemKeyRef.current !== itemKey || messages.length < keysRef.current.length || messages[0] !== prevMessages[0];
+  if (!shouldRebuildKeys && messages !== prevMessages && messages.length === prevMessages.length) {
+    for (let i = 1; i < messages.length; i++) {
+      if (messages[i] !== prevMessages[i]) {
+        shouldRebuildKeys = true;
+        break;
+      }
+    }
+  }
+  if (shouldRebuildKeys) {
     keysRef.current = messages.map(m => itemKey(m));
   } else {
     for (let i = keysRef.current.length; i < messages.length; i++) {

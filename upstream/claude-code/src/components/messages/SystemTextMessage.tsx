@@ -43,8 +43,7 @@ function shouldShowInfoMessageByDefault(message: SystemMessage): boolean {
   if (item.kind === 'ui_message') {
     return (
       item.source === 'web_search_call' ||
-      item.source === 'web_search_call_completed' ||
-      item.source === 'tool_call_started'
+      item.source === 'web_search_call_completed'
     )
   }
 

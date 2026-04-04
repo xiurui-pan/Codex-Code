@@ -90,7 +90,7 @@ export function DesktopUpsellStartup(t0) {
   let t3;
   if ($[5] === Symbol.for("react.memo_cache_sentinel")) {
     t3 = {
-      label: "Open in Claude Code Desktop",
+      label: "Open in Codex Code Desktop",
       value: "try" as const
     };
     $[5] = t3;
@@ -120,7 +120,7 @@ export function DesktopUpsellStartup(t0) {
   const options = t5;
   let t6;
   if ($[8] === Symbol.for("react.memo_cache_sentinel")) {
-    t6 = <Box marginBottom={1}><Text>Same Claude Code with visual diffs, live app preview, parallel sessions, and more.</Text></Box>;
+    t6 = <Box marginBottom={1}><Text>Same Codex Code with visual diffs, live app preview, parallel sessions, and more.</Text></Box>;
     $[8] = t6;
   } else {
     t6 = $[8];

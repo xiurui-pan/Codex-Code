@@ -100,7 +100,7 @@ export function ModelPicker({
   useKeybindings(
     {
       'modelPicker:decreaseEffort': () => {
-        if (supportedLevels.length === 0) return
+        if (supportedLevels.length <= 1) return
         setEffort(current =>
           cycleEffortLevel(
             clampEffortLevel(current ?? focusedDefaultEffort, supportedLevels),
@@ -111,7 +111,7 @@ export function ModelPicker({
         setHasToggledEffort(true)
       },
       'modelPicker:increaseEffort': () => {
-        if (supportedLevels.length === 0) return
+        if (supportedLevels.length <= 1) return
         setEffort(current =>
           cycleEffortLevel(
             clampEffortLevel(current ?? focusedDefaultEffort, supportedLevels),
@@ -197,13 +197,19 @@ export function ModelPicker({
       </Box>
 
       <Box marginBottom={1} flexDirection="column">
-        {supportedLevels.length > 0 ? (
+        {supportedLevels.length > 1 ? (
           <Text dimColor>
             <EffortLevelIndicator effort={displayedEffort} />{' '}
             {capitalize(displayedEffort)} reasoning
             {displayedEffort === focusedDefaultEffort ? ' (default)' : ''} ·{' '}
             {getEffortLevelDescription(displayedEffort)}{' '}
             <Text color="subtle">← → to adjust</Text>
+          </Text>
+        ) : supportedLevels.length === 1 ? (
+          <Text dimColor>
+            <EffortLevelIndicator effort={displayedEffort} />{' '}
+            {capitalize(displayedEffort)} reasoning (fixed) ·{' '}
+            {getEffortLevelDescription(displayedEffort)}
           </Text>
         ) : (
           <Text color="subtle">This model does not support reasoning controls.</Text>

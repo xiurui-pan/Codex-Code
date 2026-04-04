@@ -785,6 +785,16 @@ async function* queryLoop(
               if (!message && !internalAssistantMessage) {
                 continue
               }
+            } else if ((chunk as CodexResponseChunk).kind === 'stream_event') {
+              const streamChunk = chunk as Extract<
+                CodexResponseChunk,
+                { kind: 'stream_event' }
+              >
+              yield {
+                type: 'stream_event',
+                event: streamChunk.event,
+              } as StreamEvent
+              continue
             } else {
               continue
             }

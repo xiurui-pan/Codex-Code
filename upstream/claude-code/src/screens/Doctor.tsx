@@ -13,8 +13,8 @@ import { Pane } from '../components/design-system/Pane.js';
 import { PressEnterToContinue } from '../components/PressEnterToContinue.js';
 import { SandboxDoctorSection } from '../components/sandbox/SandboxDoctorSection.js';
 import { ValidationErrorsList } from '../components/ValidationErrorsList.js';
-import { useSettingsErrors } from '../hooks/notifs/useSettingsErrors.js';
 import { useExitOnCtrlCDWithKeybindings } from '../hooks/useExitOnCtrlCDWithKeybindings.js';
+import { useSettingsChange } from '../hooks/useSettingsChange.js';
 import { Box, Text } from '../ink.js';
 import { useKeybindings } from '../keybindings/useKeybinding.js';
 import { useAppState } from '../state/AppState.js';
@@ -25,6 +25,7 @@ import { type DiagnosticInfo, getDoctorDiagnostic } from '../utils/doctorDiagnos
 import { validateBoundedIntEnvVar } from '../utils/envValidation.js';
 import { pathExists } from '../utils/file.js';
 import { cleanupStaleLocks, getAllLockInfo, isPidBasedLockingEnabled, type LockInfo } from '../utils/nativeInstaller/pidLock.js';
+import { getSettingsWithAllErrors } from '../utils/settings/allErrors.js';
 import { getInitialSettings } from '../utils/settings/settings.js';
 import { BASH_MAX_OUTPUT_DEFAULT, BASH_MAX_OUTPUT_UPPER_LIMIT } from '../utils/shell/outputLimits.js';
 import { TASK_MAX_OUTPUT_DEFAULT, TASK_MAX_OUTPUT_UPPER_LIMIT } from '../utils/task/outputFormatting.js';
@@ -54,6 +55,19 @@ type VersionLockInfo = {
   locksDir: string;
   staleLocksCleaned: number;
 };
+
+function useDoctorSettingsErrors() {
+  const [errors, setErrors] = useState(() => getSettingsWithAllErrors().errors);
+
+  const refreshErrors = useCallback(() => {
+    setErrors(getSettingsWithAllErrors().errors);
+  }, []);
+
+  useSettingsChange(refreshErrors);
+
+  return errors;
+}
+
 function DistTagsDisplay(t0) {
   const $ = _c(8);
   const {
@@ -120,7 +134,7 @@ export function Doctor(t0) {
   const [agentInfo, setAgentInfo] = useState(null);
   const [contextWarnings, setContextWarnings] = useState(null);
   const [versionLockInfo, setVersionLockInfo] = useState(null);
-  const validationErrors = useSettingsErrors();
+  const validationErrors = useDoctorSettingsErrors();
   let t2;
   if ($[2] === Symbol.for("react.memo_cache_sentinel")) {
     t2 = getDoctorDiagnostic().then(_temp6);
@@ -222,7 +236,7 @@ export function Doctor(t0) {
   let t7;
   if ($[11] !== onDone) {
     t7 = () => {
-      onDone("Claude Code diagnostics dismissed", {
+      onDone("Codex Code diagnostics dismissed", {
         display: "system"
       });
     };

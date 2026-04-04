@@ -114,3 +114,23 @@ test('queryCodexResponses forwards top-level tools into the Responses request bo
   assert.ok(result.toolNames.includes('ReadAllFiles'))
   assert.equal(result.toolChoice, 'auto')
 })
+
+test('queryCodexResponses tolerates split JSON across multiple SSE data lines', async () => {
+  const result = await runBehavior('multiline-data-fallback')
+
+  assert.equal(result.errorMessage, null)
+  assert.deepEqual(result.turnItemKinds, ['raw_model_output', 'final_answer'])
+  assert.equal(result.finalText, 'claude')
+})
+
+test('queryCodexResponsesStream synthesizes streaming text blocks when delta events omit indexes', async () => {
+  const result = await runBehavior('delta-without-indexes')
+
+  assert.deepEqual(result.eventTypes, [
+    'content_block_start',
+    'content_block_delta',
+    'content_block_delta',
+  ])
+  assert.deepEqual(result.eventIndexes, [0, 0, 0])
+  assert.deepEqual(result.deltaTexts, ['FIRST_STREAM_OK', ' SECOND_DONE'])
+})

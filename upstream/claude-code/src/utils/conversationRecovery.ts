@@ -549,6 +549,14 @@ export async function loadConversationForResume(
         return typeof slug === 'string' && slug.length > 0
       }) as { slug?: string } | undefined
       planSlug = slugCarrier?.slug
+      if (!planSlug && log.fullPath?.endsWith('.jsonl')) {
+        const reloaded = await loadMessagesFromJsonlPath(log.fullPath)
+        const reloadedSlugCarrier = reloaded.messages.find(message => {
+          const slug = (message as { slug?: unknown }).slug
+          return typeof slug === 'string' && slug.length > 0
+        }) as { slug?: string } | undefined
+        planSlug = reloadedSlugCarrier?.slug
+      }
 
       // Determine sessionId first so we can pass it to copy functions
       if (!sessionId) {

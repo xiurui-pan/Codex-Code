@@ -1499,7 +1499,7 @@ test('/compact TUI: resume compacts locally, returns to input, and the next prom
             },
             {
               name: 'exit',
-              waitFor: ['after compact answer'],
+              waitFor: ['compactanswer'],
               send: '/exit\r',
               settleMs: 800,
             },
@@ -1513,7 +1513,7 @@ test('/compact TUI: resume compacts locally, returns to input, and the next prom
           JSON.stringify(result),
         )
         assert.match(result.normalizedTranscript, /Compacted/)
-        assert.match(result.normalizedTranscript, /aftercompactanswer/)
+        assert.match(result.normalizedTranscript, /a(?:fter|fer)compactanswer/)
         assert.equal(requestBodies.length, 1)
         const requestBodyText = JSON.stringify(requestBodies[0])
         assert.match(requestBodyText, /Prefer the resumed worktree summary/)

@@ -103,6 +103,8 @@ const loadedSandboxRuntime: RuntimeSandboxModule | null = (() => {
 
 const unavailableDependencyCheck: SandboxDependencyCheck = {
   available: false,
+  errors: [SANDBOX_RUNTIME_UNAVAILABLE_REASON],
+  warnings: [],
   missingDependencies: [SANDBOX_RUNTIME_UNAVAILABLE_REASON],
 }
 
@@ -111,11 +113,14 @@ const localSandboxViolationStore = new LocalSandboxViolationStore()
 const BaseSandboxManager: RuntimeSandboxManager = loadedSandboxRuntime
   ? loadedSandboxRuntime.SandboxManager
   : {
-      async checkDependencies() {
+      checkDependencies() {
         return unavailableDependencyCheck
       },
       isSupportedPlatform() {
-        return false
+        const platform = getPlatform()
+        return (
+          platform === 'macos' || platform === 'linux' || platform === 'wsl'
+        )
       },
       async wrapWithSandbox() {
         throw new Error(SANDBOX_RUNTIME_UNAVAILABLE_REASON)

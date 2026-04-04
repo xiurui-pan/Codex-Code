@@ -439,14 +439,14 @@ async function detectConfigurationIssues(
     if (type === 'npm-local' && config.installMethod !== 'local') {
       warnings.push({
         issue: `Running from local installation but config install method is '${config.installMethod}'`,
-        fix: 'Consider using native installation: claude install',
+        fix: 'Reinstall Codex Code with the current installer flow',
       })
     }
 
     if (type === 'native' && config.installMethod !== 'native') {
       warnings.push({
         issue: `Running native installation but config install method is '${config.installMethod}'`,
-        fix: 'Run claude install to update configuration',
+        fix: 'Reinstall Codex Code with the current installer flow to refresh configuration',
       })
     }
   }
@@ -454,7 +454,7 @@ async function detectConfigurationIssues(
   if (type === 'npm-global' && (await localInstallationExists())) {
     warnings.push({
       issue: 'Local installation exists but not being used',
-      fix: 'Consider using native installation: claude install',
+      fix: 'Reinstall Codex Code with the current installer flow',
     })
   }
 
@@ -473,13 +473,13 @@ async function detectConfigurationIssues(
         // Alias exists but points to invalid target
         warnings.push({
           issue: 'Local installation not accessible',
-          fix: `Alias exists but points to invalid target: ${existingAlias}. Update alias: alias claude="~/.claude/local/claude"`,
+          fix: `Alias exists but points to an invalid target: ${existingAlias}. Update your shell alias so it points at the local Codex Code binary in ~/.claude/local.`,
         })
       } else {
         // No alias exists and not in PATH
         warnings.push({
           issue: 'Local installation not accessible',
-          fix: 'Create alias: alias claude="~/.claude/local/claude"',
+          fix: 'Add ~/.claude/local to your PATH, or create a shell alias that points at the local Codex Code binary there.',
         })
       }
     }
@@ -540,16 +540,9 @@ export async function getDoctorDiagnostic(): Promise<DiagnosticInfo> {
 
     for (const install of npmInstalls) {
       if (install.type === 'npm-global') {
-        let uninstallCmd = 'npm -g uninstall @anthropic-ai/claude-code'
-        if (
-          MACRO.PACKAGE_URL &&
-          MACRO.PACKAGE_URL !== '@anthropic-ai/claude-code'
-        ) {
-          uninstallCmd += ` && npm -g uninstall ${MACRO.PACKAGE_URL}`
-        }
         warnings.push({
           issue: `Leftover npm global installation at ${install.path}`,
-          fix: `Run: ${uninstallCmd}`,
+          fix: `Remove the leftover npm global wrapper at ${install.path}, then reinstall Codex Code with the current installer flow.`,
         })
       } else if (install.type === 'npm-global-orphan') {
         warnings.push({
@@ -584,7 +577,7 @@ export async function getDoctorDiagnostic(): Promise<DiagnosticInfo> {
     if (!hasUpdatePermissions && !getAutoUpdaterDisabledReason()) {
       warnings.push({
         issue: 'Insufficient permissions for auto-updates',
-        fix: 'Do one of: (1) Re-install node without sudo, or (2) Use `claude install` for native installation',
+        fix: 'Do one of: (1) re-install Node without sudo, or (2) reinstall Codex Code with the current installer flow',
       })
     }
   }

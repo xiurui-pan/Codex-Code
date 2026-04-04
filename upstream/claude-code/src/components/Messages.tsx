@@ -320,22 +320,31 @@ export function computeSliceStart(collapsed: ReadonlyArray<{
   current: SliceAnchor;
 }, cap = MAX_MESSAGES_WITHOUT_VIRTUALIZATION, step = MESSAGE_CAP_STEP): number {
   const anchor = anchorRef.current;
-  const anchorIdx = anchor ? collapsed.findIndex(m => m.uuid === anchor.uuid) : -1;
+  const anchorIdx = anchor ? collapsed.findIndex(m => m?.uuid === anchor.uuid) : -1;
   // Anchor found → use it. Anchor lost → fall back to stored index
   // (clamped) so collapse-regrouping uuid churn doesn't reset to 0.
-  let start = anchorIdx >= 0 ? anchorIdx : anchor ? Math.min(anchor.idx, Math.max(0, collapsed.length - cap)) : 0;
+  let start =
+    anchorIdx >= 0
+      ? anchorIdx
+      : anchor
+        ? Math.min(anchor.idx, Math.max(0, collapsed.length - cap))
+        : 0;
   if (collapsed.length - start > cap + step) {
     start = collapsed.length - cap;
   }
   // Refresh anchor from whatever lives at the current start — heals a
   // stale uuid after fallback and captures a new one after advancement.
   const msgAtStart = collapsed[start];
-  if (msgAtStart && (anchor?.uuid !== msgAtStart.uuid || anchor.idx !== start)) {
+  const msgAtStartUuid = msgAtStart?.uuid;
+  if (
+    msgAtStartUuid &&
+    (anchor?.uuid !== msgAtStartUuid || anchor?.idx !== start)
+  ) {
     anchorRef.current = {
-      uuid: msgAtStart.uuid,
+      uuid: msgAtStartUuid,
       idx: start
     };
-  } else if (!msgAtStart && anchor) {
+  } else if (!msgAtStartUuid && anchor) {
     anchorRef.current = null;
   }
   return start;

@@ -3,16 +3,20 @@ import type { InstallStatus } from './autoUpdater.js'
 export function resolveAutoUpdatePackageName(
   packageUrl: string | undefined,
   userType: string | undefined,
-): string {
+): string | null {
   void userType
   if (packageUrl && packageUrl.trim().length > 0) {
-    // Keep official legacy package names out of user-facing recovery commands.
-    if (packageUrl.trim() === '@anthropic-ai/claude-code') {
-      return 'claude-code'
+    const normalized = packageUrl.trim()
+    if (
+      normalized === '@anthropic-ai/claude-code' ||
+      normalized === '@anthropic-ai/claude-cli' ||
+      normalized === 'claude-code'
+    ) {
+      return null
     }
-    return packageUrl
+    return normalized
   }
-  return 'claude-code'
+  return null
 }
 
 export function getAutoUpdateRecoveryCommand({
@@ -25,6 +29,11 @@ export function getAutoUpdateRecoveryCommand({
   userType: string | undefined
 }): string {
   const packageName = resolveAutoUpdatePackageName(packageUrl, userType)
+  if (!packageName) {
+    return hasLocalInstall
+      ? 'reinstall Codex Code in ~/.claude/local'
+      : 'reinstall Codex Code'
+  }
   return hasLocalInstall
     ? `cd ~/.claude/local && npm update ${packageName}`
     : `npm install -g ${packageName}`

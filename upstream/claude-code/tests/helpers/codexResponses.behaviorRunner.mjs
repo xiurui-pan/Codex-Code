@@ -1,7 +1,11 @@
 import http from 'node:http'
 import { once } from 'node:events'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 
 const mode = process.argv[2]
+process.env.NODE_ENV ??= 'test'
 
 globalThis.MACRO ??= {
   VERSION: '0.0.0-test',
@@ -164,6 +168,150 @@ async function runQuery() {
   }
 }
 
+async function runMultilineDataFallback() {
+  const { queryCodexResponses } = await import(
+    '../../src/services/api/codexResponses.ts'
+  )
+
+  const server = http.createServer((req, res) => {
+    if (req.method !== 'POST' || req.url !== '/responses') {
+      res.writeHead(404).end('not found')
+      return
+    }
+
+    res.writeHead(200, {
+      'content-type': 'text/event-stream',
+      connection: 'keep-alive',
+      'cache-control': 'no-cache',
+    })
+    res.write('event: response.output_item.done\n')
+    res.write(
+      'data: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"clau\n',
+    )
+    res.write('data: de"}]}}\n\n')
+    res.write(
+      'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp-multiline"}}\n\n',
+    )
+    res.end('data: [DONE]\n\n')
+  })
+
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('failed to bind test server')
+  }
+
+  try {
+    return await withEnv(
+      {
+        ANTHROPIC_BASE_URL: `http://127.0.0.1:${address.port}`,
+        ANTHROPIC_API_KEY: 'test-key',
+        ANTHROPIC_MODEL: 'gpt-5.1-codex-mini',
+      },
+      async () => {
+        const result = await queryCodexResponses({
+          messages: [
+            {
+              type: 'user',
+              uuid: 'user-1',
+              message: { content: 'test multiline fallback' },
+            },
+          ],
+          systemPrompt: [],
+          options: {},
+          signal: new AbortController().signal,
+        })
+
+        return {
+          turnItemKinds: result.turnItems.map(item => item.kind),
+          finalText:
+            result.turnItems.find(item => item.kind === 'final_answer')?.text ??
+            null,
+          errorMessage: result.errorMessage ?? null,
+        }
+      },
+    )
+  } finally {
+    await new Promise(resolve => server.close(resolve))
+  }
+}
+
+async function runDeltaWithoutIndexes() {
+  const { queryCodexResponsesStream } = await import(
+    '../../src/services/api/codexResponses.ts'
+  )
+
+  const server = http.createServer((req, res) => {
+    if (req.method !== 'POST' || req.url !== '/responses') {
+      res.writeHead(404).end('not found')
+      return
+    }
+
+    res.writeHead(200, {
+      'content-type': 'text/event-stream',
+      connection: 'keep-alive',
+      'cache-control': 'no-cache',
+    })
+    res.write(
+      'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"FIRST_STREAM_OK"}\n\n',
+    )
+    res.write(
+      'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":" SECOND_DONE"}\n\n',
+    )
+    res.write(
+      'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp-delta-no-index"}}\n\n',
+    )
+    res.end('data: [DONE]\n\n')
+  })
+
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('failed to bind test server')
+  }
+
+  try {
+    return await withEnv(
+      {
+        ANTHROPIC_BASE_URL: `http://127.0.0.1:${address.port}`,
+        ANTHROPIC_API_KEY: 'test-key',
+        ANTHROPIC_MODEL: 'gpt-5.1-codex-mini',
+      },
+      async () => {
+        const events = []
+        for await (const chunk of queryCodexResponsesStream({
+          messages: [
+            {
+              type: 'user',
+              uuid: 'user-1',
+              message: { content: 'stream without indexes' },
+            },
+          ],
+          systemPrompt: [],
+          options: {},
+          signal: new AbortController().signal,
+        })) {
+          if (chunk.kind === 'stream_event') {
+            events.push(chunk.event)
+          }
+        }
+
+        return {
+          eventTypes: events.map(event => event.type),
+          eventIndexes: events.map(event => event.index ?? null),
+          deltaTexts: events
+            .map(event => event.delta?.text ?? null)
+            .filter(text => typeof text === 'string'),
+        }
+      },
+    )
+  } finally {
+    await new Promise(resolve => server.close(resolve))
+  }
+}
+
 async function runIdentity(sendIdentity) {
   const { buildCodexRequestIdentity } = await import(
     '../../src/services/api/codexRequestIdentity.ts'
@@ -205,14 +353,19 @@ async function runMissingBaseUrl() {
     '../../src/services/api/codexResponses.ts'
   )
 
-  return withEnv(
-    {
-      ANTHROPIC_BASE_URL: undefined,
-      ANTHROPIC_MODEL: 'gpt-5.1-codex-mini',
-    },
-    async () => {
-      try {
-        await queryCodexResponses({
+  const tempHome = await mkdtemp(join(tmpdir(), 'codex-responses-missing-base-'))
+
+  try {
+    return await withEnv(
+      {
+        HOME: tempHome,
+        CODEX_HOME: tempHome,
+        XDG_CONFIG_HOME: tempHome,
+        ANTHROPIC_BASE_URL: undefined,
+        ANTHROPIC_MODEL: 'gpt-5.1-codex-mini',
+      },
+      async () => {
+        const result = await queryCodexResponses({
           messages: [
             {
               type: 'user',
@@ -224,14 +377,15 @@ async function runMissingBaseUrl() {
           options: {},
           signal: new AbortController().signal,
         })
-        return { errorMessage: null }
-      } catch (error) {
+
         return {
-          errorMessage: error instanceof Error ? error.message : String(error),
+          errorMessage: result.errorMessage ?? null,
         }
-      }
-    },
-  )
+      },
+    )
+  } finally {
+    await rm(tempHome, { recursive: true, force: true })
+  }
 }
 
 async function runToolBody() {
@@ -378,6 +532,10 @@ const result =
     ? await runMerge()
     : mode === 'query'
       ? await runQuery()
+      : mode === 'multiline-data-fallback'
+        ? await runMultilineDataFallback()
+        : mode === 'delta-without-indexes'
+          ? await runDeltaWithoutIndexes()
       : mode === 'identity-default'
         ? await runIdentity(false)
         : mode === 'identity-enabled'
@@ -386,5 +544,5 @@ const result =
             ? await runToolBody()
             : mode === 'query-tool-forwarding'
               ? await runQueryToolForwarding()
-            : await runMissingBaseUrl()
+              : await runMissingBaseUrl()
 process.stdout.write(JSON.stringify(result))

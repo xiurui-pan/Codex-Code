@@ -446,8 +446,15 @@ export function popAllEditable(
   const queuedTexts = editable.map(cmd => extractTextFromValue(cmd.value))
   const newInput = [...queuedTexts, currentInput].filter(Boolean).join('\n')
 
-  // Calculate cursor offset: length of joined queued commands + 1 + current cursor offset
-  const cursorOffset = queuedTexts.join('\n').length + 1 + currentCursorOffset
+  // Only add the separator that actually exists in newInput. When the current
+  // input is empty, adding an unconditional +1 pushes the cursor past the end
+  // of the restored queued prompt and can corrupt subsequent edits/submits.
+  const separatorBeforeCurrentInput =
+    queuedTexts.length > 0 && currentInput ? 1 : 0
+  const cursorOffset =
+    queuedTexts.join('\n').length +
+    separatorBeforeCurrentInput +
+    currentCursorOffset
 
   // Extract images from queued commands
   const images: PastedContent[] = []

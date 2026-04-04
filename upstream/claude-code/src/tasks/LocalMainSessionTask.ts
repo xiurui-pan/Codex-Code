@@ -379,11 +379,21 @@ export function startBackgroundSession({
       let toolCount = 0
       let tokenCount = 0
       let lastRecordedUuid: UUID | null = messages.at(-1)?.uuid ?? null
+      let terminalReason: string | null = null
 
-      for await (const event of query({
+      const iterator = query({
         messages: bgMessages,
         ...queryParams,
-      })) {
+      })[Symbol.asyncIterator]()
+
+      while (true) {
+        const step = await iterator.next()
+        if (step.done) {
+          terminalReason = step.value.reason
+          break
+        }
+
+        const event = step.value
         if (abortSignal.aborted) {
           // Aborted mid-stream — completeMainSessionTask won't be reached.
           // chat:killAgents path already marked notified + emitted; stopTask path did not.
@@ -397,6 +407,7 @@ export function startBackgroundSession({
               summary: description,
             })
           }
+          await iterator.return?.(undefined)
           return
         }
 
@@ -468,7 +479,13 @@ export function startBackgroundSession({
         })
       }
 
-      completeMainSessionTask(taskId, true, setAppState)
+      const success = terminalReason === 'completed'
+      if (!success) {
+        logForDebugging(
+          `[LocalMainSessionTask] Background session ${taskId} stopped with terminal reason: ${terminalReason ?? 'unknown'}`,
+        )
+      }
+      completeMainSessionTask(taskId, success, setAppState)
     } catch (error) {
       logError(error)
       completeMainSessionTask(taskId, false, setAppState)

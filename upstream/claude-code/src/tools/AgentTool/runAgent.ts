@@ -82,6 +82,13 @@ import { createAgentId } from '../../utils/uuid.js'
 import { resolveAgentTools } from './agentToolUtils.js'
 import { type AgentDefinition, isBuiltInAgent } from './loadAgentsDir.js'
 
+export class IncompleteAgentExecutionError extends Error {
+  constructor(readonly terminalReason: string) {
+    super(`Agent stopped before completing: ${terminalReason}`)
+    this.name = 'IncompleteAgentExecutionError'
+  }
+}
+
 /**
  * Initialize agent-specific MCP servers
  * Agents can define their own MCP servers in their frontmatter that are additive
@@ -745,7 +752,7 @@ export async function* runAgent({
   let lastRecordedUuid: UUID | null = initialMessages.at(-1)?.uuid ?? null
 
   try {
-    for await (const message of query({
+    const iterator = query({
       messages: initialMessages,
       systemPrompt: agentSystemPrompt,
       userContext: resolvedUserContext,
@@ -754,7 +761,18 @@ export async function* runAgent({
       toolUseContext: agentToolUseContext,
       querySource,
       maxTurns: maxTurns ?? agentDefinition.maxTurns,
-    })) {
+    })[Symbol.asyncIterator]()
+
+    let terminalReason: string | null = null
+
+    while (true) {
+      const step = await iterator.next()
+      if (step.done) {
+        terminalReason = step.value.reason
+        break
+      }
+
+      const message = step.value
       onQueryProgress?.()
       // Forward subagent API request starts to parent's metrics display
       // so TTFT/OTPS update during subagent execution.
@@ -769,21 +787,10 @@ export async function* runAgent({
 
       // Yield attachment messages (e.g., structured_output) without recording them
       if (message.type === 'attachment') {
-        // Handle max turns reached signal from query.ts
         if (message.attachment.type === 'max_turns_reached') {
           logForDebugging(
-            `[Agent
-: $
-{
-  agentDefinition.agentType
-}
-] Reached max turns limit ($
-{
-  message.attachment.maxTurns
-}
-)`,
+            `[Agent ${agentDefinition.agentType}] Reached max turns limit (${message.attachment.maxTurns})`,
           )
-          break
         }
         yield message
         continue
@@ -807,6 +814,10 @@ export async function* runAgent({
 
     if (agentAbortController.signal.aborted) {
       throw new AbortError()
+    }
+
+    if (terminalReason && terminalReason !== 'completed') {
+      throw new IncompleteAgentExecutionError(terminalReason)
     }
 
     // Run callback if provided (only built-in agents have callbacks)

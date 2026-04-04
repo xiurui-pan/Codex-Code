@@ -13,14 +13,14 @@ test('auto updater recovery command falls back to stable package name when macro
       packageUrl: undefined,
       userType: undefined,
     }),
-    'npm install -g claude-code',
+    'reinstall Codex Code',
   )
 })
 
 test('auto updater recovery command keeps user-facing fallback package name stable for internal user type', () => {
   assert.equal(
     resolveAutoUpdatePackageName(undefined, 'ant'),
-    'claude-code',
+    null,
   )
 })
 
@@ -42,7 +42,18 @@ test('auto updater recovery command rewrites legacy Anthropic package name in us
       packageUrl: '@anthropic-ai/claude-code',
       userType: undefined,
     }),
-    'npm install -g claude-code',
+    'reinstall Codex Code',
+  )
+})
+
+test('auto updater recovery command rewrites bare claude-code package name in user-facing output', () => {
+  assert.equal(
+    getAutoUpdateRecoveryCommand({
+      hasLocalInstall: false,
+      packageUrl: 'claude-code',
+      userType: undefined,
+    }),
+    'reinstall Codex Code',
   )
 })
 

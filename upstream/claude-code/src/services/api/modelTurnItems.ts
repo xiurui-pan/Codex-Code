@@ -54,19 +54,12 @@ export function createSystemMessageFromModelTurnItem(
         modelTurnItem: item,
       }
     case 'tool_output':
-      return {
-        type: 'system',
-        subtype: 'informational',
-        level: 'info',
-        content: `工具结果已回灌: ${item.toolUseId}`,
-        modelTurnItem: item,
-      }
+      return null
     case 'ui_message':
       if (
         item.level !== 'info' ||
         item.source === 'web_search_call' ||
-        item.source === 'web_search_call_completed' ||
-        item.source === 'tool_call_started'
+        item.source === 'web_search_call_completed'
       ) {
         return {
           type: 'system',
@@ -118,8 +111,7 @@ export function buildSDKExecutionItemMessages(
       item.kind === 'ui_message' &&
       item.level === 'info' &&
       item.source !== 'web_search_call' &&
-      item.source !== 'web_search_call_completed' &&
-      item.source !== 'tool_call_started'
+      item.source !== 'web_search_call_completed'
     ) {
       continue
     }

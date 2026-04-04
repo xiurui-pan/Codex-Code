@@ -1430,6 +1430,16 @@ export function REPL({
   }, [setLocalCommands]);
   const [inProgressToolUseIDs, setInProgressToolUseIDs] = useState<Set<string>>(new Set());
   const hasInterruptibleToolInProgressRef = useRef(false);
+  // Streaming text display: set state directly per delta (Ink's 16ms render
+  // throttle batches rapid updates). Cleared on message arrival (messages.ts)
+  // so displayedMessages switches from deferredMessages to messages atomically.
+  const [streamingText, setStreamingText] = useState<string | null>(null);
+  const reducedMotion = useAppState(s => s.settings.prefersReducedMotion) ?? false;
+  const showStreamingText = !reducedMotion && !hasCursorUpViewportYankBug();
+  const onStreamingText = useCallback((f: (current: string | null) => string | null) => {
+    if (!showStreamingText) return;
+    setStreamingText(f);
+  }, [showStreamingText]);
 
   // Remote session hook - manages WebSocket connection and message handling for --remote mode
   const remoteSession = useRemoteSession({
@@ -1441,6 +1451,8 @@ export function REPL({
     tools: combinedInitialTools,
     setStreamingToolUses,
     setStreamMode,
+    setStreamingThinking,
+    onStreamingText,
     setInProgressToolUseIDs
   });
 
@@ -1500,17 +1512,6 @@ export function REPL({
       }
     }
   }, []);
-
-  // Streaming text display: set state directly per delta (Ink's 16ms render
-  // throttle batches rapid updates). Cleared on message arrival (messages.ts)
-  // so displayedMessages switches from deferredMessages to messages atomically.
-  const [streamingText, setStreamingText] = useState<string | null>(null);
-  const reducedMotion = useAppState(s => s.settings.prefersReducedMotion) ?? false;
-  const showStreamingText = !reducedMotion && !hasCursorUpViewportYankBug();
-  const onStreamingText = useCallback((f: (current: string | null) => string | null) => {
-    if (!showStreamingText) return;
-    setStreamingText(f);
-  }, [showStreamingText]);
 
   // Hide the in-progress source line so text streams line-by-line, not
   // char-by-char. lastIndexOf returns -1 when no newline, giving '' → null.
@@ -1837,9 +1838,9 @@ export function REPL({
       // original and forked sessions don't clobber each other's plan files.
       // For regular resumes, reuse the original session's plan slug.
       if (entrypoint === 'fork') {
-        void copyPlanForFork(log, asSessionId(sessionId));
+        await copyPlanForFork(log, asSessionId(sessionId));
       } else {
-        void copyPlanForResume(log, asSessionId(sessionId));
+        await copyPlanForResume(log, asSessionId(sessionId));
       }
 
       // Restore file history and attribution state from the resumed conversation
@@ -2028,6 +2029,13 @@ export function REPL({
   useEffect(() => {
     if (initialMessages && initialMessages.length > 0) {
       restoreReadFileState(initialMessages, getOriginalCwd());
+      const slugCarrier = initialMessages.find(message => {
+        const slug = (message as { slug?: unknown }).slug;
+        return typeof slug === 'string' && slug.length > 0;
+      }) as { slug?: string } | undefined;
+      if (slugCarrier?.slug) {
+        setPlanSlug(getSessionId(), slugCarrier.slug);
+      }
       void restoreRemoteAgentTasks({
         abortController: new AbortController(),
         getAppState: () => store.getState(),

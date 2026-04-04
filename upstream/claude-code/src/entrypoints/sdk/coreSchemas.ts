@@ -1053,10 +1053,10 @@ export const ModelInfoSchema = lazySchema(() =>
         .string()
         .describe("Description of the model's capabilities"),
       supportedEffortLevels: z
-        .array(z.enum(['low', 'medium', 'high', 'max']))
+        .array(z.enum(['low', 'medium', 'high', 'xhigh', 'max']))
         .describe('Available reasoning levels for this Codex model'),
       defaultEffortLevel: z
-        .enum(['low', 'medium', 'high', 'max'])
+        .enum(['low', 'medium', 'high', 'xhigh', 'max'])
         .describe('Default reasoning level used when no explicit override is set'),
     })
     .describe('Information about an available model.'),
@@ -1150,7 +1150,7 @@ export const AgentDefinitionSchema = lazySchema(() =>
           "Scope for auto-loading agent memory files. 'user' - ~/.claude/agent-memory/<agentType>/, 'project' - .claude/agent-memory/<agentType>/, 'local' - .claude/agent-memory-local/<agentType>/",
         ),
       effort: z
-        .union([z.enum(['low', 'medium', 'high', 'max']), z.number().int()])
+        .union([z.enum(['low', 'medium', 'high', 'xhigh', 'max']), z.number().int()])
         .optional()
         .describe(
           'Reasoning effort level for this agent. Either a named level or an integer',

@@ -62,6 +62,16 @@ export function useDirectConnect({
       return
     }
 
+    const removePermissionPrompt = (
+      toolUseId: string | undefined,
+      requestId: string,
+    ) => {
+      const idToRemove = toolUseId ?? requestId
+      setToolUseConfirmQueue(queue =>
+        queue.filter(item => item.toolUseID !== idToRemove),
+      )
+    }
+
     hasReceivedInitRef.current = false
     logForDebugging(`[useDirectConnect] Connecting to ${config.wsUrl}`)
 
@@ -129,9 +139,7 @@ export function useDirectConnect({
               message: 'User aborted',
             }
             manager.respondToPermissionRequest(requestId, response)
-            setToolUseConfirmQueue(queue =>
-              queue.filter(item => item.toolUseID !== request.tool_use_id),
-            )
+            removePermissionPrompt(request.tool_use_id, requestId)
           },
           onAllow(updatedInput, _permissionUpdates, _feedback) {
             const response: RemotePermissionResponse = {
@@ -139,9 +147,7 @@ export function useDirectConnect({
               updatedInput,
             }
             manager.respondToPermissionRequest(requestId, response)
-            setToolUseConfirmQueue(queue =>
-              queue.filter(item => item.toolUseID !== request.tool_use_id),
-            )
+            removePermissionPrompt(request.tool_use_id, requestId)
             setIsLoading(true)
           },
           onReject(feedback?: string) {
@@ -150,9 +156,7 @@ export function useDirectConnect({
               message: feedback ?? 'User denied permission',
             }
             manager.respondToPermissionRequest(requestId, response)
-            setToolUseConfirmQueue(queue =>
-              queue.filter(item => item.toolUseID !== request.tool_use_id),
-            )
+            removePermissionPrompt(request.tool_use_id, requestId)
           },
           async recheckPermission() {
             // No-op for remote
@@ -161,6 +165,13 @@ export function useDirectConnect({
 
         setToolUseConfirmQueue(queue => [...queue, toolUseConfirm])
         setIsLoading(false)
+      },
+      onPermissionCancelled: (requestId, toolUseId) => {
+        logForDebugging(
+          `[useDirectConnect] Permission request cancelled: ${requestId}`,
+        )
+        removePermissionPrompt(toolUseId, requestId)
+        setIsLoading(true)
       },
       onConnected: () => {
         logForDebugging('[useDirectConnect] Connected')
@@ -178,6 +189,7 @@ export function useDirectConnect({
           process.stderr.write('\nServer disconnected.\n')
         }
         isConnectedRef.current = false
+        setToolUseConfirmQueue(queue => (queue.length > 0 ? [] : queue))
         void gracefulShutdown(1)
         setIsLoading(false)
       },

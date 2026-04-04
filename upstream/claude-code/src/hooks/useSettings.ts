@@ -1,4 +1,8 @@
-import { type AppState, useAppState } from '../state/AppState.js'
+import {
+  type AppState,
+  useAppState,
+  useAppStateMaybeOutsideOfProvider,
+} from '../state/AppState.js'
 
 /**
  * Settings type as stored in AppState (DeepImmutable wrapped).
@@ -14,4 +18,10 @@ export type ReadonlySettings = AppState['settings']
  */
 export function useSettings(): ReadonlySettings {
   return useAppState(s => s.settings)
+}
+
+export function useSettingsMaybeOutsideOfProvider():
+  | ReadonlySettings
+  | undefined {
+  return useAppStateMaybeOutsideOfProvider(s => s.settings)
 }

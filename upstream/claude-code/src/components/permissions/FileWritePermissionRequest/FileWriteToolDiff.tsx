@@ -1,7 +1,7 @@
 import { c as _c } from "react/compiler-runtime";
 import * as React from 'react';
-import { useMemo } from 'react';
-import { useTerminalSize } from '../../../hooks/useTerminalSize.js';
+import { useContext, useMemo } from 'react';
+import { TerminalSizeContext } from '../../../ink/components/TerminalSizeContext.js';
 import { Box, NoSelect, Text } from '../../../ink.js';
 import { intersperse } from '../../../utils/array.js';
 import { getPatchForDisplay } from '../../../utils/diff.js';
@@ -21,9 +21,8 @@ export function FileWriteToolDiff(t0) {
     fileExists,
     oldContent
   } = t0;
-  const {
-    columns
-  } = useTerminalSize();
+  const terminalSize = useContext(TerminalSizeContext);
+  const columns = terminalSize?.columns ?? process.stdout.columns ?? 80;
   let t1;
   bb0: {
     if (!fileExists) {

@@ -82,26 +82,29 @@ test('preferred response conversion keeps api_error on the payload side until wr
 
 
 test('codex model capability table resolves aliases and supported reasoning levels', () => {
-  assert.equal(DEFAULT_CODEX_MODEL, 'gpt-5.1-codex-mini')
-  assert.equal(resolveCodexModelInput('mini'), 'gpt-5.1-codex-mini')
-  assert.equal(resolveCodexModelInput('haiku'), 'gpt-5.1-codex-mini')
-  assert.equal(resolveCodexModelInput('sonnet'), 'gpt-5.1-codex')
-  assert.equal(resolveCodexModelInput('opus'), 'gpt-5.1-codex-max')
-  assert.equal(resolveCodexModelInput('opusplan'), 'gpt-5.1-codex-max')
-  assert.deepEqual(getCodexSupportedEffortLevels('gpt-5.1-codex-mini'), [
-    'medium',
-    'high',
-  ])
-  assert.deepEqual(getCodexSupportedEffortLevels('gpt-5.1-codex'), [
+  assert.equal(DEFAULT_CODEX_MODEL, 'gpt-5.4')
+  assert.equal(resolveCodexModelInput('mini'), 'gpt-5.4-mini')
+  assert.equal(resolveCodexModelInput('haiku'), 'gpt-5.4-mini')
+  assert.equal(resolveCodexModelInput('sonnet'), 'gpt-5.4')
+  assert.equal(resolveCodexModelInput('opus'), 'gpt-5.3-codex')
+  assert.equal(resolveCodexModelInput('opusplan'), 'gpt-5.3-codex')
+  assert.deepEqual(getCodexSupportedEffortLevels('gpt-5.4-mini'), [
     'low',
     'medium',
     'high',
+    'xhigh',
   ])
-  assert.deepEqual(getCodexSupportedEffortLevels('gpt-5.1-codex-max'), [
+  assert.deepEqual(getCodexSupportedEffortLevels('gpt-5.4'), [
     'low',
     'medium',
     'high',
-    'max',
+    'xhigh',
+  ])
+  assert.deepEqual(getCodexSupportedEffortLevels('gpt-5.3-codex'), [
+    'low',
+    'medium',
+    'high',
+    'xhigh',
   ])
 })
 
@@ -123,7 +126,7 @@ test('unknown custom codex models use the same public reasoning shape everywhere
 
 test('default public model info keeps a distinct default id while using default model reasoning', () => {
   const publicInfo = createCodexPublicModelInfo({
-    value: 'gpt-5.1-codex-mini',
+    value: 'gpt-5.4',
     publicValue: 'default',
     displayName: 'Default (recommended)',
     description: 'Use the default Codex model',
@@ -134,7 +137,7 @@ test('default public model info keeps a distinct default id while using default 
     displayName: 'Default (recommended)',
     description: 'Use the default Codex model',
     defaultEffortLevel: 'medium',
-    supportedEffortLevels: ['medium', 'high'],
+    supportedEffortLevels: ['low', 'medium', 'high', 'xhigh'],
   })
 })
 

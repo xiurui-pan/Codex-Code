@@ -2,7 +2,7 @@ import { c as _c } from "react/compiler-runtime";
 import type { StructuredPatchHunk } from 'diff';
 import * as React from 'react';
 import { memo } from 'react';
-import { useSettings } from '../hooks/useSettings.js';
+import { useSettingsMaybeOutsideOfProvider } from '../hooks/useSettings.js';
 import { Box, NoSelect, RawAnsi, useTheme } from '../ink.js';
 import { isFullscreenEnvEnabled } from '../utils/fullscreen.js';
 import sliceAnsi from '../utils/sliceAnsi.js';
@@ -105,8 +105,9 @@ export const StructuredDiff = memo(function StructuredDiff(t0) {
   } = t0;
   const skipHighlighting = t1 === undefined ? false : t1;
   const [theme] = useTheme();
-  const settings = useSettings();
-  const syntaxHighlightingDisabled = settings.syntaxHighlightingDisabled ?? false;
+  const settings = useSettingsMaybeOutsideOfProvider();
+  const syntaxHighlightingDisabled =
+    settings?.syntaxHighlightingDisabled ?? false;
   const safeWidth = Math.max(1, Math.floor(width));
   let t2;
   if ($[0] !== dim || $[1] !== fileContent || $[2] !== filePath || $[3] !== firstLine || $[4] !== patch || $[5] !== safeWidth || $[6] !== skipHighlighting || $[7] !== syntaxHighlightingDisabled || $[8] !== theme) {

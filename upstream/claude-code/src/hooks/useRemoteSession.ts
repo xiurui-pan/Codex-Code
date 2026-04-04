@@ -29,6 +29,7 @@ import {
   createSystemMessage,
   extractTextContent,
   handleMessageFromStream,
+  type StreamingThinking,
   type StreamingToolUse,
 } from '../utils/messages.js'
 import { generateSessionTitle } from '../utils/sessionTitle.js'
@@ -53,6 +54,10 @@ type UseRemoteSessionProps = {
     React.SetStateAction<StreamingToolUse[]>
   >
   setStreamMode?: React.Dispatch<React.SetStateAction<SpinnerMode>>
+  setStreamingThinking?: React.Dispatch<
+    React.SetStateAction<StreamingThinking | null>
+  >
+  onStreamingText?: (f: (current: string | null) => string | null) => void
   setInProgressToolUseIDs?: (f: (prev: Set<string>) => Set<string>) => void
 }
 
@@ -84,6 +89,8 @@ export function useRemoteSession({
   tools,
   setStreamingToolUses,
   setStreamMode,
+  setStreamingThinking,
+  onStreamingText,
   setInProgressToolUseIDs,
 }: UseRemoteSessionProps): UseRemoteSessionResult {
   const isRemoteMode = !!config
@@ -320,6 +327,10 @@ export function useRemoteSession({
               },
               setStreamMode,
               setStreamingToolUses,
+              undefined,
+              setStreamingThinking,
+              undefined,
+              onStreamingText,
             )
           } else {
             logForDebugging(

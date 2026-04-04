@@ -1,0 +1,208 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
+
+const ROOT =
+  '/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code/src'
+
+test('native auto updater failure copy points to Codex recovery guidance', async () => {
+  const source = await readFile(`${ROOT}/components/NativeAutoUpdater.tsx`, 'utf8')
+
+  assert.match(source, /Try <Text bold>\/doctor<\/Text> or/)
+  assert.match(source, /getAutoUpdateRecoveryCommand/)
+  assert.doesNotMatch(source, /Try <Text bold>\/status<\/Text>/)
+  assert.doesNotMatch(source, /claude rollback --safe/)
+})
+
+test('npm deprecation notification no longer shows Claude-only install guidance', async () => {
+  const source = await readFile(
+    `${ROOT}/hooks/notifs/useNpmDeprecationNotification.tsx`,
+    'utf8',
+  )
+
+  assert.match(source, /Codex Code no longer uses the legacy npm installer path/)
+  assert.doesNotMatch(source, /Claude Code has switched from npm to native installer/)
+  assert.doesNotMatch(source, /`claude install`/)
+})
+
+test('update and doctor guidance no longer points to Claude-only install commands or links', async () => {
+  const updateSource = await readFile(`${ROOT}/cli/update.ts`, 'utf8')
+  const doctorSource = await readFile(`${ROOT}/utils/doctorDiagnostic.ts`, 'utf8')
+  const fastModeSource = await readFile(`${ROOT}/utils/fastMode.ts`, 'utf8')
+
+  assert.doesNotMatch(updateSource, /claude install/)
+  assert.doesNotMatch(updateSource, /Claude Code is up to date/)
+  assert.doesNotMatch(updateSource, /claude doctor/)
+  assert.match(updateSource, /Codex Code is up to date/)
+  assert.match(updateSource, /Try running "\/doctor" for diagnostics/)
+  assert.doesNotMatch(fastModeSource, /https:\/\/claude\.com\/product\/claude-code/)
+  assert.doesNotMatch(doctorSource, /Consider using native installation: claude install/)
+  assert.doesNotMatch(doctorSource, /Run claude install to update configuration/)
+  assert.doesNotMatch(doctorSource, /Use `claude install` for native installation/)
+  assert.doesNotMatch(doctorSource, /npm -g uninstall @anthropic-ai\/claude-code/)
+})
+
+test('plugin and installer copy no longer points users at Claude-only commands', async () => {
+  const pluginSource = await readFile(`${ROOT}/cli/handlers/plugins.ts`, 'utf8')
+  const autoUpdaterSource = await readFile(`${ROOT}/utils/autoUpdater.ts`, 'utf8')
+  const localInstallerSource = await readFile(`${ROOT}/utils/localInstaller.ts`, 'utf8')
+  const windowsSource = await readFile(`${ROOT}/utils/windowsPaths.ts`, 'utf8')
+  const doctorSource = await readFile(`${ROOT}/utils/doctorDiagnostic.ts`, 'utf8')
+  const bridgeSource = await readFile(`${ROOT}/bridge/bridgeEnabled.ts`, 'utf8')
+  const envLessBridgeSource = await readFile(
+    `${ROOT}/bridge/envLessBridgeConfig.ts`,
+    'utf8',
+  )
+  const initReplBridgeSource = await readFile(
+    `${ROOT}/bridge/initReplBridge.ts`,
+    'utf8',
+  )
+  const movedCommandSource = await readFile(
+    `${ROOT}/commands/createMovedToPluginCommand.ts`,
+    'utf8',
+  )
+
+  assert.match(pluginSource, /Use `\/plugin install` to install a plugin/)
+  assert.doesNotMatch(pluginSource, /claude plugin install/)
+
+  assert.match(autoUpdaterSource, /version of Codex Code/)
+  assert.doesNotMatch(autoUpdaterSource, /version of Claude Code/)
+  assert.doesNotMatch(autoUpdaterSource, /To update, please run:\s+claude update/)
+  assert.doesNotMatch(autoUpdaterSource, /Try updating again with 'claude update'/)
+  assert.doesNotMatch(autoUpdaterSource, /new version of claude/)
+
+  assert.doesNotMatch(localInstallerSource, /Failed to install Claude CLI package/)
+  assert.match(localInstallerSource, /local Codex Code package/)
+
+  assert.doesNotMatch(doctorSource, /alias claude="~\/\.claude\/local\/claude"/)
+  assert.doesNotMatch(windowsSource, /Claude Code on Windows requires git-bash/)
+  assert.match(windowsSource, /Codex Code on Windows requires git-bash/)
+
+  assert.doesNotMatch(bridgeSource, /Your version of Claude Code/)
+  assert.doesNotMatch(envLessBridgeSource, /Your version of Claude Code/)
+  assert.doesNotMatch(initReplBridgeSource, /run `claude update` to upgrade/)
+  assert.match(movedCommandSource, /\/plugin install .*@claude-plugins-official/)
+  assert.doesNotMatch(movedCommandSource, /claude plugin install/)
+})
+
+test('tui helper copy uses Codex Code wording in MCP, IDE, and attribution output', async () => {
+  const mcpSource = await readFile(`${ROOT}/components/mcp/MCPSettings.tsx`, 'utf8')
+  const ideSource = await readFile(`${ROOT}/commands/ide/ide.tsx`, 'utf8')
+  const attributionSource = await readFile(`${ROOT}/utils/attribution.ts`, 'utf8')
+
+  assert.doesNotMatch(mcpSource, /claude mcp --help/)
+  assert.match(mcpSource, /use \/mcp to inspect or add MCP servers/)
+
+  assert.doesNotMatch(ideSource, /Claude Code extension/)
+  assert.doesNotMatch(ideSource, /Only one Claude Code instance/)
+  assert.match(ideSource, /Codex Code extension/)
+  assert.match(ideSource, /Only one Codex Code instance/)
+
+  assert.doesNotMatch(attributionSource, /Generated with \[Claude Code\]/)
+  assert.match(attributionSource, /Generated with Codex Code/)
+})
+
+test('main help and session copy use Codex-facing wording', async () => {
+  const mainSource = await readFile(`${ROOT}/main.tsx`, 'utf8')
+  const oauthSource = await readFile(`${ROOT}/components/ConsoleOAuthFlow.tsx`, 'utf8')
+  const resumeSource = await readFile(`${ROOT}/components/ResumeTask.tsx`, 'utf8')
+
+  assert.match(mainSource, /program\.name\('codex'\)/)
+  assert.match(mainSource, /launch Codex Code with just `codex`/)
+  assert.match(mainSource, /Start the Codex Code MCP server/)
+  assert.match(mainSource, /Manage Codex Code plugins/)
+  assert.match(mainSource, /Manage Codex Code marketplaces/)
+  assert.match(mainSource, /Check the health of your Codex Code auto-updater/)
+  assert.match(mainSource, /Usage: codex ssh/)
+  assert.match(mainSource, /Usage: codex assistant/)
+  assert.doesNotMatch(mainSource, /program\.name\('claude'\)/)
+  assert.doesNotMatch(mainSource, /launch Claude Code with just `claude`/)
+
+  assert.match(oauthSource, /Codex Code login successful/)
+  assert.match(oauthSource, /restart Codex Code/)
+  assert.match(oauthSource, /Creating API key for Codex Code/)
+  assert.doesNotMatch(oauthSource, /Claude Code login successful/)
+
+  assert.match(resumeSource, /Loading Codex Code sessions…/)
+  assert.match(resumeSource, /Error loading Codex Code sessions/)
+  assert.match(resumeSource, /No Codex Code sessions found/)
+  assert.match(resumeSource, /Sorry, Codex Code encountered an error/)
+  assert.doesNotMatch(resumeSource, /Loading Claude Code sessions…/)
+})
+
+test('secondary TUI copy no longer tells users to ask Claude', async () => {
+  const interruptSource = await readFile(`${ROOT}/components/InterruptedByUser.tsx`, 'utf8')
+  const eventModeSource = await readFile(`${ROOT}/components/hooks/SelectEventMode.tsx`, 'utf8')
+  const matcherModeSource = await readFile(
+    `${ROOT}/components/hooks/SelectMatcherMode.tsx`,
+    'utf8',
+  )
+  const hookModeSource = await readFile(
+    `${ROOT}/components/hooks/SelectHookMode.tsx`,
+    'utf8',
+  )
+  const hooksMenuSource = await readFile(
+    `${ROOT}/components/hooks/HooksConfigMenu.tsx`,
+    'utf8',
+  )
+
+  assert.match(interruptSource, /What should Codex Code do instead\?/)
+  assert.doesNotMatch(interruptSource, /What should Claude do instead\?/)
+  assert.doesNotMatch(eventModeSource, /ask Claude\./)
+  assert.doesNotMatch(matcherModeSource, /ask Claude\./)
+  assert.doesNotMatch(hookModeSource, /ask Claude\./)
+  assert.doesNotMatch(hooksMenuSource, /ask Claude\./)
+  assert.match(eventModeSource, /ask Codex Code\./)
+  assert.match(matcherModeSource, /ask Codex Code\./)
+  assert.match(hookModeSource, /ask Codex Code\./)
+  assert.match(hooksMenuSource, /ask Codex Code\./)
+})
+
+test('command descriptions avoid stale Claude Code wording', async () => {
+  const statuslineSource = await readFile(`${ROOT}/commands/statusline.tsx`, 'utf8')
+  const statsSource = await readFile(`${ROOT}/commands/stats/index.ts`, 'utf8')
+  const doctorSource = await readFile(`${ROOT}/commands/doctor/index.ts`, 'utf8')
+  const memorySource = await readFile(`${ROOT}/commands/memory/index.ts`, 'utf8')
+  const reviewSource = await readFile(`${ROOT}/commands/review.ts`, 'utf8')
+  const ultraplanSource = await readFile(`${ROOT}/commands/ultraplan.tsx`, 'utf8')
+  const installSource = await readFile(`${ROOT}/commands/install.tsx`, 'utf8')
+  const desktopCommandSource = await readFile(`${ROOT}/commands/desktop/index.ts`, 'utf8')
+
+  assert.match(statuslineSource, /Set up Codex Code's status line UI/)
+  assert.match(statsSource, /Show your Codex Code usage statistics and activity/)
+  assert.match(doctorSource, /Diagnose and verify your Codex Code installation and settings/)
+  assert.match(memorySource, /Edit Codex memory files/)
+  assert.match(reviewSource, /Runs in the Codex Code web session\./)
+  assert.match(ultraplanSource, /Codex Code web session drafts an advanced plan/)
+  assert.match(installSource, /Install Codex Code native build/)
+  assert.match(desktopCommandSource, /Continue the current session in Codex Code Desktop/)
+  assert.doesNotMatch(reviewSource, /Runs in Claude Code on the web\./)
+  assert.doesNotMatch(ultraplanSource, /Claude Code on the web drafts an advanced plan/)
+})
+
+test('desktop and help surfaces use Codex Code wording', async () => {
+  const helpSource = await readFile(`${ROOT}/components/HelpV2/HelpV2.tsx`, 'utf8')
+  const desktopHandoffSource = await readFile(
+    `${ROOT}/components/DesktopHandoff.tsx`,
+    'utf8',
+  )
+  const desktopImportSource = await readFile(
+    `${ROOT}/components/MCPServerDesktopImportDialog.tsx`,
+    'utf8',
+  )
+  const deepLinkSource = await readFile(`${ROOT}/utils/desktopDeepLink.ts`, 'utf8')
+  const desktopUtilsSource = await readFile(`${ROOT}/utils/claudeDesktop.ts`, 'utf8')
+  const mcpHandlerSource = await readFile(`${ROOT}/cli/handlers/mcp.tsx`, 'utf8')
+  const cliEntrySource = await readFile(`${ROOT}/entrypoints/cli.tsx`, 'utf8')
+
+  assert.match(helpSource, /Codex Code v\$\{MACRO\.VERSION\}/)
+  assert.match(cliEntrySource, /\(Codex Code\)/)
+  assert.match(desktopHandoffSource, /Codex Code Desktop is not installed\./)
+  assert.match(desktopHandoffSource, /Opening in Codex Code Desktop/)
+  assert.match(desktopHandoffSource, /Session transferred to Codex Code Desktop/)
+  assert.match(desktopImportSource, /Import MCP Servers from the desktop app/)
+  assert.match(deepLinkSource, /Codex Code Desktop is not installed/)
+  assert.match(desktopUtilsSource, /Codex Code Desktop integration only works/)
+  assert.match(mcpHandlerSource, /No MCP servers found in the desktop app configuration/)
+  assert.doesNotMatch(helpSource, /Claude Code v\$\{MACRO\.VERSION\}/)
+})

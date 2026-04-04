@@ -23,6 +23,10 @@ export type DirectConnectCallbacks = {
     request: SDKControlPermissionRequest,
     requestId: string,
   ) => void
+  onPermissionCancelled?: (
+    requestId: string,
+    toolUseId: string | undefined,
+  ) => void
   onConnected?: () => void
   onDisconnected?: () => void
   onError?: (error: Error) => void
@@ -41,6 +45,8 @@ export class DirectConnectSessionManager {
   private ws: WebSocket | null = null
   private config: DirectConnectConfig
   private callbacks: DirectConnectCallbacks
+  private pendingPermissionRequests: Map<string, SDKControlPermissionRequest> =
+    new Map()
 
   constructor(config: DirectConnectConfig, callbacks: DirectConnectCallbacks) {
     this.config = config
@@ -81,6 +87,7 @@ export class DirectConnectSessionManager {
         // Handle control requests (permission requests)
         if (parsed.type === 'control_request') {
           if (parsed.request.subtype === 'can_use_tool') {
+            this.pendingPermissionRequests.set(parsed.request_id, parsed.request)
             this.callbacks.onPermissionRequest(
               parsed.request,
               parsed.request_id,
@@ -99,11 +106,22 @@ export class DirectConnectSessionManager {
           continue
         }
 
+        if (parsed.type === 'control_cancel_request') {
+          const pendingRequest = this.pendingPermissionRequests.get(
+            parsed.request_id,
+          )
+          this.pendingPermissionRequests.delete(parsed.request_id)
+          this.callbacks.onPermissionCancelled?.(
+            parsed.request_id,
+            pendingRequest?.tool_use_id,
+          )
+          continue
+        }
+
         // Forward SDK messages (assistant, result, system, etc.)
         if (
           parsed.type !== 'control_response' &&
           parsed.type !== 'keep_alive' &&
-          parsed.type !== 'control_cancel_request' &&
           parsed.type !== 'streamlined_text' &&
           parsed.type !== 'streamlined_tool_use_summary' &&
           !(parsed.type === 'system' && parsed.subtype === 'post_turn_summary')
@@ -148,6 +166,8 @@ export class DirectConnectSessionManager {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
       return
     }
+
+    this.pendingPermissionRequests.delete(requestId)
 
     // Must match SDKControlResponse format expected by StructuredIO
     const response = jsonStringify({
@@ -205,6 +225,7 @@ export class DirectConnectSessionManager {
       this.ws.close()
       this.ws = null
     }
+    this.pendingPermissionRequests.clear()
   }
 
   isConnected(): boolean {

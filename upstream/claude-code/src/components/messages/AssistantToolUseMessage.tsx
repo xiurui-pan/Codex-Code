@@ -1,10 +1,10 @@
 import { c as _c } from "react/compiler-runtime";
 import type { ToolUseBlockParam } from '@anthropic-ai/sdk/resources/index.mjs';
-import React, { useMemo } from 'react';
-import { useTerminalSize } from 'src/hooks/useTerminalSize.js';
+import React, { useContext, useMemo } from 'react';
 import type { ThemeName } from 'src/utils/theme.js';
 import type { Command } from '../../commands.js';
 import { BLACK_CIRCLE } from '../../constants/figures.js';
+import { TerminalSizeContext } from '../../ink/components/TerminalSizeContext.js';
 import { stringWidth } from '../../ink/stringWidth.js';
 import { Box, Text, useTheme } from '../../ink.js';
 import { useAppStateMaybeOutsideOfProvider } from '../../state/AppState.js';
@@ -48,7 +48,7 @@ export function AssistantToolUseMessage(t0) {
     lookups,
     isTranscriptMode
   } = t0;
-  const terminalSize = useTerminalSize();
+  const terminalSize = useContext(TerminalSizeContext);
   const [theme] = useTheme();
   const bg = useSelectedMessageBg();
   const pendingWorkerRequest = useAppStateMaybeOutsideOfProvider(_temp);
@@ -126,11 +126,11 @@ export function AssistantToolUseMessage(t0) {
     }
     let t4;
     if ($[11] !== inProgressToolCallCount || $[12] !== isTranscriptMode || $[13] !== lookups || $[14] !== param.id || $[15] !== progressMessagesForMessage || $[16] !== terminalSize || $[17] !== tool_0 || $[18] !== tools || $[19] !== verbose) {
-      t4 = renderToolUseProgressMessage(tool_0, tools, lookups, param.id, progressMessagesForMessage, {
+      t4 = terminalSize ? renderToolUseProgressMessage(tool_0, tools, lookups, param.id, progressMessagesForMessage, {
         verbose,
         inProgressToolCallCount,
         isTranscriptMode
-      }, terminalSize);
+      }, terminalSize) : null;
       $[11] = inProgressToolCallCount;
       $[12] = isTranscriptMode;
       $[13] = lookups;
@@ -237,11 +237,11 @@ export function AssistantToolUseMessage(t0) {
   }
   let t13;
   if ($[54] !== inProgressToolCallCount || $[55] !== isAutoClassifier || $[56] !== isClassifierChecking || $[57] !== isQueued || $[58] !== isResolved || $[59] !== isTranscriptMode || $[60] !== isWaitingForPermission || $[61] !== lookups || $[62] !== param.id || $[63] !== progressMessagesForMessage || $[64] !== terminalSize || $[65] !== tool_0 || $[66] !== tools || $[67] !== verbose) {
-    t13 = !isResolved && !isQueued && (isClassifierChecking ? <MessageResponse height={1}><Text dimColor={true}>{isAutoClassifier ? "Auto classifier checking\u2026" : "Bash classifier checking\u2026"}</Text></MessageResponse> : isWaitingForPermission ? <MessageResponse height={1}><Text dimColor={true}>Waiting for permission…</Text></MessageResponse> : renderToolUseProgressMessage(tool_0, tools, lookups, param.id, progressMessagesForMessage, {
+    t13 = !isResolved && !isQueued && (isClassifierChecking ? <MessageResponse height={1}><Text dimColor={true}>{isAutoClassifier ? "Auto classifier checking\u2026" : "Bash classifier checking\u2026"}</Text></MessageResponse> : isWaitingForPermission ? <MessageResponse height={1}><Text dimColor={true}>Waiting for permission…</Text></MessageResponse> : terminalSize ? renderToolUseProgressMessage(tool_0, tools, lookups, param.id, progressMessagesForMessage, {
       verbose,
       inProgressToolCallCount,
       isTranscriptMode
-    }, terminalSize));
+    }, terminalSize) : null);
     $[54] = inProgressToolCallCount;
     $[55] = isAutoClassifier;
     $[56] = isClassifierChecking;

@@ -8,6 +8,7 @@ import { useUpdateNotification } from '../hooks/useUpdateNotification.js';
 import { Box, Text } from '../ink.js';
 import type { AutoUpdaterResult } from '../utils/autoUpdater.js';
 import { getMaxVersion, getMaxVersionMessage } from '../utils/autoUpdater.js';
+import { getAutoUpdateRecoveryCommand } from '../utils/autoUpdaterMessages.js';
 import { isAutoUpdaterDisabled } from '../utils/config.js';
 import { installLatest } from '../utils/nativeInstaller/index.js';
 import { gt } from '../utils/semver.js';
@@ -63,6 +64,11 @@ export function NativeAutoUpdater({
   const [maxVersionIssue, setMaxVersionIssue] = useState<string | null>(null);
   const updateSemver = useUpdateNotification(autoUpdaterResult?.version);
   const channel = getInitialSettings()?.autoUpdatesChannel ?? 'latest';
+  const recoveryCommand = getAutoUpdateRecoveryCommand({
+    hasLocalInstall: false,
+    packageUrl: MACRO.PACKAGE_URL,
+    userType: process.env.USER_TYPE,
+  });
 
   // Track latest isUpdating value in a ref so the memoized checkForUpdates
   // callback always sees the current value without changing callback identity
@@ -182,11 +188,12 @@ export function NativeAutoUpdater({
             ✓ Update installed · Restart to update
           </Text>}
       {autoUpdaterResult?.status === 'install_failed' && <Text color="error" wrap="truncate">
-          ✗ Auto-update failed &middot; Try <Text bold>/status</Text>
+          ✗ Auto-update failed &middot; Try <Text bold>/doctor</Text> or{' '}
+          <Text bold>{recoveryCommand}</Text>
         </Text>}
       {maxVersionIssue && "external" === 'ant' && <Text color="warning">
           ⚠ Known issue: {maxVersionIssue} &middot; Run{' '}
-          <Text bold>claude rollback --safe</Text> to downgrade
+          <Text bold>reinstall Codex Code with a compatible version</Text>
         </Text>}
     </Box>;
 }

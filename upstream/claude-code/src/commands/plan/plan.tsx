@@ -80,6 +80,8 @@ export async function call(onDone: LocalJSXCommandOnDone, context: LocalJSXComma
         destination: 'session'
       })
     }));
+    // Let the mode flip commit before the next slash command reads appState.
+    await new Promise(resolve => setTimeout(resolve, 0));
     const description = args.trim();
     if (description && description !== 'open') {
       onDone('Enabled plan mode', {

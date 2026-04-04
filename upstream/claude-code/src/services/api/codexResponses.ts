@@ -64,29 +64,22 @@ export type CodexApiErrorChunk = {
   errorMessage: string
 }
 
-export type CodexResponseChunk = CodexTurnItemChunk | CodexApiErrorChunk
+export type CodexStreamEventChunk = {
+  kind: 'stream_event'
+  event: {
+    type: 'content_block_start' | 'content_block_delta'
+    [key: string]: unknown
+  }
+}
+
+export type CodexResponseChunk =
+  | CodexTurnItemChunk
+  | CodexApiErrorChunk
+  | CodexStreamEventChunk
 
 export type CodexResponseResult = {
   turnItems: ModelTurnItem[]
   errorMessage?: string
-}
-
-function buildFunctionCallStartedTurnItems(item: {
-  name?: string
-}): ModelTurnItem[] {
-  if (!item.name) {
-    return []
-  }
-
-  return [
-    {
-      kind: 'ui_message',
-      provider: 'custom',
-      level: 'info',
-      text: `准备调用工具: ${item.name}`,
-      source: 'tool_call_started',
-    },
-  ]
 }
 
 type ResponsesOutputText = {
@@ -111,6 +104,25 @@ type ResponsesOutputDoneEvent = {
   item?: ResponsesOutputItem
 }
 
+type ResponsesContentPartAddedEvent = {
+  type: 'response.content_part.added'
+  content_index?: number
+  item_id?: string
+  output_index?: number
+  part?: {
+    type?: string
+    text?: string
+  }
+}
+
+type ResponsesOutputTextDeltaEvent = {
+  type: 'response.output_text.delta'
+  content_index?: number
+  delta?: string
+  item_id?: string
+  output_index?: number
+}
+
 type ResponsesOutputAddedEvent = {
   type: 'response.output_item.added'
   item?: ResponsesOutputItem
@@ -128,6 +140,8 @@ type ResponsesFailureEvent = {
 type ResponsesStreamEvent =
   | ResponsesCompletedEvent
   | ResponsesOutputDoneEvent
+  | ResponsesContentPartAddedEvent
+  | ResponsesOutputTextDeltaEvent
   | ResponsesOutputAddedEvent
   | ResponsesFailureEvent
   | { type?: string }
@@ -152,7 +166,7 @@ type ResponsesInputItem =
   | {
       type: 'function_call_output'
       call_id: string
-      output: ResponsesInputText[]
+      output: string
     }
 
 type ResponsesFunctionTool = {
@@ -324,12 +338,7 @@ function buildResponsesInput(
         items.push({
           type: 'function_call_output',
           call_id: block.tool_use_id,
-          output: [
-            {
-              type: 'input_text',
-              text: getLocalExecutionOutputText(turnItems),
-            },
-          ],
+          output: getLocalExecutionOutputText(turnItems),
         })
       }
     }
@@ -462,6 +471,7 @@ function parseEffortValue(
     effortValue === 'low' ||
     effortValue === 'medium' ||
     effortValue === 'high' ||
+    effortValue === 'xhigh' ||
     effortValue === 'max'
   ) {
     return effortValue
@@ -531,19 +541,45 @@ export async function buildResponsesBody({
   return body
 }
 
-function extractPayloadTextFromSseBlock(block: string): string | null {
-  const payloadText = block
-    .split('\n')
-    .filter(line => line.startsWith('data: '))
-    .map(line => line.slice('data: '.length))
-    .join('\n')
-    .trim()
+function normalizeSseBuffer(buffer: string): string {
+  return buffer.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+}
 
-  if (!payloadText || payloadText === '[DONE]') {
-    return null
+function extractPayloadTextCandidatesFromSseBlock(block: string): string[] {
+  const dataLines = normalizeSseBuffer(block)
+    .split('\n')
+    .filter(line => line.startsWith('data:'))
+    .map(line => {
+      const value = line.slice('data:'.length)
+      return value.startsWith(' ') ? value.slice(1) : value
+    })
+
+  if (dataLines.length === 0) {
+    return []
   }
 
-  return payloadText
+  const specPayloadText = dataLines.join('\n').trim()
+  if (!specPayloadText || specPayloadText === '[DONE]') {
+    return []
+  }
+
+  if (dataLines.length === 1) {
+    return [specPayloadText]
+  }
+
+  // Some Codex relay paths split a single JSON payload across multiple
+  // `data:` lines without respecting JSON string boundaries. Try the
+  // spec-compliant join first, then a no-newline fallback.
+  const concatenatedPayloadText = dataLines.join('').trim()
+  if (
+    concatenatedPayloadText &&
+    concatenatedPayloadText !== '[DONE]' &&
+    concatenatedPayloadText !== specPayloadText
+  ) {
+    return [specPayloadText, concatenatedPayloadText]
+  }
+
+  return [specPayloadText]
 }
 
 const DEFAULT_FIRST_EVENT_TIMEOUT_MS = 30_000
@@ -665,12 +701,21 @@ export function parseResponsesSseEvent(
     return null
   }
 
-  const payloadText = extractPayloadTextFromSseBlock(block)
-  if (!payloadText) {
+  const payloadTextCandidates = extractPayloadTextCandidatesFromSseBlock(block)
+  if (payloadTextCandidates.length === 0) {
     return null
   }
 
-  return JSON.parse(payloadText) as ResponsesStreamEvent
+  let lastError: unknown
+  for (const payloadText of payloadTextCandidates) {
+    try {
+      return JSON.parse(payloadText) as ResponsesStreamEvent
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  throw lastError
 }
 
 async function* iterateResponsesSseEvents(
@@ -694,9 +739,12 @@ async function* iterateResponsesSseEvents(
       ? 'waiting for next event'
       : 'waiting for first event'
     const { done, value } = await readWithTimeout(reader, timeoutMs, timeoutLabel)
-    buffer += decoder.decode(value ?? new Uint8Array(), {
-      stream: !done,
-    })
+    buffer = normalizeSseBuffer(
+      buffer +
+        decoder.decode(value ?? new Uint8Array(), {
+          stream: !done,
+        }),
+    )
 
     let separatorIndex = buffer.indexOf('\n\n')
     while (separatorIndex !== -1) {
@@ -732,6 +780,7 @@ export async function* queryCodexResponsesStream({
   signal,
 }: CodexStreamingArgs): AsyncGenerator<CodexResponseChunk, void, unknown> {
   try {
+    const startedTextBlocks = new Set<string>()
     const requestIdentity = buildCodexRequestIdentity()
     const requestTimeoutMs = getRequestTimeoutMs(tools)
     const response = await fetchWithRequestTimeout(getResponsesBaseUrl(), {
@@ -764,13 +813,75 @@ export async function* queryCodexResponsesStream({
     }
 
     for await (const event of iterateResponsesSseEvents(response, tools)) {
+      if (event.type === 'response.content_part.added' && event.part) {
+        if (event.part.type === 'output_text') {
+          const outputIndex =
+            typeof event.output_index === 'number' ? event.output_index : 0
+          const contentIndex =
+            typeof event.content_index === 'number' ? event.content_index : 0
+          const blockKey = `${outputIndex}:${contentIndex}`
+          if (startedTextBlocks.has(blockKey)) {
+            continue
+          }
+          startedTextBlocks.add(blockKey)
+          yield {
+            kind: 'stream_event',
+            event: {
+              type: 'content_block_start',
+              index: contentIndex,
+              output_index: outputIndex,
+              content_block: {
+                type: 'text',
+                text: '',
+              },
+            },
+          }
+        }
+        continue
+      }
+
+      if (event.type === 'response.output_text.delta') {
+        if (typeof event.delta === 'string' && event.delta.length > 0) {
+          const outputIndex =
+            typeof event.output_index === 'number' ? event.output_index : 0
+          const contentIndex =
+            typeof event.content_index === 'number' ? event.content_index : 0
+          const blockKey = `${outputIndex}:${contentIndex}`
+          if (!startedTextBlocks.has(blockKey)) {
+            startedTextBlocks.add(blockKey)
+            yield {
+              kind: 'stream_event',
+              event: {
+                type: 'content_block_start',
+                index: contentIndex,
+                output_index: outputIndex,
+                content_block: {
+                  type: 'text',
+                  text: '',
+                },
+              },
+            }
+          }
+          yield {
+            kind: 'stream_event',
+            event: {
+              type: 'content_block_delta',
+              index: contentIndex,
+              delta: {
+                type: 'text_delta',
+                text: event.delta,
+              },
+            },
+          }
+        }
+        continue
+      }
+
       if (event.type === 'response.output_item.added' && event.item) {
         const turnItems =
-          event.item.type === 'function_call'
-            ? buildFunctionCallStartedTurnItems(event.item)
-            : event.item.type === 'web_search_call'
-              ? normalizeResponsesOutputToTurnItems([event.item])
-              : []
+          event.item.type === 'web_search_call'
+            ? normalizeResponsesOutputToTurnItems([event.item])
+            : []
         if (turnItems.length > 0) {
           yield {
             kind: 'turn_items',

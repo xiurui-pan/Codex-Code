@@ -1,8 +1,8 @@
 import { c as _c } from "react/compiler-runtime";
 import type { StructuredPatchHunk } from 'diff';
 import * as React from 'react';
-import { Suspense, use, useState } from 'react';
-import { useTerminalSize } from '../hooks/useTerminalSize.js';
+import { Suspense, use, useContext, useState } from 'react';
+import { TerminalSizeContext } from '../ink/components/TerminalSizeContext.js';
 import { Box, Text } from '../ink.js';
 import type { FileEdit } from '../tools/FileEditTool/types.js';
 import { findActualString, preserveQuoteStyle } from '../tools/FileEditTool/utils.js';
@@ -61,9 +61,8 @@ function DiffBody(t0) {
     firstLine,
     fileContent
   } = use(promise);
-  const {
-    columns
-  } = useTerminalSize();
+  const terminalSize = useContext(TerminalSizeContext);
+  const columns = terminalSize?.columns ?? process.stdout.columns ?? 80;
   let t1;
   if ($[0] !== columns || $[1] !== fileContent || $[2] !== file_path || $[3] !== firstLine || $[4] !== patch) {
     t1 = <DiffFrame><StructuredDiffList hunks={patch} dim={false} width={columns} filePath={file_path} firstLine={firstLine} fileContent={fileContent} /></DiffFrame>;

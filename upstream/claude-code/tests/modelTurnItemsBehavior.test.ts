@@ -131,7 +131,7 @@ test('warning ui messages are surfaced as system messages for TUI visibility', (
   assert.equal(message?.content.includes('text fallback tool call'), true)
 })
 
-test('tool start ui messages are surfaced as informational system messages', () => {
+test('tool start ui messages are hidden from normal TUI output', () => {
   const message = createSystemMessageFromModelTurnItem({
     kind: 'ui_message',
     provider: 'custom',
@@ -140,8 +140,19 @@ test('tool start ui messages are surfaced as informational system messages', () 
     source: 'tool_call_started',
   })
 
-  assert.equal(message?.level, 'info')
-  assert.equal(message?.content, '准备调用工具: Read')
+  assert.equal(message, null)
+})
+
+test('tool output bookkeeping messages stay hidden from normal TUI output', () => {
+  const message = createSystemMessageFromModelTurnItem({
+    kind: 'tool_output',
+    provider: 'custom',
+    toolUseId: 'tool-1',
+    outputText: 'ok',
+    source: 'tool_execution',
+  })
+
+  assert.equal(message, null)
 })
 
 test('web search ui messages are emitted into SDK execution item stream', () => {

@@ -39,6 +39,7 @@ export const EFFORT_LEVELS = [
   'low',
   'medium',
   'high',
+  'xhigh',
   'max',
 ] as const satisfies readonly EffortLevel[]
 
@@ -129,6 +130,9 @@ export function toPersistableEffort(
   value: EffortValue | undefined,
 ): EffortLevel | undefined {
   if (value === 'low' || value === 'medium' || value === 'high') {
+    return value
+  }
+  if (value === 'xhigh') {
     return value
   }
   if (value === 'max' && process.env.USER_TYPE === 'ant') {
@@ -243,7 +247,7 @@ export function convertEffortValueToLevel(value: EffortValue): EffortLevel {
     if (value <= 50) return 'low'
     if (value <= 85) return 'medium'
     if (value <= 100) return 'high'
-    return 'max'
+    return 'xhigh'
   }
   return 'high'
 }
@@ -262,6 +266,8 @@ export function getEffortLevelDescription(level: EffortLevel): string {
       return 'Balanced reasoning for everyday coding work'
     case 'high':
       return 'Stronger reasoning for harder tasks'
+    case 'xhigh':
+      return 'Extra-high reasoning for the hardest tasks'
     case 'max':
       return 'Deepest reasoning on the highest-capability Codex model'
   }

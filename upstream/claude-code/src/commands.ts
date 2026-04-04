@@ -46,26 +46,25 @@ import teleport from './commands/teleport/index.js'
 const require = createRequire(import.meta.url)
 const currentStageDisableClaudePluginCommands =
   isCurrentPhaseCustomCodexProvider()
+function getPluginCommandsModule() {
+  return require('./utils/plugins/loadPluginCommands.js') as typeof import('./utils/plugins/loadPluginCommands.js')
+}
 const getPluginCommands = currentStageDisableClaudePluginCommands
   ? (async (): Promise<Command[]> => [])
-  : (
-      require('./utils/plugins/loadPluginCommands.js') as typeof import('./utils/plugins/loadPluginCommands.js')
-    ).getPluginCommands
+  : (async (): Promise<Command[]> => getPluginCommandsModule().getPluginCommands())
 const clearPluginCommandCache = currentStageDisableClaudePluginCommands
   ? (() => {})
-  : (
-      require('./utils/plugins/loadPluginCommands.js') as typeof import('./utils/plugins/loadPluginCommands.js')
-    ).clearPluginCommandCache
+  : (() => {
+      getPluginCommandsModule().clearPluginCommandCache()
+    })
 const getPluginSkills = currentStageDisableClaudePluginCommands
   ? (async (): Promise<Command[]> => [])
-  : (
-      require('./utils/plugins/loadPluginCommands.js') as typeof import('./utils/plugins/loadPluginCommands.js')
-    ).getPluginSkills
+  : (async (): Promise<Command[]> => getPluginCommandsModule().getPluginSkills())
 const clearPluginSkillsCache = currentStageDisableClaudePluginCommands
   ? (() => {})
-  : (
-      require('./utils/plugins/loadPluginCommands.js') as typeof import('./utils/plugins/loadPluginCommands.js')
-    ).clearPluginSkillsCache
+  : (() => {
+      getPluginCommandsModule().clearPluginSkillsCache()
+    })
 const isUsing3PServices = currentStageDisableClaudePluginCommands
   ? (() => true)
   : (require('./utils/auth.js') as typeof import('./utils/auth.js'))
@@ -80,6 +79,34 @@ const agentsPlatform =
     : null
 const currentStageDisableClaudeProductCommands =
   isCurrentPhaseCustomCodexProvider()
+const disabledClaudeBusinessCommandNames = new Set([
+  'assistant',
+  'brief',
+  'chrome',
+  'cost',
+  'desktop',
+  'extra-usage',
+  'feedback',
+  'insights',
+  'install-github-app',
+  'install-slack-app',
+  'login',
+  'logout',
+  'mobile',
+  'passes',
+  'privacy-settings',
+  'proactive',
+  'rate-limit-options',
+  'remote-control',
+  'remote-env',
+  'stickers',
+  'think-back',
+  'think-back-play',
+  'upgrade',
+  'usage',
+  'voice',
+  'web-setup',
+])
 const getLoginCommand = currentStageDisableClaudeProductCommands
   ? (() => null)
   : (() =>
@@ -316,97 +343,103 @@ export const INTERNAL_ONLY_COMMANDS = [
 
 // Declared as a function so that we don't run this until getCommands is called,
 // since underlying functions read from config, which can't be read at module initialization time
-const COMMANDS = memoize((): Command[] => [
-  addDir,
-  advisor,
-  agents,
-  branch,
-  btw,
-  chrome,
-  clear,
-  color,
-  compact,
-  config,
-  copy,
-  desktop,
-  context,
-  contextNonInteractive,
-  diff,
-  doctor,
-  effort,
-  exit,
-  fast,
-  files,
-  heapDump,
-  help,
-  ide,
-  init,
-  keybindings,
-  installGitHubApp,
-  installSlackApp,
-  mcp,
-  memory,
-  mobile,
-  model,
-  outputStyle,
-  plugin,
-  pr_comments,
-  releaseNotes,
-  reloadPlugins,
-  rename,
-  resume,
-  session,
-  skills,
-  stats,
-  status,
-  statusline,
-  stickers,
-  tag,
-  theme,
-  feedback,
-  review,
-  ultrareview,
-  rewind,
-  securityReview,
-  terminalSetup,
-  usage,
-  usageReport,
-  vim,
-  ...(webCmd ? [webCmd] : []),
-  ...(forkCmd ? [forkCmd] : []),
-  ...(buddy ? [buddy] : []),
-  ...(proactive ? [proactive] : []),
-  ...(briefCommand ? [briefCommand] : []),
-  ...(assistantCommand ? [assistantCommand] : []),
-  ...(bridge ? [bridge] : []),
-  ...(remoteControlServerCommand ? [remoteControlServerCommand] : []),
-  ...(voiceCommand ? [voiceCommand] : []),
-  thinkback,
-  thinkbackPlay,
-  permissions,
-  plan,
-  hooks,
-  exportCommand,
-  sandboxToggle,
-  ...(getRemoteEnvCommand() ? [getRemoteEnvCommand()!] : []),
-  ...(getUpgradeCommand() ? [getUpgradeCommand()!] : []),
-  ...getExtraUsageCommands(),
-  ...(getRateLimitOptionsCommand() ? [getRateLimitOptionsCommand()!] : []),
-  ...(getPrivacySettingsCommand() ? [getPrivacySettingsCommand()!] : []),
-  ...(!currentStageDisableClaudePluginCommands &&
-  !currentStageDisableClaudeProductCommands &&
-  !isUsing3PServices()
-    ? [logout, getLoginCommand()!]
-    : []),
-  passes,
-  ...(peersCmd ? [peersCmd] : []),
-  tasks,
-  ...(workflowsCmd ? [workflowsCmd] : []),
-  ...(torch ? [torch] : []),
-  ...(process.env.USER_TYPE === 'ant' && !process.env.IS_DEMO
-    ? INTERNAL_ONLY_COMMANDS
-    : []),
-])
+const COMMANDS = memoize((): Command[] =>
+  [
+    addDir,
+    advisor,
+    agents,
+    branch,
+    btw,
+    chrome,
+    clear,
+    color,
+    compact,
+    config,
+    copy,
+    desktop,
+    context,
+    contextNonInteractive,
+    diff,
+    doctor,
+    effort,
+    exit,
+    fast,
+    files,
+    heapDump,
+    help,
+    ide,
+    init,
+    keybindings,
+    installGitHubApp,
+    installSlackApp,
+    mcp,
+    memory,
+    mobile,
+    model,
+    outputStyle,
+    plugin,
+    pr_comments,
+    releaseNotes,
+    reloadPlugins,
+    rename,
+    resume,
+    session,
+    skills,
+    stats,
+    status,
+    statusline,
+    stickers,
+    tag,
+    theme,
+    feedback,
+    review,
+    ultrareview,
+    rewind,
+    securityReview,
+    terminalSetup,
+    usage,
+    usageReport,
+    vim,
+    ...(webCmd ? [webCmd] : []),
+    ...(forkCmd ? [forkCmd] : []),
+    ...(buddy ? [buddy] : []),
+    ...(proactive ? [proactive] : []),
+    ...(briefCommand ? [briefCommand] : []),
+    ...(assistantCommand ? [assistantCommand] : []),
+    ...(bridge ? [bridge] : []),
+    ...(remoteControlServerCommand ? [remoteControlServerCommand] : []),
+    ...(voiceCommand ? [voiceCommand] : []),
+    thinkback,
+    thinkbackPlay,
+    permissions,
+    plan,
+    hooks,
+    exportCommand,
+    sandboxToggle,
+    ...(getRemoteEnvCommand() ? [getRemoteEnvCommand()!] : []),
+    ...(getUpgradeCommand() ? [getUpgradeCommand()!] : []),
+    ...getExtraUsageCommands(),
+    ...(getRateLimitOptionsCommand() ? [getRateLimitOptionsCommand()!] : []),
+    ...(getPrivacySettingsCommand() ? [getPrivacySettingsCommand()!] : []),
+    ...(!currentStageDisableClaudePluginCommands &&
+    !currentStageDisableClaudeProductCommands &&
+    !isUsing3PServices()
+      ? [logout, getLoginCommand()!]
+      : []),
+    passes,
+    ...(peersCmd ? [peersCmd] : []),
+    tasks,
+    ...(workflowsCmd ? [workflowsCmd] : []),
+    ...(torch ? [torch] : []),
+    ...(process.env.USER_TYPE === 'ant' && !process.env.IS_DEMO
+      ? INTERNAL_ONLY_COMMANDS
+      : []),
+  ].filter(
+    command =>
+      !currentStageDisableClaudeProductCommands ||
+      !disabledClaudeBusinessCommandNames.has(command.name),
+  ),
+)
 
 export const builtInCommandNames = memoize(
   (): Set<string> =>

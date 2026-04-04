@@ -11,6 +11,9 @@ What this means in practice:
 - Mainline goal is "make Codex-shaped runtime objects first-class".
 - 2026-04-03 当前代码再次实测后，headless 最小 `-p` 闭环已经恢复；真实“读目录并总结”场景也会直接走工具链。
 - 2026-04-03 当前代码再次实测后，自然语言联网搜索也已收口：正常对话直接走 Codex 原生 `web_search`，并能看到搜索开始/完成进度。
+- 2026-04-04 真实 PTY TUI 再次实测后，`/sandbox` 已不再误报 “only supported on macOS, Linux, and WSL2”；放开 Linux 路径后暴露出的 fallback `checkDependencies()` 异步返回崩溃也已修掉。
+- 2026-04-04 真实 Codex TUI 发任务再次确认：普通开发型输入会被会话接收并进入工作态，不再在提交后立刻掉回假本地提示或直接崩溃。
+- 2026-04-04 真实 PTY 命令清扫继续推进：Codex 模式下 `/mobile`、`/chrome`、`/usage`、`/install-github-app`、`/web-setup`、`/remote-control` 已确认不再落入旧业务页面，而是统一表现为不可用命令。
 
 ## Recent Convergence Commits (04995ec, b87593a, 5a3b315)
 
@@ -48,6 +51,11 @@ Current behavior:
 - permission 这条已拆清边界：工具权限链路已验收，host 沙箱权限由于当前仓库未包含 `@anthropic-ai/sandbox-runtime`，不再假装是同一条本地能力。
 - 真实“请读取当前目录的所有文件然后告诉我”场景已经不再先来回解释，而是直接进入 `Bash` / `Agent` / `Read` 工具链；同时修掉了 subagent 默认 `sonnet/haiku` 在 Codex provider 下不可用的问题，以及缺失 ripgrep 二进制导致的 `Glob` / `Grep` 主链失败。
 - 联网搜索链路现在的真实状态已更新：正常对话不再先走本地 `WebSearch` 函数工具，而是直接暴露 Codex 原生 `web_search`；`stream-json` 复验能看到 `正在联网搜索...` / `联网搜索已完成...`，最后返回最终答案。
+- `direct connect` / `ssh` 的远端权限取消残留修复已经落地到本地代码：`control_cancel_request` 不再在 direct connect manager 中被吞掉，direct/ssh hook 也都会在取消、断开、重连时清理本地权限弹窗队列。
+- `VirtualMessageList` 的“中间消息重排但总数不变时旧 key 复用导致滚动错位”风险已按对象身份变化补了重建条件。
+- `/sandbox` 的本地 fallback 现在会把真实缺失原因放进依赖检查结果里，并且 Linux / WSL / macOS 会走支持平台判定；当前真实 PTY 证据见 `artifacts/manual-tui-sandbox-2026-04-04.md`。
+- 真实 Codex provider TUI 的开发型输入已再次确认能进入工作态；当前工件见 `artifacts/manual-tui-real-task-2026-04-04.md`。但这套 PTY 驱动对长任务中途工具流的抓取还不够稳定，仍需继续改进。
+- 新一轮真实 PTY slash 命令清扫已留下工件 `artifacts/manual-tui-command-sweep-2026-04-04.md`：一方面确认 Claude / Anthropic 业务命令已从 Codex 模式移除，另一方面确认 `/plan`、`/model status`、`/theme`、`/copy` 仍能在真实 TUI 中工作。
 
 ## Done (Scope and Direction)
 
@@ -97,12 +105,17 @@ From now on, capability acceptance must be tracked row by row against the offici
 Still pending:
 
 - broader multi-round real TUI soak for repeated prompt cycles under unstable network.
-- 联网搜索真实自然语言场景；已通过真实命令收口，阻塞已从提供方故障转成已完成项。
+- 远端 direct/ssh 两条链路还没有做完对应的真实 TUI / 真实远端会话验收；当前只完成了本地代码修复和主链 PTY 复查。
+- `/sandbox` 当前已从误报/崩溃收口到可识别命令，但完整配置界面的端到端 PTY 留证还没补齐。
+- 真实 Codex provider 长任务的中途工具流在当前 PTY harness 里仍然不够容易完整抓取；现有工件只能稳定证明“提交成功并进入工作态”。
+- 保留下来的 slash 命令还没有按真实 PTY 全量逐条扫完；当前只新增补到 `/plan`、`/model status`、`/theme`、`/copy` 和前一轮的 `/sandbox`。
 
 Next command set:
 
 本轮已复验通过：
 
+- 真实 PTY：继续逐条扫保留 slash 命令，优先 `/help`、`/model`、`/effort`、`/memory`、`/status`
+- 真实 PTY：继续做 direct/ssh 远端链路，重点看“远端取消权限请求后本地弹窗是否消失”
 - `cd upstream/claude-code && node --test tests/tuiKeyboardInputAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`
 - `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`
