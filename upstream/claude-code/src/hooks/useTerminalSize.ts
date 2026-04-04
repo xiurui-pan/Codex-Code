@@ -4,11 +4,12 @@ import {
   TerminalSizeContext,
 } from '../ink/components/TerminalSizeContext.js'
 
-export function useTerminalSize(): TerminalSize {
+export function useTerminalSize(): TerminalSize{
   const size = useContext(TerminalSizeContext)
 
   if (!size) {
-    throw new Error('useTerminalSize must be used within an Ink App component')
+    // Fallback for when rendered outside Ink context (e.g., background task status)
+    return { columns: process.stdout.columns ?? 120, rows: process.stdout.rows ?? 40 }
   }
 
   return size

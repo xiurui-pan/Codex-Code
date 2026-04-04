@@ -83,7 +83,6 @@ const disabledClaudeBusinessCommandNames = new Set([
   'assistant',
   'brief',
   'chrome',
-  'cost',
   'desktop',
   'extra-usage',
   'feedback',
@@ -145,9 +144,7 @@ const getRateLimitOptionsCommand = currentStageDisableClaudeProductCommands
       (
         require('./commands/rate-limit-options/index.js') as typeof import('./commands/rate-limit-options/index.js')
       ).default)
-const getCostCommand = currentStageDisableClaudeProductCommands
-  ? (() => null)
-  : (() =>
+const getCostCommand = (() =>
       (
         require('./commands/cost/index.js') as typeof import('./commands/cost/index.js')
       ).default)
@@ -435,6 +432,7 @@ const COMMANDS = memoize((): Command[] =>
     ...(process.env.USER_TYPE === 'ant' && !process.env.IS_DEMO
       ? INTERNAL_ONLY_COMMANDS
       : []),
+    ...(getCostCommand() ? [getCostCommand()!] : []), // Show session cost (local cost tracking)
   ].filter(
     command =>
       !currentStageDisableClaudeProductCommands ||

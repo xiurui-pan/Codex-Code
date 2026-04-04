@@ -163,6 +163,10 @@ export function openFileInExternalEditor(
 
 export const getExternalEditor = memoize((): string | undefined => {
   // Prioritize environment variables
+  if (process.env.CODEX_CODE_EDITOR?.trim()) {
+    return process.env.CODEX_CODE_EDITOR.trim()
+  }
+
   if (process.env.VISUAL?.trim()) {
     return process.env.VISUAL.trim()
   }
