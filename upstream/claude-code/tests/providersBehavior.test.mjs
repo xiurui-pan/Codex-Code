@@ -58,10 +58,10 @@ async function readProviderState(envOverrides) {
 
 test('Codex-only flag wins over legacy provider flags and disables first-party fallback checks', async () => {
   const result = await readProviderState({
-    CLAUDE_CODE_USE_CODEX_PROVIDER: '1',
-    CLAUDE_CODE_USE_BEDROCK: '1',
-    CLAUDE_CODE_USE_VERTEX: '1',
-    CLAUDE_CODE_USE_FOUNDRY: '1',
+    CODEX_CODE_USE_CODEX_PROVIDER: '1',
+    CODEX_CODE_USE_BEDROCK: '1',
+    CODEX_CODE_USE_VERTEX: '1',
+    CODEX_CODE_USE_FOUNDRY: '1',
     ANTHROPIC_BASE_URL: '',
   })
 
@@ -72,10 +72,10 @@ test('Codex-only flag wins over legacy provider flags and disables first-party f
 
 test('without Codex-only flag, first-party default behavior stays unchanged', async () => {
   const result = await readProviderState({
-    CLAUDE_CODE_USE_CODEX_PROVIDER: '',
-    CLAUDE_CODE_USE_BEDROCK: '',
-    CLAUDE_CODE_USE_VERTEX: '',
-    CLAUDE_CODE_USE_FOUNDRY: '',
+    CODEX_CODE_USE_CODEX_PROVIDER: '',
+    CODEX_CODE_USE_BEDROCK: '',
+    CODEX_CODE_USE_VERTEX: '',
+    CODEX_CODE_USE_FOUNDRY: '',
     ANTHROPIC_BASE_URL: '',
   })
 

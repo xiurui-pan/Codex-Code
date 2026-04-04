@@ -84,7 +84,7 @@ const eventQueue: QueuedEvent[] = []
 let sink: AnalyticsSink | null = null
 
 function shouldSkipAnalyticsForCurrentPhase(): boolean {
-  return process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+  return process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
 }
 
 /**

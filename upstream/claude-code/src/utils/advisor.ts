@@ -5,7 +5,7 @@ import { isEnvTruthy } from './envUtils.js'
 import { getInitialSettings } from './settings/settings.js'
 
 const require = createRequire(import.meta.url)
-const currentPhaseDisableLegacyAdvisor = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+const currentPhaseDisableLegacyAdvisor = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
 
 function getFeatureValue_CACHED_MAY_BE_STALE<T>(feature: string, fallback: T): T {
   if (currentPhaseDisableLegacyAdvisor) return fallback
@@ -66,7 +66,7 @@ function getAdvisorConfig(): AdvisorConfig {
 }
 
 export function isAdvisorEnabled(): boolean {
-  if (isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_ADVISOR_TOOL)) {
+  if (isEnvTruthy(process.env.CODEX_CODE_DISABLE_ADVISOR_TOOL)) {
     return false
   }
   // The advisor beta header is first-party only (Bedrock/Vertex 400 on it).

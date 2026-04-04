@@ -107,7 +107,7 @@ type ListItem = {
 // ~1.3K lines into external builds. Gate with feature() + require so the
 // bundler can dead-code-eliminate the branch.
 /* eslint-disable @typescript-eslint/no-require-imports */
-const currentStageDisableUltraplan = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1';
+const currentStageDisableUltraplan = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1';
 const stopUltraplan = !currentStageDisableUltraplan ? (require('../../commands/ultraplan.js') as typeof import('../../commands/ultraplan.js')).stopUltraplan : null;
 const WorkflowDetailDialog = feature('WORKFLOW_SCRIPTS') ? (require('./WorkflowDetailDialog.js') as typeof import('./WorkflowDetailDialog.js')).WorkflowDetailDialog : null;
 const workflowTaskModule = feature('WORKFLOW_SCRIPTS') ? require('src/tasks/LocalWorkflowTask/LocalWorkflowTask.js') as typeof import('src/tasks/LocalWorkflowTask/LocalWorkflowTask.js') : null;

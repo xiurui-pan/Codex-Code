@@ -943,8 +943,8 @@ export const connectToServer = memoize(
         logMCPDebug(name, `In-process Computer Use MCP server started`)
       } else if (serverRef.type === 'stdio' || !serverRef.type) {
         const finalCommand =
-          process.env.CLAUDE_CODE_SHELL_PREFIX || serverRef.command
-        const finalArgs = process.env.CLAUDE_CODE_SHELL_PREFIX
+          process.env.CODEX_CODE_SHELL_PREFIX || serverRef.command
+        const finalArgs = process.env.CODEX_CODE_SHELL_PREFIX
           ? [[serverRef.command, ...serverRef.args].join(' ')]
           : serverRef.args
         transport = new StdioClientTransport({
@@ -984,10 +984,10 @@ export const connectToServer = memoize(
 
       const client = new Client(
         {
-          name: 'claude-code',
-          title: 'Claude Code',
+          name: 'codex-code',
+          title: 'Codex Code',
           version: MACRO.VERSION ?? 'unknown',
-          description: "Anthropic's agentic coding tool",
+          description: "Codex Code agentic coding tool",
           websiteUrl: PRODUCT_URL,
         },
         {
@@ -3279,10 +3279,10 @@ export async function setupSdkMcpClients(
 
       const client = new Client(
         {
-          name: 'claude-code',
-          title: 'Claude Code',
+          name: 'codex-code',
+          title: 'Codex Code',
           version: MACRO.VERSION ?? 'unknown',
-          description: "Anthropic's agentic coding tool",
+          description: "Codex Code agentic coding tool",
           websiteUrl: PRODUCT_URL,
         },
         {

@@ -8,7 +8,7 @@ import {
   PERMISSION_MODES,
 } from '../permissions/PermissionMode.js'
 import { MarketplaceSourceSchema } from '../plugins/schemas.js'
-import { CLAUDE_CODE_SETTINGS_SCHEMA_URL } from './constants.js'
+import { CODEX_CODE_SETTINGS_SCHEMA_URL } from './constants.js'
 import { PermissionRuleSchema } from './permissionValidation.js'
 
 // Re-export hook schemas and types from centralized location for backward compatibility
@@ -63,7 +63,7 @@ export const PermissionsSchema = lazySchema(() =>
             : EXTERNAL_PERMISSION_MODES,
         )
         .optional()
-        .describe('Default permission mode when Claude Code needs access'),
+        .describe('Default permission mode when Codex Code needs access'),
       disableBypassPermissionsMode: z
         .enum(['disable'])
         .optional()
@@ -256,9 +256,9 @@ export const SettingsSchema = lazySchema(() =>
   z
     .object({
       $schema: z
-        .literal(CLAUDE_CODE_SETTINGS_SCHEMA_URL)
+        .literal(CODEX_CODE_SETTINGS_SCHEMA_URL)
         .optional()
-        .describe('JSON Schema reference for Claude Code settings'),
+        .describe('JSON Schema reference for Codex Code settings'),
       apiKeyHelper: z
         .string()
         .optional()
@@ -277,11 +277,11 @@ export const SettingsSchema = lazySchema(() =>
         .describe(
           'Command to refresh GCP authentication (e.g., gcloud auth application-default login)',
         ),
-      // Gated so the SDK generator (which runs without CLAUDE_CODE_ENABLE_XAA)
+      // Gated so the SDK generator (which runs without CODEX_CODE_ENABLE_XAA)
       // doesn't surface this in GlobalClaudeSettings. Read via getXaaIdpSettings().
       // .passthrough() on the outer object keeps an existing settings.json key
       // alive across env-var-off sessions — it's just not schema-validated then.
-      ...(isEnvTruthy(process.env.CLAUDE_CODE_ENABLE_XAA)
+      ...(isEnvTruthy(process.env.CODEX_CODE_ENABLE_XAA)
         ? {
             xaaIdp: z
               .object({
@@ -291,7 +291,7 @@ export const SettingsSchema = lazySchema(() =>
                   .describe('IdP issuer URL for OIDC discovery'),
                 clientId: z
                   .string()
-                  .describe("Claude Code's client_id registered at the IdP"),
+                  .describe("Codex Code's client_id registered at the IdP"),
                 callbackPort: z
                   .number()
                   .int()
@@ -332,7 +332,7 @@ export const SettingsSchema = lazySchema(() =>
         ),
       env: EnvironmentVariablesSchema()
         .optional()
-        .describe('Environment variables to set for Claude Code sessions'),
+        .describe('Environment variables to set for Codex Code sessions'),
       // Attribution for commits and PRs
       attribution: z
         .object({
@@ -354,20 +354,20 @@ export const SettingsSchema = lazySchema(() =>
         .optional()
         .describe(
           'Customize attribution text for commits and PRs. ' +
-            'Each field defaults to the standard Claude Code attribution if not set.',
+            'Each field defaults to the standard Codex Code attribution if not set.',
         ),
       includeCoAuthoredBy: z
         .boolean()
         .optional()
         .describe(
           'Deprecated: Use attribution instead. ' +
-            "Whether to include Claude's co-authored by attribution in commits and PRs (defaults to true)",
+            "Whether to include Codex Code's co-authored by attribution in commits and PRs (defaults to true)",
         ),
       includeGitInstructions: z
         .boolean()
         .optional()
         .describe(
-          "Include built-in commit and PR workflow instructions in Claude's system prompt (default: true)",
+          "Include built-in commit and PR workflow instructions in Codex Code's system prompt (default: true)",
         ),
       permissions: PermissionsSchema()
         .optional()
@@ -375,7 +375,7 @@ export const SettingsSchema = lazySchema(() =>
       model: z
         .string()
         .optional()
-        .describe('Override the default model used by Claude Code'),
+        .describe('Override the default model used by Codex Code'),
       // Enterprise allowlist of models
       availableModels: z
         .array(z.string())

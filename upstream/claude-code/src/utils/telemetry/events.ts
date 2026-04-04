@@ -22,7 +22,7 @@ export async function logOTelEvent(
   eventName: string,
   metadata: { [key: string]: string | undefined } = {},
 ): Promise<void> {
-  if (process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1') {
+  if (process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1') {
     return
   }
   const eventLogger = getEventLogger()
@@ -58,7 +58,7 @@ export async function logOTelEvent(
   // Workspace directory from the desktop app (host path). Events only —
   // filesystem paths are too high-cardinality for metric dimensions, and
   // the BQ metrics pipeline must never see them.
-  const workspaceDir = process.env.CLAUDE_CODE_WORKSPACE_HOST_PATHS
+  const workspaceDir = process.env.CODEX_CODE_WORKSPACE_HOST_PATHS
   if (workspaceDir) {
     attributes['workspace.host_paths'] = workspaceDir.split('|')
   }

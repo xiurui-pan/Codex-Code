@@ -3,7 +3,7 @@ import type { DailyActivity } from './stats.js'
 import { toDateString } from './statsCache.js'
 
 const USE_CODEX_BRANDING_COLORS =
-  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+  process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
 const activityAccent = USE_CODEX_BRANDING_COLORS
   ? chalk.rgb(0, 179, 219)
   : chalk.hex('#da7756')

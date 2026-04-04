@@ -18,9 +18,9 @@ test('codex config parser reads web_search mode and tool settings from config.to
 test('codex config exports native web search env helpers', async () => {
   const source = await readFile(SOURCE_PATH, 'utf8')
 
-  assert.match(source, /CLAUDE_CODE_CODEX_WEB_SEARCH_MODE/)
-  assert.match(source, /CLAUDE_CODE_CODEX_WEB_SEARCH_ALLOWED_DOMAINS/)
-  assert.match(source, /CLAUDE_CODE_CODEX_WEB_SEARCH_CONTEXT_SIZE/)
-  assert.match(source, /CLAUDE_CODE_CODEX_WEB_SEARCH_LOCATION/)
+  assert.match(source, /CODEX_CODE_CODEX_WEB_SEARCH_MODE/)
+  assert.match(source, /CODEX_CODE_CODEX_WEB_SEARCH_ALLOWED_DOMAINS/)
+  assert.match(source, /CODEX_CODE_CODEX_WEB_SEARCH_CONTEXT_SIZE/)
+  assert.match(source, /CODEX_CODE_CODEX_WEB_SEARCH_LOCATION/)
   assert.match(source, /export function getCodexConfiguredWebSearchMode/)
 })

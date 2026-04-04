@@ -176,12 +176,12 @@ export function buildRequestParamsFromContext(
 
   const hasThinking =
     context.thinkingConfig.type !== 'disabled' &&
-    !isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_THINKING)
+    !isEnvTruthy(process.env.CODEX_CODE_DISABLE_THINKING)
   let thinking: BetaMessageStreamParams['thinking'] | undefined = undefined
 
   if (hasThinking && modelSupportsThinking(context.options.model)) {
     if (
-      !isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_ADAPTIVE_THINKING) &&
+      !isEnvTruthy(process.env.CODEX_CODE_DISABLE_ADAPTIVE_THINKING) &&
       modelSupportsAdaptiveThinking(context.options.model)
     ) {
       thinking = {

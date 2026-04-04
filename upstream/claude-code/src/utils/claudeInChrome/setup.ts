@@ -31,7 +31,7 @@ import { getChromeSystemPrompt } from './prompt.js'
 import { isChromeExtensionInstalledPortable } from './setupPortable.js'
 
 const require = createRequire(import.meta.url)
-const currentPhaseDisableLegacyChromeGrowthbook = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+const currentPhaseDisableLegacyChromeGrowthbook = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
 
 function getFeatureValue_CACHED_MAY_BE_STALE<T>(feature: string, fallback: T): T {
   if (currentPhaseDisableLegacyChromeGrowthbook) return fallback
@@ -80,10 +80,10 @@ export function shouldEnableClaudeInChrome(chromeFlag?: boolean): boolean {
   }
 
   // Check environment variables
-  if (isEnvTruthy(process.env.CLAUDE_CODE_ENABLE_CFC)) {
+  if (isEnvTruthy(process.env.CODEX_CODE_ENABLE_CFC)) {
     return true
   }
-  if (isEnvDefinedFalsy(process.env.CLAUDE_CODE_ENABLE_CFC)) {
+  if (isEnvDefinedFalsy(process.env.CODEX_CODE_ENABLE_CFC)) {
     return false
   }
 
@@ -118,7 +118,7 @@ export function shouldAutoEnableClaudeInChrome(): boolean {
 }
 
 /**
- * Setup Claude in Chrome MCP server and tools
+ * Setup Codex in Browser MCP server and tools
  *
  * @returns MCP config and allowed tools, or throws an error if platform is unsupported
  */
@@ -130,7 +130,7 @@ export function setupClaudeInChrome(): {
   const browserTools = getBrowserTools()
   if (!browserTools) {
     throw new Error(
-      '当前阶段不支持 Claude in Chrome 集成：自定义 Codex provider 本地启动链未包含该外部扩展依赖。',
+      '当前阶段不支持 Codex in Browser 集成：自定义 Codex provider 本地启动链未包含该外部扩展依赖。',
     )
   }
 
@@ -157,7 +157,7 @@ export function setupClaudeInChrome(): {
       )
       .catch(e =>
         logForDebugging(
-          `[Claude in Chrome] Failed to install native host: ${e}`,
+          `[Codex in Browser] Failed to install native host: ${e}`,
           { level: 'error' },
         ),
       )
@@ -188,7 +188,7 @@ export function setupClaudeInChrome(): {
       )
       .catch(e =>
         logForDebugging(
-          `[Claude in Chrome] Failed to install native host: ${e}`,
+          `[Codex in Browser] Failed to install native host: ${e}`,
           { level: 'error' },
         ),
       )
@@ -222,7 +222,7 @@ function getNativeMessagingHostsDirs(): string[] {
     // Windows uses a single location with registry entries pointing to it
     const home = homedir()
     const appData = process.env.APPDATA || join(home, 'AppData', 'Local')
-    return [join(appData, 'Claude Code', 'ChromeNativeHost')]
+    return [join(appData, 'Codex Code', 'ChromeNativeHost')]
   }
 
   // macOS and Linux: return all browser native messaging directories
@@ -234,12 +234,12 @@ export async function installChromeNativeHostManifest(
 ): Promise<void> {
   const manifestDirs = getNativeMessagingHostsDirs()
   if (manifestDirs.length === 0) {
-    throw Error('Claude in Chrome Native Host not supported on this platform')
+    throw Error('Codex in Browser Native Host not supported on this platform')
   }
 
   const manifest = {
     name: NATIVE_HOST_IDENTIFIER,
-    description: 'Claude Code Browser Extension Native Host',
+    description: 'Codex Code Browser Extension Native Host',
     path: manifestBinaryPath,
     type: 'stdio',
     allowed_origins: [
@@ -272,13 +272,13 @@ export async function installChromeNativeHostManifest(
       await mkdir(manifestDir, { recursive: true })
       await writeFile(manifestPath, manifestContent)
       logForDebugging(
-        `[Claude in Chrome] Installed native host manifest at: ${manifestPath}`,
+        `[Codex in Browser] Installed native host manifest at: ${manifestPath}`,
       )
       anyManifestUpdated = true
     } catch (error) {
       // Log but don't fail - the browser might not be installed
       logForDebugging(
-        `[Claude in Chrome] Failed to install manifest at ${manifestPath}: ${error}`,
+        `[Codex in Browser] Failed to install manifest at ${manifestPath}: ${error}`,
       )
     }
   }
@@ -294,12 +294,12 @@ export async function installChromeNativeHostManifest(
     void isChromeExtensionInstalled().then(isInstalled => {
       if (isInstalled) {
         logForDebugging(
-          `[Claude in Chrome] First-time install detected, opening reconnect page in browser`,
+          `[Codex in Browser] First-time install detected, opening reconnect page in browser`,
         )
         void openInChrome(CHROME_EXTENSION_RECONNECT_URL)
       } else {
         logForDebugging(
-          `[Claude in Chrome] First-time install detected, but extension not installed, skipping reconnect`,
+          `[Codex in Browser] First-time install detected, but extension not installed, skipping reconnect`,
         )
       }
     })
@@ -328,11 +328,11 @@ function registerWindowsNativeHosts(manifestPath: string): void {
     ]).then(result => {
       if (result.code === 0) {
         logForDebugging(
-          `[Claude in Chrome] Registered native host for ${browser} in Windows registry: ${fullKey}`,
+          `[Codex in Browser] Registered native host for ${browser} in Windows registry: ${fullKey}`,
         )
       } else {
         logForDebugging(
-          `[Claude in Chrome] Failed to register native host for ${browser} in Windows registry: ${result.stderr}`,
+          `[Codex in Browser] Failed to register native host for ${browser} in Windows registry: ${result.stderr}`,
         )
       }
     })
@@ -358,12 +358,12 @@ async function createWrapperScript(command: string): Promise<string> {
     platform === 'windows'
       ? `@echo off
 REM Chrome native host wrapper script
-REM Generated by Claude Code - do not edit manually
+REM Generated by Codex Code - do not edit manually
 ${command}
 `
       : `#!/bin/sh
 # Chrome native host wrapper script
-# Generated by Claude Code - do not edit manually
+# Generated by Codex Code - do not edit manually
 exec ${command}
 `
 
@@ -381,7 +381,7 @@ exec ${command}
   }
 
   logForDebugging(
-    `[Claude in Chrome] Created Chrome native host wrapper script: ${wrapperPath}`,
+    `[Codex in Browser] Created Chrome native host wrapper script: ${wrapperPath}`,
   )
   return wrapperPath
 }
@@ -424,7 +424,7 @@ function isChromeExtensionInstalled_CACHED_MAY_BE_STALE(): boolean {
 }
 
 /**
- * Detects if the Claude in Chrome extension is installed by checking the Extensions
+ * Detects if the Codex in Browser extension is installed by checking the Extensions
  * directory across all supported Chromium-based browsers and their profiles.
  *
  * @returns Object with isInstalled boolean and the browser where the extension was found
@@ -433,7 +433,7 @@ export async function isChromeExtensionInstalled(): Promise<boolean> {
   const browserPaths = getAllBrowserDataPaths()
   if (browserPaths.length === 0) {
     logForDebugging(
-      `[Claude in Chrome] Unsupported platform for extension detection: ${getPlatform()}`,
+      `[Codex in Browser] Unsupported platform for extension detection: ${getPlatform()}`,
     )
     return false
   }

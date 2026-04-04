@@ -96,6 +96,7 @@ import { executeStopFailureHooks } from './utils/hooks.js'
 import type { QuerySource } from './constants/querySource.js'
 import { createDumpPromptsFetch } from './services/api/dumpPrompts.js'
 import type { CodexResponseChunk } from './services/api/codexResponses.js'
+import { convertResponsesUsageToAnthropicAndTrack } from './services/api/codexResponsesUsage.js'
 import {
   createPreferredAssistantResponsePayloadFromTurnItems,
   createSystemMessageFromModelTurnItem,
@@ -795,6 +796,21 @@ async function* queryLoop(
                 event: streamChunk.event,
               } as StreamEvent
               continue
+            } else if ((chunk as CodexResponseChunk).kind === 'usage') {
+              // Track usage from OpenAI Responses API response.completed events
+              const usageChunk = chunk as Extract<
+                CodexResponseChunk,
+                { kind: 'usage' }
+              >
+              try {
+                convertResponsesUsageToAnthropicAndTrack(
+                  usageChunk.usage,
+                  toolUseContext.options.mainLoopModel,
+                )
+              } catch {
+                // Silently ignore usage tracking errors
+              }
+              continue
             } else {
               continue
             }
@@ -1297,7 +1313,7 @@ async function* queryLoop(
         if (
           capEnabled &&
           maxOutputTokensOverride === undefined &&
-          !process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS
+          !process.env.CODEX_CODE_MAX_OUTPUT_TOKENS
         ) {
           logEvent('tengu_max_tokens_escalate', {
             escalatedTo: ESCALATED_MAX_TOKENS,

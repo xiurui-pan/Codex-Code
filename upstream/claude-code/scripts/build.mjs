@@ -790,7 +790,7 @@ export async function load(url, context, nextLoad) {
 await fs.writeFile(
   path.join(dist, 'shims', 'runtime-globals.mjs'),
   `globalThis.MACRO = {
-  VERSION: process.env.CLAUDE_CODE_VERSION ?? '0.0.0-dev',
+  VERSION: process.env.CODEX_CODE_VERSION ?? '0.0.0-dev',
 }
 `,
   'utf8',
@@ -825,7 +825,7 @@ const child = spawn(
     stdio: 'inherit',
     env: {
       ...process.env,
-      CLAUDE_CODE_VERSION: process.env.CLAUDE_CODE_VERSION ?? '0.0.0-dev',
+      CODEX_CODE_VERSION: process.env.CODEX_CODE_VERSION ?? '0.0.0-dev',
     },
   },
 )

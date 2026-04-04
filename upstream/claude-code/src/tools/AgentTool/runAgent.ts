@@ -764,10 +764,14 @@ export async function* runAgent({
     })[Symbol.asyncIterator]()
 
     let terminalReason: string | null = null
+    let agentMessageCount = 0
 
     while (true) {
       const step = await iterator.next()
       if (step.done) {
+        logForDebugging(
+          `[Agent ${agentDefinition.agentType}] Loop ended. reason=${step.value.reason}, messages=${agentMessageCount}, model=${resolvedAgentModel}`,
+        )
         terminalReason = step.value.reason
         break
       }
@@ -797,6 +801,7 @@ export async function* runAgent({
       }
 
       if (isRecordableMessage(message)) {
+        agentMessageCount++
         // Record only the new message with correct parent (O(1) per message)
         await recordSidechainTranscript(
           [message],

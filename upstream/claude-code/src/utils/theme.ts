@@ -102,7 +102,7 @@ export type ThemeName = (typeof THEME_NAMES)[number]
 
 export const THEME_SETTINGS = ['auto', ...THEME_NAMES] as const
 const USE_CODEX_BRANDING_COLORS =
-  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+  process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
 
 /**
  * A theme preference as stored in user config. `'auto'` follows the system

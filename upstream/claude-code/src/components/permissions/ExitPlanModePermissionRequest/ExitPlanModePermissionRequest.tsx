@@ -40,7 +40,7 @@ import { PermissionRuleExplanation } from '../PermissionRuleExplanation.js';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const autoModeStateModule = feature('TRANSCRIPT_CLASSIFIER') ? require('../../../utils/permissions/autoModeState.js') as typeof import('../../../utils/permissions/autoModeState.js') : null;
-const currentStageDisableUltraplan = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1';
+const currentStageDisableUltraplan = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1';
 const launchUltraplan = feature('ULTRAPLAN') && !currentStageDisableUltraplan ? (require('../../../commands/ultraplan.js') as typeof import('../../../commands/ultraplan.js')).launchUltraplan : null;
 import type { Base64ImageSource, ImageBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs';
 /* eslint-enable @typescript-eslint/no-require-imports */
@@ -373,7 +373,7 @@ export function ExitPlanModePermissionRequest({
 
       // Set initial message - REPL will handle context clear and fresh query
       // Add verification instruction if the feature is enabled
-      // Dead code elimination: CLAUDE_CODE_VERIFY_PLAN='false' in external builds, so === 'true' check allows Bun to eliminate the string
+      // Dead code elimination: CODEX_CODE_VERIFY_PLAN='false' in external builds, so === 'true' check allows Bun to eliminate the string
       const verificationInstruction = undefined === 'true' ? `\n\nIMPORTANT: When you have finished implementing the plan, you MUST call the "VerifyPlanExecution" tool directly (NOT the ${AGENT_TOOL_NAME} tool or an agent) to trigger background verification.` : '';
 
       // Capture the transcript path before context is cleared (session ID will be regenerated)

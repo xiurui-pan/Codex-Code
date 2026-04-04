@@ -72,10 +72,16 @@ export type CodexStreamEventChunk = {
   }
 }
 
+export type CodexUsageChunk = {
+  kind: 'usage'
+  usage: ResponsesCompletedUsage
+}
+
 export type CodexResponseChunk =
   | CodexTurnItemChunk
   | CodexApiErrorChunk
   | CodexStreamEventChunk
+  | CodexUsageChunk
 
 export type CodexResponseResult = {
   turnItems: ModelTurnItem[]
@@ -92,10 +98,23 @@ type ResponsesInputText = {
   text: string
 }
 
+type ResponsesCompletedUsage = {
+  input_tokens: number
+  input_tokens_details?: {
+    cached_tokens?: number
+  }
+  output_tokens: number
+  output_tokens_details?: {
+    reasoning_tokens?: number
+  }
+  total_tokens: number
+}
+
 type ResponsesCompletedEvent = {
   type: 'response.completed'
   response?: {
     id?: string
+    usage?: ResponsesCompletedUsage
   }
 }
 
@@ -906,6 +925,17 @@ export async function* queryCodexResponsesStream({
         continue
       }
 
+      // Extract usage data from response.completed
+      if (event.type === 'response.completed') {
+        if (event.response?.usage) {
+          yield {
+            kind: 'usage',
+            usage: event.response.usage,
+          }
+        }
+        continue
+      }
+
       if (event.type === 'response.failed' || event.type === 'error') {
         const errorMessage =
           event.error?.message ??
@@ -957,6 +987,14 @@ export async function queryCodexResponses({
         turnItems,
         errorMessage: chunk.errorMessage,
       }
+    }
+
+    if (chunk.kind === 'usage') {
+      // Track usage for non-streaming path
+      import('./codexResponsesUsage.js').then(({ convertResponsesUsageToAnthropicAndTrack }) => {
+        convertResponsesUsageToAnthropicAndTrack(chunk.usage, options.model as string | undefined)
+      }).catch(() => {})
+      continue
     }
 
     turnItems.push(...chunk.turnItems)

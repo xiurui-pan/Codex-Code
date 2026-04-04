@@ -145,7 +145,7 @@ async function runHeadlessPrompt({
           HOME: tempHome,
           CLAUDE_CONFIG_DIR: join(tempHome, '.claude'),
           ANTHROPIC_API_KEY: 'test-key',
-          CLAUDE_CODE_USE_CODEX_PROVIDER: '1',
+          CODEX_CODE_USE_CODEX_PROVIDER: '1',
           ...envOverrides,
         },
         stdio: ['pipe', 'pipe', 'pipe'],
@@ -349,7 +349,7 @@ test(
         projectDir,
         tempHome,
         envOverrides: {
-          CLAUDE_CODE_DISABLE_AUTO_MEMORY: '1',
+          CODEX_CODE_DISABLE_AUTO_MEMORY: '1',
         },
         prompt: '请检查长期记忆是否启用。',
       })

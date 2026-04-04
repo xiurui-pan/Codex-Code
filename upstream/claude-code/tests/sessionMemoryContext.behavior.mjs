@@ -174,7 +174,7 @@ async function runSession({ queries, responseBatches }) {
         ...process.env,
         HOME: tempHome,
         ANTHROPIC_API_KEY: 'test-key',
-        CLAUDE_CODE_USE_CODEX_PROVIDER: '1',
+        CODEX_CODE_USE_CODEX_PROVIDER: '1',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     },
@@ -474,7 +474,7 @@ async function runResumeCompactSession({
         ...process.env,
         HOME: homeDir,
         ANTHROPIC_API_KEY: 'test-key',
-        CLAUDE_CODE_USE_CODEX_PROVIDER: '1',
+        CODEX_CODE_USE_CODEX_PROVIDER: '1',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     },
@@ -704,7 +704,7 @@ test('resume-like first compact reuses stored session memory summary', async () 
 test('resume-like compact prefers the current resumed session summary over newer project summaries', async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'codex-session-memory-compact-'))
   const originalHome = process.env.HOME
-  const originalCodexProvider = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER
+  const originalCodexProvider = process.env.CODEX_CODE_USE_CODEX_PROVIDER
 
   try {
     const cwd = '/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code'
@@ -778,9 +778,9 @@ test('resume-like compact prefers the current resumed session summary over newer
       process.env.HOME = originalHome
     }
     if (originalCodexProvider === undefined) {
-      delete process.env.CLAUDE_CODE_USE_CODEX_PROVIDER
+      delete process.env.CODEX_CODE_USE_CODEX_PROVIDER
     } else {
-      process.env.CLAUDE_CODE_USE_CODEX_PROVIDER = originalCodexProvider
+      process.env.CODEX_CODE_USE_CODEX_PROVIDER = originalCodexProvider
     }
     await rm(tempHome, { recursive: true, force: true })
   }
@@ -968,11 +968,11 @@ test('session memory writer path does not recurse back through provider injectio
 test('querySource session_memory never injects current session memory back into its own writer path', async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'codex-session-memory-module-'))
   const originalHome = process.env.HOME
-  const originalCodexProvider = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER
+  const originalCodexProvider = process.env.CODEX_CODE_USE_CODEX_PROVIDER
 
   try {
     process.env.HOME = tempHome
-    process.env.CLAUDE_CODE_USE_CODEX_PROVIDER = '1'
+    process.env.CODEX_CODE_USE_CODEX_PROVIDER = '1'
 
     const { getCurrentSessionMemoryContextItems } = await import(
       '../src/services/SessionMemory/sessionMemoryContextRules.ts'
@@ -1006,9 +1006,9 @@ test('querySource session_memory never injects current session memory back into 
       process.env.HOME = originalHome
     }
     if (originalCodexProvider === undefined) {
-      delete process.env.CLAUDE_CODE_USE_CODEX_PROVIDER
+      delete process.env.CODEX_CODE_USE_CODEX_PROVIDER
     } else {
-      process.env.CLAUDE_CODE_USE_CODEX_PROVIDER = originalCodexProvider
+      process.env.CODEX_CODE_USE_CODEX_PROVIDER = originalCodexProvider
     }
     await rm(tempHome, { recursive: true, force: true })
   }

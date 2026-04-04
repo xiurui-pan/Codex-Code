@@ -4,7 +4,7 @@ import { Box, Text, useTheme } from '../../ink.js';
 import { isCurrentPhaseCustomCodexProvider } from '../../utils/currentPhase.js';
 import { env } from '../../utils/env.js';
 const WELCOME_V2_WIDTH = 58;
-const PRODUCT_NAME = isCurrentPhaseCustomCodexProvider() ? 'Codex Code' : 'Claude Code';
+const PRODUCT_NAME = 'Codex Code';
 const WELCOME_MESSAGE = `Welcome to ${PRODUCT_NAME}`;
 export function WelcomeV2() {
   const $ = _c(35);

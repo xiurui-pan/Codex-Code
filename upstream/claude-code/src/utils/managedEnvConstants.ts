@@ -2,7 +2,7 @@
  * Environment variables that control inference routing: which provider to use,
  * which endpoint to hit, and which model IDs to send.
  *
- * When CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST is truthy in the spawn env, these
+ * When CODEX_CODE_PROVIDER_MANAGED_BY_HOST is truthy in the spawn env, these
  * are stripped from settings-sourced env so the host's routing config isn't
  * overridden by a user's ~/.claude/settings.json — e.g. a Bedrock setup for
  * terminal CLI that would break a host that only supports first-party auth.
@@ -13,11 +13,11 @@
  */
 const PROVIDER_MANAGED_ENV_VARS = new Set([
   // The flag itself — settings can't unset it once the host set it
-  'CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST',
+  'CODEX_CODE_PROVIDER_MANAGED_BY_HOST',
   // Provider selection
-  'CLAUDE_CODE_USE_BEDROCK',
-  'CLAUDE_CODE_USE_VERTEX',
-  'CLAUDE_CODE_USE_FOUNDRY',
+  'CODEX_CODE_USE_BEDROCK',
+  'CODEX_CODE_USE_VERTEX',
+  'CODEX_CODE_USE_FOUNDRY',
   // Endpoint config (base URLs, project/resource identifiers)
   'ANTHROPIC_BASE_URL',
   'ANTHROPIC_BEDROCK_BASE_URL',
@@ -30,12 +30,12 @@ const PROVIDER_MANAGED_ENV_VARS = new Set([
   // Auth
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_AUTH_TOKEN',
-  'CLAUDE_CODE_OAUTH_TOKEN',
+  'CODEX_CODE_OAUTH_TOKEN',
   'AWS_BEARER_TOKEN_BEDROCK',
   'ANTHROPIC_FOUNDRY_API_KEY',
-  'CLAUDE_CODE_SKIP_BEDROCK_AUTH',
-  'CLAUDE_CODE_SKIP_VERTEX_AUTH',
-  'CLAUDE_CODE_SKIP_FOUNDRY_AUTH',
+  'CODEX_CODE_SKIP_BEDROCK_AUTH',
+  'CODEX_CODE_SKIP_VERTEX_AUTH',
+  'CODEX_CODE_SKIP_FOUNDRY_AUTH',
   // Model defaults — often set to provider-specific ID formats
   'ANTHROPIC_MODEL',
   'ANTHROPIC_DEFAULT_HAIKU_MODEL',
@@ -52,7 +52,7 @@ const PROVIDER_MANAGED_ENV_VARS = new Set([
   'ANTHROPIC_DEFAULT_SONNET_MODEL_SUPPORTED_CAPABILITIES',
   'ANTHROPIC_SMALL_FAST_MODEL',
   'ANTHROPIC_SMALL_FAST_MODEL_AWS_REGION',
-  'CLAUDE_CODE_SUBAGENT_MODEL',
+  'CODEX_CODE_SUBAGENT_MODEL',
 ])
 
 const PROVIDER_MANAGED_ENV_PREFIXES = [
@@ -83,7 +83,7 @@ export const DANGEROUS_SHELL_SETTINGS = [
 
 /**
  * Safe environment variables that can be applied before trust dialog.
- * These are Claude Code specific settings that don't pose security risks.
+ * These are Codex Code specific settings that don't pose security risks.
  *
  * IMPORTANT: This is the source of truth for which env vars are safe.
  * Any env var NOT in this list is considered dangerous and will trigger
@@ -133,21 +133,21 @@ export const SAFE_ENV_VARS = new Set([
   'BASH_MAX_OUTPUT_LENGTH',
   'BASH_MAX_TIMEOUT_MS',
   'CLAUDE_BASH_MAINTAIN_PROJECT_WORKING_DIR',
-  'CLAUDE_CODE_API_KEY_HELPER_TTL_MS',
-  'CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS',
-  'CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
-  'CLAUDE_CODE_DISABLE_TERMINAL_TITLE',
-  'CLAUDE_CODE_ENABLE_TELEMETRY',
-  'CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS',
-  'CLAUDE_CODE_IDE_SKIP_AUTO_INSTALL',
-  'CLAUDE_CODE_MAX_OUTPUT_TOKENS',
-  'CLAUDE_CODE_SKIP_BEDROCK_AUTH',
-  'CLAUDE_CODE_SKIP_FOUNDRY_AUTH',
-  'CLAUDE_CODE_SKIP_VERTEX_AUTH',
-  'CLAUDE_CODE_SUBAGENT_MODEL',
-  'CLAUDE_CODE_USE_BEDROCK',
-  'CLAUDE_CODE_USE_FOUNDRY',
-  'CLAUDE_CODE_USE_VERTEX',
+  'CODEX_CODE_API_KEY_HELPER_TTL_MS',
+  'CODEX_CODE_DISABLE_EXPERIMENTAL_BETAS',
+  'CODEX_CODE_DISABLE_NONESSENTIAL_TRAFFIC',
+  'CODEX_CODE_DISABLE_TERMINAL_TITLE',
+  'CODEX_CODE_ENABLE_TELEMETRY',
+  'CODEX_CODE_EXPERIMENTAL_AGENT_TEAMS',
+  'CODEX_CODE_IDE_SKIP_AUTO_INSTALL',
+  'CODEX_CODE_MAX_OUTPUT_TOKENS',
+  'CODEX_CODE_SKIP_BEDROCK_AUTH',
+  'CODEX_CODE_SKIP_FOUNDRY_AUTH',
+  'CODEX_CODE_SKIP_VERTEX_AUTH',
+  'CODEX_CODE_SUBAGENT_MODEL',
+  'CODEX_CODE_USE_BEDROCK',
+  'CODEX_CODE_USE_FOUNDRY',
+  'CODEX_CODE_USE_VERTEX',
   'DISABLE_AUTOUPDATER',
   'DISABLE_BUG_COMMAND',
   'DISABLE_COST_WARNINGS',

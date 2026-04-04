@@ -500,7 +500,7 @@ async function runIdentityEnabledAssertions() {
   const result = await runHeadlessSession({
     prompt: '请处理带请求身份信息的测试请求。',
     envOverrides: {
-      CLAUDE_CODE_CODEX_SEND_REQUEST_IDENTITY: '1',
+      CODEX_CODE_CODEX_SEND_REQUEST_IDENTITY: '1',
     },
     responseBatches: [
       [

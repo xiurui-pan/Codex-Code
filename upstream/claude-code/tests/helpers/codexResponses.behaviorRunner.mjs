@@ -323,7 +323,7 @@ async function runIdentity(sendIdentity) {
   return withEnv(
     {
       ANTHROPIC_MODEL: 'gpt-5.1-codex-mini',
-      CLAUDE_CODE_CODEX_SEND_REQUEST_IDENTITY: sendIdentity ? '1' : undefined,
+      CODEX_CODE_CODEX_SEND_REQUEST_IDENTITY: sendIdentity ? '1' : undefined,
     },
     async () => {
       const identity = buildCodexRequestIdentity()

@@ -25,7 +25,7 @@ function runModuleJson({ env = {}, code }) {
 
 test('theme runtime mapping switches to codex accent/status palette in codex mode', () => {
   const codexOn = runModuleJson({
-    env: { CLAUDE_CODE_USE_CODEX_PROVIDER: '1' },
+    env: { CODEX_CODE_USE_CODEX_PROVIDER: '1' },
     code: `
       import { getTheme } from './src/utils/theme.ts'
       const theme = getTheme('dark')
@@ -43,7 +43,7 @@ test('theme runtime mapping switches to codex accent/status palette in codex mod
   })
 
   const codexOff = runModuleJson({
-    env: { CLAUDE_CODE_USE_CODEX_PROVIDER: '0' },
+    env: { CODEX_CODE_USE_CODEX_PROVIDER: '0' },
     code: `
       import { getTheme } from './src/utils/theme.ts'
       const theme = getTheme('dark')
@@ -67,7 +67,7 @@ test('theme runtime mapping switches to codex accent/status palette in codex mod
 
 test('color-diff runtime switches syntax theme name and scope palette in codex mode', () => {
   const codexOn = runModuleJson({
-    env: { CLAUDE_CODE_USE_CODEX_PROVIDER: '1' },
+    env: { CODEX_CODE_USE_CODEX_PROVIDER: '1' },
     code: `
       import { __test, getSyntaxTheme } from './src/native-ts/color-diff/index.ts'
       const theme = __test.buildTheme('dark', 'truecolor')
@@ -80,7 +80,7 @@ test('color-diff runtime switches syntax theme name and scope palette in codex m
   })
 
   const codexOff = runModuleJson({
-    env: { CLAUDE_CODE_USE_CODEX_PROVIDER: '0' },
+    env: { CODEX_CODE_USE_CODEX_PROVIDER: '0' },
     code: `
       import { __test, getSyntaxTheme } from './src/native-ts/color-diff/index.ts'
       const theme = __test.buildTheme('dark', 'truecolor')
@@ -113,7 +113,7 @@ test('heatmap runtime legend color switches to codex accent in codex mode', () =
 
   const codexOn = runModuleJson({
     env: {
-      CLAUDE_CODE_USE_CODEX_PROVIDER: '1',
+      CODEX_CODE_USE_CODEX_PROVIDER: '1',
       FORCE_COLOR: '3',
       COLORTERM: 'truecolor',
     },
@@ -122,7 +122,7 @@ test('heatmap runtime legend color switches to codex accent in codex mode', () =
 
   const codexOff = runModuleJson({
     env: {
-      CLAUDE_CODE_USE_CODEX_PROVIDER: '0',
+      CODEX_CODE_USE_CODEX_PROVIDER: '0',
       FORCE_COLOR: '3',
       COLORTERM: 'truecolor',
     },
@@ -137,7 +137,7 @@ test('heatmap runtime legend color switches to codex accent in codex mode', () =
 
 test('tab status runtime maps busy/waiting presets to codex colors in codex mode', () => {
   const codexOn = runModuleJson({
-    env: { CLAUDE_CODE_USE_CODEX_PROVIDER: '1' },
+    env: { CODEX_CODE_USE_CODEX_PROVIDER: '1' },
     code: `
       import { __test } from './src/ink/hooks/use-tab-status.ts'
       console.log(JSON.stringify({
@@ -148,7 +148,7 @@ test('tab status runtime maps busy/waiting presets to codex colors in codex mode
   })
 
   const codexOff = runModuleJson({
-    env: { CLAUDE_CODE_USE_CODEX_PROVIDER: '0' },
+    env: { CODEX_CODE_USE_CODEX_PROVIDER: '0' },
     code: `
       import { __test } from './src/ink/hooks/use-tab-status.ts'
       console.log(JSON.stringify({

@@ -240,10 +240,10 @@ import { AutoRunIssueNotification, shouldAutoRunIssue, getAutoRunIssueReasonText
 import type { HookProgress } from '../types/hooks.js';
 /* eslint-disable @typescript-eslint/no-require-imports */
 const WebBrowserPanelModule = feature('WEB_BROWSER_TOOL') ? require('../tools/WebBrowserTool/WebBrowserPanel.js') as typeof import('../tools/WebBrowserTool/WebBrowserPanel.js') : null;
-const currentStageDisableUltraplan = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1';
-const currentStageDisableStartupNotifications = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1';
-const currentStageDisableIdeFeatures = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1';
-const currentStageDisablePlugins = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1';
+const currentStageDisableUltraplan = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1';
+const currentStageDisableStartupNotifications = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1';
+const currentStageDisableIdeFeatures = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1';
+const currentStageDisablePlugins = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1';
 const ultraplanModule = feature('ULTRAPLAN') && !currentStageDisableUltraplan ? require('../commands/ultraplan.js') as typeof import('../commands/ultraplan.js') : null;
 const launchUltraplan = ultraplanModule?.launchUltraplan ?? null;
 const UltraplanChoiceDialog = (): null => null;
@@ -307,13 +307,13 @@ const useClaudeCodeHintRecommendationForCurrentStage = currentStageDisableStartu
   recommendation: null,
   handleResponse: () => {}
 }) : useClaudeCodeHintRecommendation;
-const PRODUCT_NAME = isCurrentPhaseCustomCodexProvider() ? 'Codex Code' : 'Claude Code';
+const PRODUCT_NAME = isCurrentPhaseCustomCodexProvider() ? 'Codex Code' : 'Codex Code';
 const EffortCallout = currentStageDisableStartupNotifications ? (() => null) : require('../components/EffortCallout.js').EffortCallout;
 const shouldShowEffortCallout = currentStageDisableStartupNotifications ? (() => false) : require('../components/EffortCallout.js').shouldShowEffortCallout;
 const RemoteCallout = currentStageDisableStartupNotifications ? (() => null) : require('../components/RemoteCallout.js').RemoteCallout;
 const useManagePlugins = currentStageDisablePlugins ? ((_args?: unknown) => {}) : require('../hooks/useManagePlugins.js').useManagePlugins;
-const logEvent = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1' ? (() => {}) : require('../services/analytics/index.js').logEvent;
-const getFeatureValue_CACHED_MAY_BE_STALE = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1' ? ((_key: string, fallbackValue: unknown) => fallbackValue) : require('../services/analytics/growthbook.js').getFeatureValue_CACHED_MAY_BE_STALE;
+const logEvent = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1' ? (() => {}) : require('../services/analytics/index.js').logEvent;
+const getFeatureValue_CACHED_MAY_BE_STALE = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1' ? ((_key: string, fallbackValue: unknown) => fallbackValue) : require('../services/analytics/growthbook.js').getFeatureValue_CACHED_MAY_BE_STALE;
 const openFileInExternalEditor = currentStageDisableIdeFeatures ? (() => false) : require('../utils/editor.js').openFileInExternalEditor;
 const useIdeLogging = currentStageDisableIdeFeatures ? (() => {}) : require('../hooks/useIdeLogging.js').useIdeLogging;
 const useIdeSelection = currentStageDisableIdeFeatures ? ((_clients: unknown, _setSelection: unknown) => {}) : require('../hooks/useIdeSelection.js').useIdeSelection;
@@ -646,12 +646,12 @@ export function REPL({
 
   // Env-var gates hoisted to mount-time — isEnvTruthy does toLowerCase+trim+
   // includes, and these were on the render path (hot during PageUp spam).
-  const titleDisabled = useMemo(() => isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_TERMINAL_TITLE), []);
+  const titleDisabled = useMemo(() => isEnvTruthy(process.env.CODEX_CODE_DISABLE_TERMINAL_TITLE), []);
   const moreRightEnabled = useMemo(() => "external" === 'ant' && isEnvTruthy(process.env.CLAUDE_MORERIGHT), []);
-  const disableVirtualScroll = useMemo(() => isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_VIRTUAL_SCROLL), []);
+  const disableVirtualScroll = useMemo(() => isEnvTruthy(process.env.CODEX_CODE_DISABLE_VIRTUAL_SCROLL), []);
   const disableMessageActions = feature('MESSAGE_ACTIONS') ?
   // biome-ignore lint/correctness/useHookAtTopLevel: feature() is a compile-time constant
-  useMemo(() => isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_MESSAGE_ACTIONS), []) : false;
+  useMemo(() => isEnvTruthy(process.env.CODEX_CODE_DISABLE_MESSAGE_ACTIONS), []) : false;
 
   // Log REPL mount/unmount lifecycle
   useEffect(() => {
@@ -749,7 +749,7 @@ export function REPL({
   const [screen, setScreen] = useState<Screen>('prompt');
   const [showAllInTranscript, setShowAllInTranscript] = useState(false);
   // [ forces the dump-to-scrollback path inside transcript mode. Separate
-  // from CLAUDE_CODE_NO_FLICKER=0 (which is process-lifetime) — this is
+  // from CODEX_CODE_NO_FLICKER=0 (which is process-lifetime) — this is
   // ephemeral, reset on transcript exit. Diagnostic escape hatch so
   // terminal/tmux native cmd-F can search the full flat render.
   const [dumpMode, setDumpMode] = useState(false);
@@ -845,7 +845,7 @@ export function REPL({
     void performStartupChecks(setAppState);
   }, [setAppState, isRemoteSession]);
 
-  // Allow Claude in Chrome MCP to send prompts through MCP notifications
+  // Allow Codex in Browser MCP to send prompts through MCP notifications
   // and sync permission mode changes to the Chrome extension
   usePromptsFromClaudeInChromeForCurrentStage(isRemoteSession ? EMPTY_MCP_CLIENTS : mcpClients, toolPermissionContext.mode);
 
@@ -2734,7 +2734,7 @@ export function REPL({
     // which was broken by SessionStart hook messages (prepended via
     // useDeferredHookMessages) and attachment messages (appended by
     // processTextPrompt) — both pushed length past 1 on turn one, so the
-    // title silently fell through to the "Claude Code" default.
+    // title silently fell through to the "Codex Code" default.
     if (!titleDisabled && !sessionTitle && !agentTitle && !haikuTitleAttemptedRef.current) {
       const firstUserMessage = newMessages.find(m => m.type === 'user' && !m.isMeta);
       const text = firstUserMessage?.type === 'user' ? getContentText(firstUserMessage.message.content) : null;
@@ -3356,8 +3356,8 @@ export function REPL({
     // controls treatment: "dialog" (blocking), "hint" (notification), "off".
     {
       const willowMode = getFeatureValue_CACHED_MAY_BE_STALE('tengu_willow_mode', 'off');
-      const idleThresholdMin = Number(process.env.CLAUDE_CODE_IDLE_THRESHOLD_MINUTES ?? 75);
-      const tokenThreshold = Number(process.env.CLAUDE_CODE_IDLE_TOKEN_THRESHOLD ?? 100_000);
+      const idleThresholdMin = Number(process.env.CODEX_CODE_IDLE_THRESHOLD_MINUTES ?? 75);
+      const tokenThreshold = Number(process.env.CODEX_CODE_IDLE_TOKEN_THRESHOLD ?? 100_000);
       if (willowMode !== 'off' && !getGlobalConfig().idleReturnDismissed && !skipIdleCheckRef.current && !speculationAccept && !input.trim().startsWith('/') && lastQueryCompletionTimeRef.current > 0 && getTotalInputTokens() >= tokenThreshold) {
         const idleMs = Date.now() - lastQueryCompletionTimeRef.current;
         const idleMinutes = idleMs / 60_000;
@@ -3997,7 +3997,7 @@ export function REPL({
       // Use ref to get current dialog state, avoiding stale closure
       focusedInputDialogRef.current === undefined && idleTimeSinceResponse >= getGlobalConfig().messageIdleNotifThresholdMs) {
         void sendNotification({
-          message: 'Claude is waiting for your input',
+          message: 'Codex Code is waiting for your input',
           notificationType: 'idle_prompt'
         }, terminal);
       }
@@ -4014,9 +4014,9 @@ export function REPL({
     const willowMode: string = getFeatureValue_CACHED_MAY_BE_STALE('tengu_willow_mode', 'off');
     if (willowMode !== 'hint' && willowMode !== 'hint_v2') return;
     if (getGlobalConfig().idleReturnDismissed) return;
-    const tokenThreshold = Number(process.env.CLAUDE_CODE_IDLE_TOKEN_THRESHOLD ?? 100_000);
+    const tokenThreshold = Number(process.env.CODEX_CODE_IDLE_TOKEN_THRESHOLD ?? 100_000);
     if (getTotalInputTokens() < tokenThreshold) return;
-    const idleThresholdMs = Number(process.env.CLAUDE_CODE_IDLE_THRESHOLD_MINUTES ?? 75) * 60_000;
+    const idleThresholdMs = Number(process.env.CODEX_CODE_IDLE_THRESHOLD_MINUTES ?? 75) * 60_000;
     const elapsed = Date.now() - lastQueryCompletionTime;
     const remaining = idleThresholdMs - elapsed;
     const timer = setTimeout((lqct, addNotif, msgsRef, mode, hintRef) => {

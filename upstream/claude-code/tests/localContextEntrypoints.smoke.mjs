@@ -225,7 +225,7 @@ test('缺口：当前 headless Codex 主链还不会把 CLAUDE.md 与裸 @path i
     prompt: '请总结当前上下文。',
     extraArgs: projectDir => ['--add-dir', projectDir],
     envOverrides: {
-      CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
+      CODEX_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
     },
   })
 
@@ -263,7 +263,7 @@ test('缺口：当前 Codex 主链里 @import 也不会生效，因为 CLAUDE.md
     prompt: '请总结当前上下文。',
     extraArgs: projectDir => ['--add-dir', projectDir],
     envOverrides: {
-      CLAUDE_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
+      CODEX_CODE_ADDITIONAL_DIRECTORIES_CLAUDE_MD: '1',
     },
   })
 

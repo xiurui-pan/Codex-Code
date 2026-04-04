@@ -340,72 +340,72 @@ export async function loadCodexConfigIfPresent(): Promise<LoadedCodexConfig | nu
 }
 
 export function applyCodexConfigToEnv(config: LoadedCodexConfig): void {
-  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER = '1'
-  process.env.CLAUDE_CODE_CODEX_CONFIG_PATH = config.configPath
-  process.env.CLAUDE_CODE_CODEX_MODEL_PROVIDER = config.providerId
+  process.env.CODEX_CODE_USE_CODEX_PROVIDER = '1'
+  process.env.CODEX_CODE_CONFIG_PATH = config.configPath
+  process.env.CODEX_CODE_MODEL_PROVIDER = config.providerId
 
   if (config.provider.base_url) {
-    process.env.ANTHROPIC_BASE_URL = config.provider.base_url
+    process.env.CODEX_CODE_BASE_URL = config.provider.base_url
   }
 
   if (config.model) {
-    process.env.ANTHROPIC_MODEL = config.model
+    process.env.CODEX_CODE_MODEL = config.model
   }
 
   if (config.reasoningEffort) {
-    process.env.CLAUDE_CODE_EFFORT_LEVEL = config.reasoningEffort
+    process.env.CODEX_CODE_EFFORT_LEVEL = config.reasoningEffort
   }
 
   if (typeof config.responseStorage === 'boolean') {
-    process.env.CLAUDE_CODE_CODEX_RESPONSE_STORAGE = config.responseStorage
+    process.env.CODEX_CODE_RESPONSE_STORAGE = config.responseStorage
       ? '1'
       : '0'
   }
 
   if (config.webSearchMode) {
-    process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_MODE = config.webSearchMode
+    process.env.CODEX_CODE_WEB_SEARCH_MODE = config.webSearchMode
   }
 
   if (config.webSearch?.context_size) {
-    process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_CONTEXT_SIZE =
+    process.env.CODEX_CODE_WEB_SEARCH_CONTEXT_SIZE =
       config.webSearch.context_size
   }
 
   if (config.webSearch?.allowed_domains) {
-    process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_ALLOWED_DOMAINS = JSON.stringify(
+    process.env.CODEX_CODE_WEB_SEARCH_ALLOWED_DOMAINS = JSON.stringify(
       config.webSearch.allowed_domains,
     )
   }
 
   if (config.webSearch?.location) {
-    process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_LOCATION = JSON.stringify(
+    process.env.CODEX_CODE_WEB_SEARCH_LOCATION = JSON.stringify(
       config.webSearch.location,
     )
   }
 
   if (config.provider.env_key) {
-    process.env.CLAUDE_CODE_CODEX_ENV_KEY = config.provider.env_key
+    process.env.CODEX_CODE_ENV_KEY = config.provider.env_key
     const apiKey = config.apiKey ?? process.env[config.provider.env_key]
     if (apiKey) {
-      process.env.ANTHROPIC_API_KEY = apiKey
+      process.env.CODEX_CODE_API_KEY = apiKey
     }
   }
 }
 
 export function getCodexConfiguredBaseUrl(): string | undefined {
-  return process.env.ANTHROPIC_BASE_URL
+  return process.env.CODEX_CODE_BASE_URL ?? process.env.ANTHROPIC_BASE_URL
 }
 
 export function getCodexConfiguredModel(): string | undefined {
-  return process.env.ANTHROPIC_MODEL
+  return process.env.CODEX_CODE_MODEL ?? process.env.ANTHROPIC_MODEL
 }
 
 export function getCodexConfiguredReasoningEffort(): string | undefined {
-  return process.env.CLAUDE_CODE_EFFORT_LEVEL
+  return process.env.CODEX_CODE_EFFORT_LEVEL
 }
 
 export function getCodexConfiguredResponseStorage(): boolean | undefined {
-  return parseBooleanEnvValue(process.env.CLAUDE_CODE_CODEX_RESPONSE_STORAGE)
+  return parseBooleanEnvValue(process.env.CODEX_CODE_RESPONSE_STORAGE)
 }
 
 export function getCodexConfiguredWebSearchMode():
@@ -413,18 +413,18 @@ export function getCodexConfiguredWebSearchMode():
   | 'cached'
   | 'disabled'
   | undefined {
-  const mode = process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_MODE
+  const mode = process.env.CODEX_CODE_WEB_SEARCH_MODE
   return mode === 'live' || mode === 'cached' || mode === 'disabled'
     ? mode
     : undefined
 }
 
 export function getCodexConfiguredWebSearchContextSize(): string | undefined {
-  return process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_CONTEXT_SIZE
+  return process.env.CODEX_CODE_WEB_SEARCH_CONTEXT_SIZE
 }
 
 export function getCodexConfiguredWebSearchAllowedDomains(): string[] | undefined {
-  const raw = process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_ALLOWED_DOMAINS
+  const raw = process.env.CODEX_CODE_WEB_SEARCH_ALLOWED_DOMAINS
   if (!raw) {
     return undefined
   }
@@ -445,7 +445,7 @@ export function getCodexConfiguredWebSearchAllowedDomains(): string[] | undefine
 export function getCodexConfiguredWebSearchLocation():
   | MinimalCodexWebSearchLocation
   | undefined {
-  const raw = process.env.CLAUDE_CODE_CODEX_WEB_SEARCH_LOCATION
+  const raw = process.env.CODEX_CODE_WEB_SEARCH_LOCATION
   if (!raw) {
     return undefined
   }
@@ -470,19 +470,19 @@ export function getCodexConfiguredWebSearchLocation():
 }
 
 export function getCodexConfiguredAuthEnvKey(): string | undefined {
-  return process.env.CLAUDE_CODE_CODEX_ENV_KEY
+  return process.env.CODEX_CODE_ENV_KEY
 }
 
 export function getCodexConfiguredApiKey(): string | undefined {
-  return process.env.ANTHROPIC_API_KEY
+  return process.env.CODEX_CODE_API_KEY ?? process.env.ANTHROPIC_API_KEY
 }
 
 export function shouldSendCodexRequestIdentity(): boolean {
   return parseBooleanEnvValue(
-    process.env.CLAUDE_CODE_CODEX_SEND_REQUEST_IDENTITY,
+    process.env.CODEX_CODE_SEND_REQUEST_IDENTITY,
   ) === true
 }
 
 export function hasCodexConfigInEnv(): boolean {
-  return process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+  return process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
 }

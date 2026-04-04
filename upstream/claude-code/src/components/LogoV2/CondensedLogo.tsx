@@ -17,7 +17,7 @@ import { AnimatedClawd } from './AnimatedClawd.js';
 import { Clawd } from './Clawd.js';
 import { GuestPassesUpsell, incrementGuestPassesSeenCount, useShowGuestPassesUpsell } from './GuestPassesUpsell.js';
 import { incrementOverageCreditUpsellSeenCount, OverageCreditUpsell, useShowOverageCreditUpsell } from './OverageCreditUpsell.js';
-const PRODUCT_NAME = isCurrentPhaseCustomCodexProvider() ? 'Codex Code' : 'Claude Code';
+const PRODUCT_NAME = isCurrentPhaseCustomCodexProvider() ? 'Codex Code' : 'Codex Code';
 export function CondensedLogo() {
   const $ = _c(29);
   const {

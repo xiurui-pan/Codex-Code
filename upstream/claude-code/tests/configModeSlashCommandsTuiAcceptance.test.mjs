@@ -162,7 +162,7 @@ env["HOME"] = temp_home
 env["CLAUDE_CONFIG_DIR"] = os.path.join(temp_home, ".claude")
 env["ANTHROPIC_API_KEY"] = env.get("ANTHROPIC_API_KEY", "test-key")
 env["TERM"] = "xterm-256color"
-env["CLAUDE_CODE_DISABLE_TERMINAL_TITLE"] = "1"
+env["CODEX_CODE_DISABLE_TERMINAL_TITLE"] = "1"
 env["FORCE_COLOR"] = "0"
 env["DISABLE_AUTOUPDATER"] = "1"
 for key, value in env_overrides.items():

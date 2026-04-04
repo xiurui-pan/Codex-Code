@@ -191,7 +191,7 @@ type JsonArray = JsonValue[]
 
 /**
  * Assemble the extra body parameters for the API request, based on the
- * CLAUDE_CODE_EXTRA_BODY environment variable if present and on any beta
+ * CODEX_CODE_EXTRA_BODY environment variable if present and on any beta
  * headers (primarily for Bedrock requests).
  *
  * @param betaHeaders - An array of beta headers to include in the request.
@@ -431,7 +431,7 @@ function shouldDeferLspTool(tool: Tool): boolean {
 function getNonstreamingFallbackTimeoutMs(): number {
   const override = parseInt(process.env.API_TIMEOUT_MS || '', 10)
   if (override) return override
-  return isEnvTruthy(process.env.CLAUDE_CODE_REMOTE) ? 120_000 : 300_000
+  return isEnvTruthy(process.env.CODEX_CODE_REMOTE) ? 120_000 : 300_000
 }
 
 /**
@@ -1363,7 +1363,7 @@ async function* queryModel(
               yield createAssistantAPIErrorMessage({
                 content: `${API_ERROR_MESSAGE_PREFIX}: Claude's response exceeded the ${
                   maxOutputTokens
-                } output token maximum. To configure this behavior, set the CLAUDE_CODE_MAX_OUTPUT_TOKENS environment variable.`,
+                } output token maximum. To configure this behavior, set the CODEX_CODE_MAX_OUTPUT_TOKENS environment variable.`,
                 apiError: 'max_output_tokens',
                 error: 'max_output_tokens',
               })
@@ -1560,7 +1560,7 @@ async function* queryModel(
       // starts a tool, then the non-streaming retry produces the same tool_use
       // and runs it again. See inc-4258.
       const disableFallback =
-        isEnvTruthy(process.env.CLAUDE_CODE_DISABLE_NONSTREAMING_FALLBACK) ||
+        isEnvTruthy(process.env.CODEX_CODE_DISABLE_NONSTREAMING_FALLBACK) ||
         getFeatureValue_CACHED_MAY_BE_STALE(
           'tengu_disable_streaming_to_non_streaming_fallback',
           false,
@@ -2191,7 +2191,7 @@ export async function queryHaiku({
 type QueryWithModelOptions = Omit<Options, 'getToolPermissionContext'>
 
 /**
- * Query a specific model through the Claude Code infrastructure.
+ * Query a specific model through the Codex Code infrastructure.
  * This goes through the full query pipeline including proper authentication,
  * betas, and headers - unlike direct API calls.
  */
@@ -2302,14 +2302,14 @@ export function getMaxOutputTokensForModel(model: string): number {
   // Requests hitting the cap get one clean retry at 64k (query.ts
   // max_output_tokens_escalate). Math.min keeps models with lower native
   // defaults (e.g. claude-3-opus at 4k) at their native value. Applied
-  // before the env-var override so CLAUDE_CODE_MAX_OUTPUT_TOKENS still wins.
+  // before the env-var override so CODEX_CODE_MAX_OUTPUT_TOKENS still wins.
   const defaultTokens = isMaxTokensCapEnabled()
     ? Math.min(maxOutputTokens.default, CAPPED_DEFAULT_MAX_TOKENS)
     : maxOutputTokens.default
 
   const result = validateBoundedIntEnvVar(
-    'CLAUDE_CODE_MAX_OUTPUT_TOKENS',
-    process.env.CLAUDE_CODE_MAX_OUTPUT_TOKENS,
+    'CODEX_CODE_MAX_OUTPUT_TOKENS',
+    process.env.CODEX_CODE_MAX_OUTPUT_TOKENS,
     defaultTokens,
     maxOutputTokens.upperLimit,
   )

@@ -300,7 +300,7 @@ export const getAgentDefinitionsWithOverrides = memoize(
       process.stderr.write(`[AGENT_PROBE] start cwd=${cwd} custom=${currentPhaseCustomCodexProvider}\n`)
     }
     // Simple mode: skip custom agents, only return built-ins
-    if (isEnvTruthy(process.env.CLAUDE_CODE_SIMPLE)) {
+    if (isEnvTruthy(process.env.CODEX_CODE_SIMPLE)) {
       const builtInAgents = getBuiltInAgents()
       return {
         activeAgents: builtInAgents,

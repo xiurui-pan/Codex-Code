@@ -164,7 +164,7 @@ export function Doctor(t0) {
       default: TASK_MAX_OUTPUT_DEFAULT,
       upperLimit: TASK_MAX_OUTPUT_UPPER_LIMIT
     }, {
-      name: "CLAUDE_CODE_MAX_OUTPUT_TOKENS",
+      name: "CODEX_CODE_MAX_OUTPUT_TOKENS",
       ...getModelMaxOutputTokens("claude-opus-4-6")
     }];
     t4 = envVars.map(_temp8).filter(_temp9);

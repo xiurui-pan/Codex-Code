@@ -27,7 +27,7 @@ type TaskBudgetParam = {
 }
 
 export function getRequestExtraBodyParams(betaHeaders?: string[]): JsonObject {
-  const extraBodyStr = process.env.CLAUDE_CODE_EXTRA_BODY
+  const extraBodyStr = process.env.CODEX_CODE_EXTRA_BODY
   let result: JsonObject = {}
 
   if (extraBodyStr) {
@@ -37,13 +37,13 @@ export function getRequestExtraBodyParams(betaHeaders?: string[]): JsonObject {
         result = { ...(parsed as JsonObject) }
       } else {
         logForDebugging(
-          `CLAUDE_CODE_EXTRA_BODY env var must be a JSON object, but was given ${extraBodyStr}`,
+          `CODEX_CODE_EXTRA_BODY env var must be a JSON object, but was given ${extraBodyStr}`,
           { level: 'error' },
         )
       }
     } catch (error) {
       logForDebugging(
-        `Error parsing CLAUDE_CODE_EXTRA_BODY: ${errorMessage(error)}`,
+        `Error parsing CODEX_CODE_EXTRA_BODY: ${errorMessage(error)}`,
         { level: 'error' },
       )
     }
@@ -112,14 +112,14 @@ export function configureRequestTaskBudgetParams(
 
 export function getRequestMetadata() {
   let extra: JsonObject = {}
-  const extraStr = process.env.CLAUDE_CODE_EXTRA_METADATA
+  const extraStr = process.env.CODEX_CODE_EXTRA_METADATA
   if (extraStr) {
     const parsed = safeParseJSON(extraStr, false)
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       extra = parsed as JsonObject
     } else {
       logForDebugging(
-        `CLAUDE_CODE_EXTRA_METADATA env var must be a JSON object, but was given ${extraStr}`,
+        `CODEX_CODE_EXTRA_METADATA env var must be a JSON object, but was given ${extraStr}`,
         { level: 'error' },
       )
     }

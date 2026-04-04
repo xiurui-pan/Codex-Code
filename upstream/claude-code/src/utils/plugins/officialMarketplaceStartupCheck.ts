@@ -1,5 +1,5 @@
 /**
- * Auto-install logic for the official Anthropic marketplace.
+ * Auto-install logic for the official Codex marketplace.
  *
  * This module handles automatically installing the official marketplace
  * on startup for new users, with appropriate checks for:
@@ -46,7 +46,7 @@ export type OfficialMarketplaceSkipReason =
  */
 export function isOfficialMarketplaceAutoInstallDisabled(): boolean {
   return isEnvTruthy(
-    process.env.CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL,
+    process.env.CODEX_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL,
   )
 }
 

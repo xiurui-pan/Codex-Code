@@ -11,7 +11,7 @@ test('codex-only memory mode is evaluated dynamically from env', async () => {
   assert.match(source, /function isCodexOnlyMemoryMode\(\): boolean/)
   assert.match(
     source,
-    /return process\.env\.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'/,
+    /return process\.env\.CODEX_CODE_USE_CODEX_PROVIDER === '1'/,
   )
   assert.doesNotMatch(
     source,

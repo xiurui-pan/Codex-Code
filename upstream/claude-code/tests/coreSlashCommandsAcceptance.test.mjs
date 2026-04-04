@@ -137,7 +137,7 @@ env = os.environ.copy()
 env["HOME"] = temp_home
 env["ANTHROPIC_API_KEY"] = env.get("ANTHROPIC_API_KEY", "test-key")
 env["TERM"] = "xterm-256color"
-env["CLAUDE_CODE_DISABLE_TERMINAL_TITLE"] = "1"
+env["CODEX_CODE_DISABLE_TERMINAL_TITLE"] = "1"
 env["FORCE_COLOR"] = "0"
 env["DISABLE_AUTOUPDATER"] = "1"
 env.update(extra_env)
@@ -288,7 +288,7 @@ async function runStructuredHeadlessSession({
         ...process.env,
         HOME: tempHome,
         ANTHROPIC_API_KEY: 'test-key',
-        CLAUDE_CODE_USE_CODEX_PROVIDER: '1',
+        CODEX_CODE_USE_CODEX_PROVIDER: '1',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     },

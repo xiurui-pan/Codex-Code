@@ -32,7 +32,7 @@ export function isCodexSessionMemoryEnabled(): boolean {
   if (process.env.ENABLE_CODEX_SESSION_MEMORY === '1') {
     return true
   }
-  return process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+  return process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
 }
 
 export function getCurrentSessionMemoryInheritance(

@@ -135,7 +135,7 @@ env = os.environ.copy()
 env["HOME"] = temp_home
 env["ANTHROPIC_API_KEY"] = env.get("ANTHROPIC_API_KEY", "test-key")
 env["TERM"] = "xterm-256color"
-env["CLAUDE_CODE_DISABLE_TERMINAL_TITLE"] = "1"
+env["CODEX_CODE_DISABLE_TERMINAL_TITLE"] = "1"
 env["FORCE_COLOR"] = "0"
 env["DISABLE_AUTOUPDATER"] = "1"
 for k, v in env_overrides.items():
@@ -270,8 +270,8 @@ test('copy command writes full response in TUI', SERIAL_TEST, async () => {
       const result = await runTuiFlow({
         tempHome,
         envOverrides: {
-          CLAUDE_CODE_USE_CODEX_PROVIDER: '1',
-          CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+          CODEX_CODE_USE_CODEX_PROVIDER: '1',
+          CODEX_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
         },
         actions: [
           { name: 'first-round', waitFor: ['❯'], send: 'please respond with COPY_ME\r' },

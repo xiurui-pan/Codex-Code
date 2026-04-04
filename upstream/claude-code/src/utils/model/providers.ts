@@ -9,17 +9,17 @@ export type APIProvider =
   | 'custom'
 
 export function isCodexOnlyProviderEnabled(): boolean {
-  return isEnvTruthy(process.env.CLAUDE_CODE_USE_CODEX_PROVIDER)
+  return isEnvTruthy(process.env.CODEX_CODE_USE_CODEX_PROVIDER)
 }
 
 export function getAPIProvider(): APIProvider {
   return isCodexOnlyProviderEnabled()
     ? 'custom'
-    : isEnvTruthy(process.env.CLAUDE_CODE_USE_BEDROCK)
+    : isEnvTruthy(process.env.CODEX_CODE_USE_BEDROCK)
     ? 'bedrock'
-    : isEnvTruthy(process.env.CLAUDE_CODE_USE_VERTEX)
+    : isEnvTruthy(process.env.CODEX_CODE_USE_VERTEX)
       ? 'vertex'
-      : isEnvTruthy(process.env.CLAUDE_CODE_USE_FOUNDRY)
+      : isEnvTruthy(process.env.CODEX_CODE_USE_FOUNDRY)
         ? 'foundry'
         : process.env.ANTHROPIC_BASE_URL
           ? 'custom'

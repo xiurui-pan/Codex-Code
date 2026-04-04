@@ -204,7 +204,7 @@ const clearSkillIndexCache = feature('EXPERIMENTAL_SKILL_SEARCH')
 const subscribePr = feature('KAIROS_GITHUB_WEBHOOKS')
   ? require('./commands/subscribe-pr.js').default
   : null
-const ultraplan = feature('ULTRAPLAN') && process.env.CLAUDE_CODE_USE_CODEX_PROVIDER !== '1'
+const ultraplan = feature('ULTRAPLAN') && process.env.CODEX_CODE_USE_CODEX_PROVIDER !== '1'
   ? require('./commands/ultraplan.js').default
   : null
 const torch = feature('TORCH') ? require('./commands/torch.js').default : null
@@ -279,7 +279,7 @@ import stats from './commands/stats/index.js'
 const usageReport: Command = {
   type: 'prompt',
   name: 'insights',
-  description: 'Generate a report analyzing your Claude Code sessions',
+  description: 'Generate a report analyzing your Codex Code sessions',
   contentLength: 0,
   progressMessage: 'analyzing your sessions',
   source: 'builtin',

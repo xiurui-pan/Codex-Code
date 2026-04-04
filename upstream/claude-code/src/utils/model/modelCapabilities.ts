@@ -16,7 +16,7 @@ import { jsonStringify } from '../slowOperations.js'
 import { getAPIProvider, isFirstPartyAnthropicBaseUrl } from './providers.js'
 
 const require = createRequire(import.meta.url)
-const currentPhaseDisableLegacyModelCapabilities = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+const currentPhaseDisableLegacyModelCapabilities = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
 
 function isClaudeAISubscriber() {
   return currentPhaseDisableLegacyModelCapabilities ? false : (require('../auth.js') as typeof import('../auth.js')).isClaudeAISubscriber()

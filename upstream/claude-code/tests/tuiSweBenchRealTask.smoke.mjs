@@ -34,7 +34,7 @@ env = os.environ.copy()
 env["HOME"] = temp_home
 env["ANTHROPIC_API_KEY"] = os.environ.get("CRS_OAI_KEY", "")
 env["TERM"] = "xterm-256color"
-env["CLAUDE_CODE_DISABLE_TERMINAL_TITLE"] = "1"
+env["CODEX_CODE_DISABLE_TERMINAL_TITLE"] = "1"
 env["FORCE_COLOR"] = "0"
 proc = subprocess.Popen(
     ["node", cli_path, "--bare"],

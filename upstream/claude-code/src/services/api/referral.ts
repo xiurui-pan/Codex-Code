@@ -14,7 +14,7 @@ import type {
 } from '../oauth/types.js'
 
 const require = createRequire(import.meta.url)
-const currentPhaseDisableLegacyReferral = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+const currentPhaseDisableLegacyReferral = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
 
 function getAuthModule() {
   return require('../../utils/auth.js') as typeof import('../../utils/auth.js')

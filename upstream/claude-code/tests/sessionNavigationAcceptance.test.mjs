@@ -249,7 +249,7 @@ async function runNavigationHeadlessSession({
           ...process.env,
           HOME: homeDir,
           ANTHROPIC_API_KEY: 'test-key',
-          CLAUDE_CODE_USE_CODEX_PROVIDER: '1',
+          CODEX_CODE_USE_CODEX_PROVIDER: '1',
         },
         stdio: ['pipe', 'pipe', 'pipe'],
       },
@@ -412,7 +412,7 @@ async function readSessionListFromBuiltModule(homeDir) {
       ...process.env,
       HOME: homeDir,
       ANTHROPIC_API_KEY: 'test-key',
-      CLAUDE_CODE_USE_CODEX_PROVIDER: '1',
+      CODEX_CODE_USE_CODEX_PROVIDER: '1',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   })

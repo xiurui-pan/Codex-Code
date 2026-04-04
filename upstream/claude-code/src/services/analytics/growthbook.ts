@@ -15,7 +15,7 @@ import type { GitHubActionsMetadata } from '../../utils/user.js'
 
 const require = createRequire(import.meta.url)
 const currentStageDisableGrowthbook =
-  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+  process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
 
 function getConfigModule() {
   return require('../../utils/config.js') as typeof import('../../utils/config.js')
@@ -521,7 +521,7 @@ const getGrowthBookClient = memoize(
     }
     const baseUrl =
       process.env.USER_TYPE === 'ant'
-        ? process.env.CLAUDE_CODE_GB_BASE_URL || 'https://api.anthropic.com/'
+        ? process.env.CODEX_CODE_GB_BASE_URL || 'https://api.anthropic.com/'
         : 'https://api.anthropic.com/'
 
     // Skip auth if trust hasn't been established yet

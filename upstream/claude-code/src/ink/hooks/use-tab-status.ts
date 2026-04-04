@@ -18,7 +18,7 @@ const rgb = (r: number, g: number, b: number): Color => ({
 })
 
 const USE_CODEX_BRANDING_COLORS =
-  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+  process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
 
 // Per the OSC 21337 usage guide's suggested mapping.
 const TAB_STATUS_PRESETS: Record<

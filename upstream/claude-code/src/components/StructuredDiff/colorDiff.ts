@@ -38,13 +38,13 @@ function getColorDiffRuntimeModule(): ColorDiffRuntimeModule | null {
 
 /**
  * Returns a static reason why the color-diff module is unavailable, or null if available.
- * 'env' = disabled via CLAUDE_CODE_SYNTAX_HIGHLIGHT
+ * 'env' = disabled via CODEX_CODE_SYNTAX_HIGHLIGHT
  *
  * The TS port of color-diff works in all build modes, so the only way to
  * disable it is via the env var.
  */
 export function getColorModuleUnavailableReason(): ColorDiffModuleUnavailableReason | null {
-  if (isEnvDefinedFalsy(process.env.CLAUDE_CODE_SYNTAX_HIGHLIGHT)) {
+  if (isEnvDefinedFalsy(process.env.CODEX_CODE_SYNTAX_HIGHLIGHT)) {
     return 'env'
   }
   if (!getColorDiffRuntimeModule()) {

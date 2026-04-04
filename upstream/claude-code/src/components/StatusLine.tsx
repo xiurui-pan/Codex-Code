@@ -30,10 +30,9 @@ import { getCurrentWorktreeSession } from '../utils/worktree.js';
 import { isVimModeEnabled } from './PromptInput/utils.js';
 /* eslint-disable @typescript-eslint/no-require-imports */
 const require = createRequire(import.meta.url);
-const getRawUtilization = isCurrentPhaseCustomCodexProvider() ? () => ({}) : require('../services/claudeAiLimits.js').getRawUtilization;
+const getRawUtilization = isCurrentPhaseCustomCodexProvider() ? () => ({}) : (() => { try { return require('../services/claudeAiLimits.js').getRawUtilization; } catch { return () => ({}); } })();
 /* eslint-enable @typescript-eslint/no-require-imports */
 export function statusLineShouldDisplay(settings: ReadonlySettings): boolean {
-  if (isCurrentPhaseCustomCodexProvider()) return false;
   // Assistant mode: statusline fields (model, permission mode, cwd) reflect the
   // REPL/daemon process, not what the agent child is actually running. Hide it.
   if (feature('KAIROS') && getKairosActive()) return false;

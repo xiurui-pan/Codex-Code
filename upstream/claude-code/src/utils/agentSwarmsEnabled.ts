@@ -2,7 +2,7 @@ import { createRequire } from 'node:module'
 import { isEnvTruthy } from './envUtils.js'
 
 const require = createRequire(import.meta.url)
-const currentPhaseDisableLegacyAgentSwarms = process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+const currentPhaseDisableLegacyAgentSwarms = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
 
 function getFeatureValue_CACHED_MAY_BE_STALE<T>(feature: string, fallback: T): T {
   if (currentPhaseDisableLegacyAgentSwarms) return fallback
@@ -26,7 +26,7 @@ function isAgentTeamsFlagSet(): boolean {
  *
  * Ant builds: always enabled.
  * External builds require both:
- * 1. Opt-in via CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS env var OR --agent-teams flag
+ * 1. Opt-in via CODEX_CODE_EXPERIMENTAL_AGENT_TEAMS env var OR --agent-teams flag
  * 2. GrowthBook gate 'tengu_amber_flint' enabled (killswitch)
  */
 export function isAgentSwarmsEnabled(): boolean {
@@ -37,7 +37,7 @@ export function isAgentSwarmsEnabled(): boolean {
 
   // External: require opt-in via env var or --agent-teams flag
   if (
-    !isEnvTruthy(process.env.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS) &&
+    !isEnvTruthy(process.env.CODEX_CODE_EXPERIMENTAL_AGENT_TEAMS) &&
     !isAgentTeamsFlagSet()
   ) {
     return false

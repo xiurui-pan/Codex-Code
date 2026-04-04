@@ -59,9 +59,9 @@ test('codex config centralizes base URL, model, reasoning, storage, and auth', a
         ANTHROPIC_BASE_URL: undefined,
         ANTHROPIC_MODEL: undefined,
         ANTHROPIC_API_KEY: undefined,
-        CLAUDE_CODE_EFFORT_LEVEL: undefined,
-        CLAUDE_CODE_CODEX_RESPONSE_STORAGE: undefined,
-        CLAUDE_CODE_CODEX_ENV_KEY: undefined,
+        CODEX_CODE_EFFORT_LEVEL: undefined,
+        CODEX_CODE_CODEX_RESPONSE_STORAGE: undefined,
+        CODEX_CODE_CODEX_ENV_KEY: undefined,
       },
       async () => {
         const {

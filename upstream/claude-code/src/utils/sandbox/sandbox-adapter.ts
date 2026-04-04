@@ -221,9 +221,9 @@ function permissionRuleExtractPrefix(permissionRule: string): string | null {
 }
 
 /**
- * Resolve Claude Code-specific path patterns for sandbox-runtime.
+ * Resolve Codex Code-specific path patterns for sandbox-runtime.
  *
- * Claude Code uses special path prefixes in permission rules:
+ * Codex Code uses special path prefixes in permission rules:
  * - `//path` → absolute from filesystem root (becomes `/path`)
  * - `/path` → relative to settings file directory (becomes `$SETTINGS_DIR/path`)
  * - `~/path` → passed through (sandbox-runtime handles this)
@@ -304,7 +304,7 @@ function shouldAllowManagedReadPathsOnly(): boolean {
 }
 
 /**
- * Convert Claude Code settings format to SandboxRuntimeConfig format
+ * Convert Codex Code settings format to SandboxRuntimeConfig format
  * (Function exported for testing)
  *
  * @param settings Merged settings (used for sandbox config like network, ripgrep, etc.)
@@ -368,7 +368,7 @@ export function convertToSandboxRuntimeConfig(
   const allowRead: string[] = []
 
   // Always deny writes to settings.json files to prevent sandbox escape
-  // This blocks settings in the original working directory (where Claude Code started)
+  // This blocks settings in the original working directory (where Codex Code started)
   const settingsPaths = SETTING_SOURCES.map(source =>
     getSettingsFilePathForSource(source),
   ).filter((p): p is string => p !== undefined)

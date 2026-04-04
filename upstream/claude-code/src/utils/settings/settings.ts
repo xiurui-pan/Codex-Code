@@ -52,7 +52,7 @@ import {
 } from './validation.js'
 
 const currentStageDisableGitignoreWrite =
-  process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1'
+  process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
 
 /**
  * Get the path to the managed settings file based on the current platform
@@ -260,13 +260,13 @@ export function getSettingsRootPathForSource(source: SettingSource): string {
  *
  * Priority:
  * 1. Session state (set by CLI flag --cowork)
- * 2. Environment variable CLAUDE_CODE_USE_COWORK_PLUGINS
+ * 2. Environment variable CODEX_CODE_USE_COWORK_PLUGINS
  * 3. Default: 'settings.json'
  */
 function getUserSettingsFilePath(): string {
   if (
     getUseCoworkPlugins() ||
-    isEnvTruthy(process.env.CLAUDE_CODE_USE_COWORK_PLUGINS)
+    isEnvTruthy(process.env.CODEX_CODE_USE_COWORK_PLUGINS)
   ) {
     return 'cowork_settings.json'
   }
@@ -855,7 +855,7 @@ export function getSettingsWithSources(): SettingsWithSources {
 /**
  * Get merged settings and validation errors from all sources
  * This function now uses session-level caching to avoid repeated file I/O.
- * Settings changes require Claude Code restart, so cache is valid for entire session.
+ * Settings changes require Codex Code restart, so cache is valid for entire session.
  * @returns Merged settings and all validation errors encountered
  */
 export function getSettingsWithErrors(): SettingsWithErrors {

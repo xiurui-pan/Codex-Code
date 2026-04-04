@@ -63,7 +63,7 @@ export async function execPromptHook(
       const response = await callModelTurnWithoutStreaming({
         messages: messagesToQuery,
         systemPrompt: asSystemPrompt([
-          `You are evaluating a hook in Claude Code.
+          `You are evaluating a hook in Codex Code.
 
 Your response must be a JSON object matching one of the following schemas:
 1. If the condition is met, return: {"ok": true}

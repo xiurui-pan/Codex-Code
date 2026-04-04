@@ -84,7 +84,7 @@ const COMMAND_LIKE_ARGUMENT_KEYS = new Set(['command', 'cmd'])
 
 function shouldRewriteCodexWorkspacePaths(): boolean {
   return (
-    process.env.CLAUDE_CODE_USE_CODEX_PROVIDER === '1' &&
+    process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1' &&
     getOriginalCwd() !== CODEX_VIRTUAL_WORKSPACE_ROOT
   )
 }

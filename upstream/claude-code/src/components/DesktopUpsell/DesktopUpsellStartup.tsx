@@ -135,7 +135,7 @@ export function DesktopUpsellStartup(t0) {
   }
   let t8;
   if ($[11] !== handleSelect || $[12] !== t7) {
-    t8 = <PermissionDialog title="Try Claude Code Desktop"><Box flexDirection="column" paddingX={2} paddingY={1}>{t6}<Select options={options} onChange={handleSelect} onCancel={t7} /></Box></PermissionDialog>;
+    t8 = <PermissionDialog title="Try Codex Code Desktop"><Box flexDirection="column" paddingX={2} paddingY={1}>{t6}<Select options={options} onChange={handleSelect} onCancel={t7} /></Box></PermissionDialog>;
     $[11] = handleSelect;
     $[12] = t7;
     $[13] = t8;

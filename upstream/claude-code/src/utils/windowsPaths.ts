@@ -96,13 +96,13 @@ export function setShellIfWindows(): void {
  * Find the path where `bash.exe` included with git-bash exists, exiting the process if not found.
  */
 export const findGitBashPath = memoize((): string => {
-  if (process.env.CLAUDE_CODE_GIT_BASH_PATH) {
-    if (checkPathExists(process.env.CLAUDE_CODE_GIT_BASH_PATH)) {
-      return process.env.CLAUDE_CODE_GIT_BASH_PATH
+  if (process.env.CODEX_CODE_GIT_BASH_PATH) {
+    if (checkPathExists(process.env.CODEX_CODE_GIT_BASH_PATH)) {
+      return process.env.CODEX_CODE_GIT_BASH_PATH
     }
     // biome-ignore lint/suspicious/noConsole:: intentional console output
     console.error(
-      `Claude Code was unable to find CLAUDE_CODE_GIT_BASH_PATH path "${process.env.CLAUDE_CODE_GIT_BASH_PATH}"`,
+      `Codex Code was unable to find CODEX_CODE_GIT_BASH_PATH path "${process.env.CODEX_CODE_GIT_BASH_PATH}"`,
     )
     // eslint-disable-next-line custom-rules/no-process-exit
     process.exit(1)
@@ -118,7 +118,7 @@ export const findGitBashPath = memoize((): string => {
 
   // biome-ignore lint/suspicious/noConsole:: intentional console output
   console.error(
-    'Codex Code on Windows requires git-bash (https://git-scm.com/downloads/win). If it is installed but not in PATH, point CLAUDE_CODE_GIT_BASH_PATH at your bash.exe, for example: CLAUDE_CODE_GIT_BASH_PATH=C:\\Program Files\\Git\\bin\\bash.exe',
+    'Codex Code on Windows requires git-bash (https://git-scm.com/downloads/win). If it is installed but not in PATH, point CODEX_CODE_GIT_BASH_PATH at your bash.exe, for example: CODEX_CODE_GIT_BASH_PATH=C:\\Program Files\\Git\\bin\\bash.exe',
   )
   // eslint-disable-next-line custom-rules/no-process-exit
   process.exit(1)

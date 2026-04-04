@@ -159,6 +159,16 @@ function codexChunkToPreferredAssistantTurnResult(
 export const callModelPreferredWithStreaming: StreamingPreferredModelCaller =
   async function* (args) {
     for await (const chunk of queryCodexResponsesStream(args)) {
+      if (chunk.kind === 'usage') {
+        // Convert OpenAI Responses API usage to Anthropic Usage format and track cost
+        try {
+          const { convertResponsesUsageToAnthropicAndTrack } = await import('./codexResponsesUsage.js')
+          convertResponsesUsageToAnthropicAndTrack(chunk.usage, args.options.model as string | undefined)
+        } catch {
+          // Silently ignore usage tracking errors
+        }
+        continue
+      }
       yield codexChunkToPreferredAssistantTurnResult(chunk)
     }
   }
@@ -245,13 +255,13 @@ export const verifyModelAccess: ModelAccessVerifier = async (
   apiKey,
   throwOnError = false,
 ) => {
-  const hasCodexEndpoint = Boolean(process.env.ANTHROPIC_BASE_URL)
+  const hasCodexEndpoint = Boolean(process.env.CODEX_CODE_BASE_URL ?? process.env.ANTHROPIC_BASE_URL)
   const hasApiKey =
     typeof apiKey === 'string'
       ? apiKey.trim().length > 0
-      : Boolean(process.env.ANTHROPIC_API_KEY)
+      : Boolean(process.env.CODEX_CODE_API_KEY ?? process.env.ANTHROPIC_API_KEY)
 
-  if (hasCodexEndpoint && (hasApiKey || !process.env.CLAUDE_CODE_CODEX_ENV_KEY)) {
+  if (hasCodexEndpoint && (hasApiKey || !process.env.CODEX_CODE_ENV_KEY)) {
     return true
   }
 
