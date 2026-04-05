@@ -287,15 +287,18 @@ async function runStreamingAssertions() {
   assert.equal(result.code, 0, result.stderr)
   assert.equal(result.requestBodies[0]?.model, 'gpt-5.1-codex-mini')
   assert.equal(result.requestBodies[0]?.stream, true)
-  assert.equal('tool_choice' in (result.requestBodies[0] ?? {}), false)
+  // Codex backend sends tool_choice: 'auto' by default (provider profile)
+  assert.equal(result.requestBodies[0]?.tool_choice, 'auto')
   assert.equal(result.requestBodies[0]?.reasoning?.effort, 'medium')
   assert.equal(result.requestBodies[0]?.store, false)
   assert.equal('metadata' in (result.requestBodies[0] ?? {}), false)
   assert.equal(Array.isArray(result.requestBodies[0]?.input), true)
-  assert.equal(
-    result.requestBodies[0]?.input?.[0]?.content?.[0]?.text,
-    '请处理这个测试请求。',
+  // The CLI may prepend a system-reminder context block; find the user message
+  // that contains the actual prompt text.
+  const userInput = result.requestBodies[0]?.input?.find(
+    item => item?.content?.some?.(part => part?.text?.includes('请处理这个测试请求。')),
   )
+  assert.ok(userInput, 'user prompt should appear in request input')
   assert.equal(result.requestHeaders[0]?.authorization, 'Bearer test-key')
   assert.equal(result.requestHeaders[0]?.['x-app'], 'cli')
   assert.match(result.requestHeaders[0]?.['user-agent'] ?? '', /^codex-code\//)

@@ -1685,16 +1685,6 @@ function PromptInput({
     isActive: !isModalOverlayActive && isFastModeEnabled() && isFastModeAvailable()
   });
 
-  // Handle help:dismiss keybinding (ESC closes help menu)
-  // This is registered separately from Chat context so it has priority over
-  // CancelRequestHandler when help menu is open
-  useKeybinding('help:dismiss', () => {
-    setHelpOpen(false);
-  }, {
-    context: 'Help',
-    isActive: helpOpen
-  });
-
   // Quick Open / Global Search. Hook calls are unconditional (Rules of Hooks);
   // the handler body is feature()-gated so the setState calls and component
   // references get tree-shaken in external builds.

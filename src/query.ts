@@ -169,11 +169,14 @@ function* yieldMissingToolResultBlocks(
 
 function assistantMessageHasRenderableContent(
   message: AssistantMessage,
+  options: {
+    includeToolUseOnly?: boolean
+  } = {},
 ): boolean {
   return message.message.content.some(
     block =>
       (block.type === 'text' && typeof block.text === 'string') ||
-      block.type === 'tool_use',
+      (options.includeToolUseOnly === true && block.type === 'tool_use'),
   )
 }
 
@@ -780,7 +783,11 @@ async function* queryLoop(
                 )
               if (assistantCandidate.message.content.length > 0) {
                 internalAssistantMessage = assistantCandidate
-                if (assistantMessageHasRenderableContent(assistantCandidate)) {
+                if (
+                  assistantMessageHasRenderableContent(assistantCandidate, {
+                    includeToolUseOnly: true,
+                  })
+                ) {
                   message = assistantCandidate
                 }
               }
@@ -1917,6 +1924,6 @@ async function* queryLoop(
       state = next
     } // while (true)
   } finally {
-    pendingMemoryPrefetch[Symbol.dispose]()
+    pendingMemoryPrefetch?.[Symbol.dispose]()
   }
 }

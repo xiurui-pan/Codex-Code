@@ -6,6 +6,7 @@ import http from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { projectRoot } from './helpers/projectRoot.mjs'
 
 const CLI_CWD = projectRoot
 const CLI_ENTRY = join(CLI_CWD, 'src/entrypoints/cli.tsx')
@@ -114,7 +115,6 @@ import signal
 import subprocess
 import sys
 import time
-import { projectRoot } from './helpers/projectRoot.mjs'
 
 cli_entry, cli_preload, cwd, temp_home, actions_json = sys.argv[1:6]
 actions = json.loads(actions_json)

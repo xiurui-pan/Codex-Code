@@ -90,7 +90,7 @@ export async function call(
   }
 }
 
-function formatContextAsMarkdownTable(data: ContextData): string {
+export function formatContextAsMarkdownTable(data: ContextData): string {
   const {
     categories,
     totalTokens,

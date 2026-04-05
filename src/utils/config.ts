@@ -2,6 +2,7 @@ import { feature } from 'bun:bundle'
 import { randomBytes } from 'crypto'
 import { unwatchFile, watchFile } from 'fs'
 import { createRequire } from 'node:module'
+import { userInfo } from 'os'
 import memoize from 'lodash-es/memoize.js'
 import pickBy from 'lodash-es/pickBy.js'
 import { basename, dirname, join, resolve } from 'path'
@@ -772,6 +773,31 @@ const TEST_PROJECT_CONFIG_FOR_TESTING: ProjectConfig = {
   ...DEFAULT_PROJECT_CONFIG,
 }
 
+function shouldUseInMemoryTestConfig(): boolean {
+  if (process.env.NODE_ENV !== 'test') {
+    return false
+  }
+
+  if (process.env.CODEX_CODE_USE_FILE_BACKED_TEST_CONFIG === '1') {
+    return false
+  }
+
+  if (process.env.CLAUDE_CONFIG_DIR) {
+    return false
+  }
+
+  const configuredHome = process.env.HOME
+  if (
+    typeof configuredHome === 'string' &&
+    configuredHome.length > 0 &&
+    configuredHome !== userInfo().homedir
+  ) {
+    return false
+  }
+
+  return true
+}
+
 export function isProjectConfigKey(key: string): key is ProjectConfigKey {
   return PROJECT_CONFIG_KEYS.includes(key as ProjectConfigKey)
 }
@@ -800,7 +826,7 @@ function wouldLoseAuthState(fresh: {
 export function saveGlobalConfig(
   updater: (currentConfig: GlobalConfig) => GlobalConfig,
 ): void {
-  if (process.env.NODE_ENV === 'test') {
+  if (shouldUseInMemoryTestConfig()) {
     const config = updater(TEST_GLOBAL_CONFIG_FOR_TESTING)
     // Skip if no changes (same reference returned)
     if (config === TEST_GLOBAL_CONFIG_FOR_TESTING) {
@@ -1066,7 +1092,7 @@ function writeThroughGlobalConfigCache(config: GlobalConfig): void {
 
 export function getGlobalConfig(): GlobalConfig {
   logForDebugging('[config] getGlobalConfig start')
-  if (process.env.NODE_ENV === 'test') {
+  if (shouldUseInMemoryTestConfig()) {
     logForDebugging('[config] getGlobalConfig test config hit')
     return TEST_GLOBAL_CONFIG_FOR_TESTING
   }
@@ -1642,7 +1668,7 @@ export const getProjectPathForConfig = memoize((): string => {
 })
 
 export function getCurrentProjectConfig(): ProjectConfig {
-  if (process.env.NODE_ENV === 'test') {
+  if (shouldUseInMemoryTestConfig()) {
     return TEST_PROJECT_CONFIG_FOR_TESTING
   }
 
@@ -1667,7 +1693,7 @@ export function getCurrentProjectConfig(): ProjectConfig {
 export function saveCurrentProjectConfig(
   updater: (currentConfig: ProjectConfig) => ProjectConfig,
 ): void {
-  if (process.env.NODE_ENV === 'test') {
+  if (shouldUseInMemoryTestConfig()) {
     const config = updater(TEST_PROJECT_CONFIG_FOR_TESTING)
     // Skip if no changes (same reference returned)
     if (config === TEST_PROJECT_CONFIG_FOR_TESTING) {

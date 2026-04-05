@@ -14,6 +14,7 @@ import http from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { projectRoot } from './helpers/projectRoot.mjs'
 
 const CLI_CWD = projectRoot
 const CLI_PATH = join(CLI_CWD, 'dist/cli.js')
@@ -152,7 +153,6 @@ import signal
 import subprocess
 import sys
 import time
-import { projectRoot } from './helpers/projectRoot.mjs'
 
 cli_path, cwd, temp_home, actions_json, env_overrides_json = sys.argv[1:6]
 actions = json.loads(actions_json)

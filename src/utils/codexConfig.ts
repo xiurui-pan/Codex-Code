@@ -557,9 +557,13 @@ export function getCodexConfiguredApiKey(): string | undefined {
 }
 
 export function shouldSendCodexRequestIdentity(): boolean {
-  return parseBooleanEnvValue(
-    process.env.CODEX_CODE_SEND_REQUEST_IDENTITY,
-  ) === true
+  return (
+    parseBooleanEnvValue(process.env.CODEX_CODE_SEND_REQUEST_IDENTITY) ===
+      true ||
+    parseBooleanEnvValue(
+      process.env.CODEX_CODE_CODEX_SEND_REQUEST_IDENTITY,
+    ) === true
+  )
 }
 
 export function hasCodexConfigInEnv(): boolean {

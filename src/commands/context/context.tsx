@@ -2,13 +2,12 @@ import { feature } from 'bun:bundle';
 import { createRequire } from 'node:module';
 import * as React from 'react';
 import type { LocalJSXCommandContext } from '../../commands.js';
-import { ContextVisualization } from '../../components/ContextVisualization.js';
 import { microcompactMessages } from '../../services/compact/microCompact.js';
+import { formatContextAsMarkdownTable } from './context-noninteractive.js';
 import type { LocalJSXCommandOnDone } from '../../types/command.js';
 import type { Message } from '../../types/message.js';
 import { analyzeContextUsage } from '../../utils/analyzeContext.js';
 import { getMessagesAfterCompactBoundary } from '../../utils/messages.js';
-import { renderToAnsiString } from '../../utils/staticRender.js';
 
 const require = createRequire(import.meta.url);
 
@@ -59,8 +58,10 @@ export async function call(onDone: LocalJSXCommandOnDone, context: LocalJSXComma
   apiView // Original messages for API usage extraction
   );
 
-  // Render to ANSI string to preserve colors and pass to onDone like local commands do
-  const output = await renderToAnsiString(<ContextVisualization data={data} />);
+  // The offscreen Ink renderer can get stuck on this large context tree under
+  // PTY-driven sessions. Reuse the shared text formatter so /context stays
+  // purely local and deterministic in both interactive and headless flows.
+  const output = formatContextAsMarkdownTable(data);
   onDone(output);
   return null;
 }

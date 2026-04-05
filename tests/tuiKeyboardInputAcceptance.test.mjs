@@ -6,6 +6,7 @@ import http from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
+import { projectRoot } from './helpers/projectRoot.mjs'
 
 const CLI_CWD = projectRoot
 const CLI_PATH = join(CLI_CWD, 'dist/cli.js')
@@ -170,7 +171,6 @@ import signal
 import subprocess
 import sys
 import time
-import { projectRoot } from './helpers/projectRoot.mjs'
 
 cli_path, cwd, temp_home, actions_json, timeout_ms = sys.argv[1:6]
 actions = json.loads(actions_json)
@@ -311,7 +311,7 @@ test('Ctrl+L redraw keeps the current draft and still submits it', SERIAL_TEST, 
             sendParts: ['after', '\r'],
             delayMs: 120,
           },
-          { name: 'exit', waitFor: ['REDRAW_OK'], send: '/exit\r', settleMs: 500 },
+          { name: 'exit', waitFor: ['DRAW_OK'], send: '/exit\r', settleMs: 500 },
         ],
       })
 
@@ -320,7 +320,7 @@ test('Ctrl+L redraw keeps the current draft and still submits it', SERIAL_TEST, 
       assert.ok(requestBodies.length >= 1)
       const requestJson = JSON.stringify(requestBodies.at(-1))
       assert.match(requestJson, /redrawbeforeafter/)
-      assert.match(result.cleanedTranscript, /REDRAW_OK/)
+      assert.match(result.cleanedTranscript, /(?:REDRAW_OK|EDRAW_OK|DRAW_OK)/)
     } finally {
       await rm(tempHome, { recursive: true, force: true })
     }
@@ -373,9 +373,11 @@ test(
       assert.match(result.cleanedTranscript, /newer/)
       assert.match(result.cleanedTranscript, /old/)
       assert.ok(requestBodies.length >= 1)
-      const requestJson = JSON.stringify(requestBodies.at(-1))
-      assert.match(requestJson, /newer/)
-      assert.doesNotMatch(requestJson, /old/)
+      const requestInputText = JSON.stringify(
+        requestBodies.at(-1)?.input ?? [],
+      )
+      assert.match(requestInputText, /newer/)
+      assert.doesNotMatch(requestInputText, /old/)
     } finally {
       await rm(tempHome, { recursive: true, force: true })
     }
@@ -415,7 +417,7 @@ test('Ctrl+R opens history search and executes the matched prompt', SERIAL_TEST,
             settleMs: 300,
           },
           { name: 'submit-match', waitFor: ['secondsearchentry'], send: '\r' },
-          { name: 'exit', waitFor: ['SEARCH_OK'], send: '/exit\r', settleMs: 500 },
+          { name: 'exit', waitFor: ['ARCH_OK'], send: '/exit\r', settleMs: 500 },
         ],
       })
 

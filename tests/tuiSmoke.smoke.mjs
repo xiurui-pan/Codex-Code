@@ -6,6 +6,7 @@ import { once } from 'node:events'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { projectRoot } from './helpers/projectRoot.mjs'
 
 const cwd = projectRoot
 const cliPath = join(cwd, 'dist/cli.js')
@@ -110,7 +111,6 @@ import signal
 import subprocess
 import sys
 import time
-import { projectRoot } from './helpers/projectRoot.mjs'
 
 cli_path, cwd, temp_home, prompt_text, expected_reply = sys.argv[1:6]
 master, slave = pty.openpty()

@@ -140,6 +140,10 @@ function codexChunkToPreferredAssistantTurnResult(
     }
   }
 
+  if (chunk.kind === 'stream_event' || chunk.kind === 'usage') {
+    return { kind: 'empty' }
+  }
+
   const renderableItems = getRenderableModelTurnItems(chunk.turnItems)
   if (renderableItems.length === 0) {
     return { kind: 'empty' }

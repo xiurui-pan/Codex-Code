@@ -17,6 +17,7 @@ import { once } from 'node:events'
 import { mkdtemp, mkdir, rm, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { projectRoot } from './helpers/projectRoot.mjs'
 
 const cwd = projectRoot
 const cliPath = join(cwd, 'dist/cli.js')
@@ -26,7 +27,6 @@ const SWE_TASK = `In this codebase, find the function that resolves which tools 
 async function runSweTask({ tempHome, timeoutSeconds = 240 }) {
   const pythonScript = String.raw`
 import json, os, pty, re, select, signal, subprocess, sys, time
-import { projectRoot } from './helpers/projectRoot.mjs'
 
 cli_path, cwd, temp_home, prompt_text = sys.argv[1:5]
 timeout_seconds = int(sys.argv[5]) if len(sys.argv) > 5 else 240

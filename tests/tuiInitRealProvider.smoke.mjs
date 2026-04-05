@@ -11,6 +11,7 @@ import { once } from 'node:events'
 import { mkdtemp, mkdir, writeFile, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { projectRoot } from './helpers/projectRoot.mjs'
 
 const cwd = projectRoot
 const cliPath = join(cwd, 'dist/cli.js')
@@ -26,7 +27,6 @@ import signal
 import subprocess
 import sys
 import time
-import { projectRoot } from './helpers/projectRoot.mjs'
 
 cli_path, cwd, temp_home = sys.argv[1:4]
 timeout_seconds = int(sys.argv[4]) if len(sys.argv) > 4 else 120

@@ -103,6 +103,14 @@ export function* normalizeMessage(message: Message): Generator<SDKMessage> {
   switch (message.type) {
     case 'assistant':
       for (const _ of normalizeMessages([message])) {
+        if (
+          _.type === 'assistant' &&
+          Array.isArray(_.message.content) &&
+          _.message.content.length === 1 &&
+          _.message.content[0]?.type === 'tool_use'
+        ) {
+          continue
+        }
         // Skip empty messages (e.g., "(no content)") that shouldn't be output to SDK
         if (!isNotEmptyMessage(_)) {
           continue

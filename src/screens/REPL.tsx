@@ -1378,6 +1378,8 @@ export function REPL({
   const [inputValue, setInputValueRaw] = useState(() => consumeEarlyInput());
   const inputValueRef = useRef(inputValue);
   inputValueRef.current = inputValue;
+  const interruptedPromptRestoredRef = useRef(false);
+  const interruptedPromptTextRef = useRef('');
   const insertTextRef = useRef<{
     insert: (text: string) => void;
     setInputWithCursor: (value: string, cursor: number) => void;
@@ -1389,6 +1391,24 @@ export function REPL({
   // batches them into a single render, eliminating the extra render that
   // the previous useEffect → setState pattern caused.
   const setInputValue = useCallback((value: string) => {
+    const previousValue = inputValueRef.current;
+    const appendedToRestoredPrompt = value.startsWith(previousValue)
+      ? value.slice(previousValue.length)
+      : '';
+    if (
+      interruptedPromptRestoredRef.current &&
+      appendedToRestoredPrompt.startsWith('/')
+    ) {
+      // After auto-restoring an interrupted prompt, a leading slash means
+      // "start a fresh slash command", not "append /foo to the old prompt".
+      value = appendedToRestoredPrompt;
+      interruptedPromptRestoredRef.current = false;
+    } else if (
+      interruptedPromptRestoredRef.current &&
+      value !== previousValue
+    ) {
+      interruptedPromptRestoredRef.current = false;
+    }
     if (trySuggestBgPRIntercept(inputValueRef.current, value)) return;
     // In fullscreen mode, typing into an empty prompt re-pins scroll to
     // bottom. Only fires on empty→non-empty so scrolling up to reference
@@ -3062,19 +3082,21 @@ export function REPL({
       // avoids removeLastFromHistory removing B's entry instead of A's),
       // not viewing a teammate (messagesRef is the main conversation — the
       // old Up-arrow quick-restore had this guard, preserve it).
-      if (abortController.signal.reason === 'user-cancel' && !queryGuard.isActive && inputValueRef.current === '' && getCommandQueueLength() === 0 && !store.getState().viewingAgentTaskId) {
-        const msgs = messagesRef.current;
-        const lastUserMsg = msgs.findLast(selectableUserMessagesFilter);
-        if (lastUserMsg) {
-          const idx = msgs.lastIndexOf(lastUserMsg);
-          if (messagesAfterAreOnlySynthetic(msgs, idx)) {
-            // The submit is being undone — undo its history entry too,
-            // otherwise Up-arrow shows the restored text twice.
-            removeLastFromHistory();
-            restoreMessageSyncRef.current(lastUserMsg);
-          }
+    if (abortController.signal.reason === 'user-cancel' && !queryGuard.isActive && inputValueRef.current === '' && getCommandQueueLength() === 0 && !store.getState().viewingAgentTaskId) {
+      const msgs = messagesRef.current;
+      const lastUserMsg = msgs.findLast(selectableUserMessagesFilter);
+      if (lastUserMsg) {
+        const idx = msgs.lastIndexOf(lastUserMsg);
+        if (messagesAfterAreOnlySynthetic(msgs, idx)) {
+          // The submit is being undone — undo its history entry too,
+          // otherwise Up-arrow shows the restored text twice.
+          removeLastFromHistory();
+          restoreMessageSyncRef.current(lastUserMsg);
+          interruptedPromptRestoredRef.current = true;
+          interruptedPromptTextRef.current = inputValueRef.current.trim();
         }
       }
+    }
     }
   }, [onQueryImpl, setAppState, resetLoadingState, queryGuard, mrOnBeforeQuery, mrOnTurnComplete]);
 
@@ -3205,6 +3227,18 @@ export function REPL({
   }, options?: {
     fromKeybinding?: boolean;
   }) => {
+    const restoredInterruptedPrompt = interruptedPromptTextRef.current;
+    if (
+      restoredInterruptedPrompt.length > 0 &&
+      input.startsWith(restoredInterruptedPrompt)
+    ) {
+      const suffix = input.slice(restoredInterruptedPrompt.length).trimStart();
+      if (suffix.startsWith('/')) {
+        input = suffix;
+      }
+    }
+    interruptedPromptRestoredRef.current = false;
+    interruptedPromptTextRef.current = '';
     // Re-pin scroll to bottom on submit so the user always sees the new
     // exchange (matches OpenCode's auto-scroll behavior).
     repinScroll();

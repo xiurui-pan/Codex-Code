@@ -683,7 +683,16 @@ test('matrix: initialize model list and runtime model switch stay on Codex-only 
   const models = initResponse?.response?.response?.models ?? []
   assert.deepEqual(
     models.map(model => model.value),
-    ['default', 'gpt-5.1-codex-mini', 'gpt-5.1-codex', 'gpt-5.1-codex-max'],
+    [
+      'default',
+      'gpt-5.4-mini',
+      'gpt-5.4',
+      'gpt-5.3-codex',
+      'gpt-5.2-codex',
+      'gpt-5.1-codex-mini',
+      'gpt-5.1-codex',
+      'gpt-5.1-codex-max',
+    ],
   )
   assert.equal(result.requestBodies[0]?.model, 'gpt-5.1-codex-max')
   assert.equal(result.requestBodies[0]?.reasoning?.effort, 'medium')

@@ -34,6 +34,7 @@ import {
   type ResponsesOutputItem,
 } from './codexTurnItems.js'
 import { buildCodexRequestIdentity } from './codexRequestIdentity.js'
+import { getSessionId } from '../../bootstrap/state.js'
 import { getCodexProviderProfile } from './providerProfiles.js'
 
 type CodexRequestOptions = {
@@ -557,6 +558,11 @@ export async function buildResponsesBody({
     }
   }
 
+  // Enable prefix caching: use session ID as cache key so the upstream
+  // provider can reuse cached prompt prefixes across turns in the same
+  // conversation. Matches codex-rs behavior (core/src/client.rs:733).
+  body.prompt_cache_key = getSessionId()
+
   return body
 }
 
@@ -800,9 +806,6 @@ export async function* queryCodexResponsesStream({
 }: CodexStreamingArgs): AsyncGenerator<CodexResponseChunk, void, unknown> {
   try {
     const startedTextBlocks = new Set<string>()
-    let thinkingEmitted = false
-    let thinkingBlockIndex = 0
-    const thinkingStartTime = Date.now()
     const requestIdentity = buildCodexRequestIdentity()
     const requestTimeoutMs = getRequestTimeoutMs(tools)
     const response = await fetchWithRequestTimeout(getResponsesBaseUrl(), {
@@ -834,37 +837,7 @@ export async function* queryCodexResponsesStream({
       return
     }
 
-    // Emit synthetic thinking block at stream start so the spinner
-    // can track thinking duration from response arrival to first text.
-    yield {
-      kind: 'stream_event',
-      event: {
-        type: 'content_block_start',
-        index: thinkingBlockIndex,
-        content_block: {
-          type: 'thinking',
-          thinking: '',
-        },
-      },
-    }
-
     for await (const event of iterateResponsesSseEvents(response, tools)) {
-      // Close the synthetic thinking block when first output arrives
-      if (!thinkingEmitted && (
-        event.type === 'response.content_part.added' ||
-        event.type === 'response.output_text.delta' ||
-        event.type === 'response.output_item.added'
-      )) {
-        thinkingEmitted = true
-        yield {
-          kind: 'stream_event',
-          event: {
-            type: 'content_block_stop',
-            index: thinkingBlockIndex,
-          },
-        }
-      }
-
       if (event.type === 'response.content_part.added' && event.part) {
         if (event.part.type === 'output_text') {
           const outputIndex =
@@ -960,17 +933,6 @@ export async function* queryCodexResponsesStream({
 
       // Extract usage data from response.completed
       if (event.type === 'response.completed') {
-        // Close thinking block if still open
-        if (!thinkingEmitted) {
-          thinkingEmitted = true
-          yield {
-            kind: 'stream_event',
-            event: {
-              type: 'content_block_stop',
-              index: thinkingBlockIndex,
-            },
-          }
-        }
         if (event.response?.usage) {
           yield {
             kind: 'usage',
@@ -1038,6 +1000,10 @@ export async function queryCodexResponses({
       import('./codexResponsesUsage.js').then(({ convertResponsesUsageToAnthropicAndTrack }) => {
         convertResponsesUsageToAnthropicAndTrack(chunk.usage, options.model as string | undefined)
       }).catch(() => {})
+      continue
+    }
+
+    if (chunk.kind === 'stream_event') {
       continue
     }
 
