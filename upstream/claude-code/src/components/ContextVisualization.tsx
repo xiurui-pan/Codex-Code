@@ -138,6 +138,9 @@ export function ContextVisualization(t0) {
   if ($[0] !== categories || $[1] !== gridRows || $[2] !== mcpTools || $[3] !== model || $[4] !== percentage || $[5] !== rawMaxTokens || $[6] !== systemTools || $[7] !== t1 || $[8] !== totalTokens) {
     const deferredBuiltinTools = t1 === undefined ? [] : t1;
     const visibleCategories = categories.filter(_temp);
+    const visibleMemoryFiles = memoryFiles.filter(_temp28);
+    const loadedMcpTools = mcpTools.filter(_temp29);
+    const availableMcpTools = mcpTools.filter(_temp30);
     let t10;
     if ($[19] !== categories) {
       t10 = categories.some(_temp2);
@@ -265,7 +268,7 @@ export function ContextVisualization(t0) {
     t2 = "column";
     t3 = -1;
     if ($[51] !== hasDeferredMcpTools || $[52] !== mcpTools) {
-      t4 = mcpTools.length > 0 && <Box flexDirection="column" marginTop={1}><Box><Text bold={true}>MCP tools</Text><Text dimColor={true}>{" "}· /mcp{hasDeferredMcpTools ? " (loaded on-demand)" : ""}</Text></Box>{mcpTools.some(_temp9) && <Box flexDirection="column" marginTop={1}><Text dimColor={true}>Loaded</Text>{mcpTools.filter(_temp0).map(_temp1)}</Box>}{hasDeferredMcpTools && mcpTools.some(_temp10) && <Box flexDirection="column" marginTop={1}><Text dimColor={true}>Available</Text>{mcpTools.filter(_temp11).map(_temp12)}</Box>}{!hasDeferredMcpTools && mcpTools.map(_temp13)}</Box>;
+      t4 = (loadedMcpTools.length > 0 || availableMcpTools.length > 0) && <Box flexDirection="column" marginTop={1}><Box><Text bold={true}>MCP tools</Text><Text dimColor={true}>{" "}· /mcp{hasDeferredMcpTools ? " (loaded on-demand)" : ""}</Text></Box>{loadedMcpTools.length > 0 && <Box flexDirection="column" marginTop={1}><Text dimColor={true}>Loaded</Text>{loadedMcpTools.map(_temp1)}</Box>}{hasDeferredMcpTools && availableMcpTools.length > 0 && <Box flexDirection="column" marginTop={1}><Text dimColor={true}>Available</Text>{availableMcpTools.map(_temp12)}</Box>}{!hasDeferredMcpTools && loadedMcpTools.map(_temp13)}</Box>;
       $[51] = hasDeferredMcpTools;
       $[52] = mcpTools;
       $[53] = t4;
@@ -322,7 +325,7 @@ export function ContextVisualization(t0) {
   }
   let t12;
   if ($[58] !== memoryFiles) {
-    t12 = memoryFiles.length > 0 && <Box flexDirection="column" marginTop={1}><Box><Text bold={true}>Memory files</Text><Text dimColor={true}> · /memory</Text></Box>{memoryFiles.map(_temp23)}</Box>;
+    t12 = visibleMemoryFiles.length > 0 && <Box flexDirection="column" marginTop={1}><Box><Text bold={true}>Memory files</Text><Text dimColor={true}> · /memory</Text></Box>{visibleMemoryFiles.map(_temp23)}</Box>;
     $[58] = memoryFiles;
     $[59] = t12;
   } else {
@@ -443,20 +446,20 @@ function _temp13(tool_1, i_1) {
 function _temp12(tool_0, i_0) {
   return <Box key={i_0}><Text dimColor={true}>└ {tool_0.name}</Text></Box>;
 }
-function _temp11(t_1) {
-  return !t_1.isLoaded;
-}
-function _temp10(t_2) {
-  return !t_2.isLoaded;
-}
 function _temp1(tool, i) {
   return <Box key={i}><Text>└ {tool.name}: </Text><Text dimColor={true}>{formatTokens(tool.tokens)} tokens</Text></Box>;
 }
 function _temp0(t) {
   return t.isLoaded;
 }
-function _temp9(t_0) {
-  return t_0.isLoaded;
+function _temp30(t_2) {
+  return !t_2.isLoaded;
+}
+function _temp29(t_1) {
+  return t_1.isLoaded && t_1.tokens > 0;
+}
+function _temp28(file) {
+  return file.tokens > 0;
 }
 function _temp8(c_0) {
   return c_0.name === "Free space";

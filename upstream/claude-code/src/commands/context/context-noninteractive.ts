@@ -106,6 +106,9 @@ function formatContextAsMarkdownTable(data: ContextData): string {
     systemPromptSections,
   } = data
 
+  const visibleMemoryFiles = memoryFiles.filter(file => file.tokens > 0)
+  const visibleMcpTools = mcpTools.filter(tool => tool.tokens > 0)
+
   let output = `## Context Usage\n\n`
   output += `**Model:** ${model}  \n`
   output += `**Tokens:** ${formatTokens(totalTokens)} / ${formatTokens(rawMaxTokens)} (${percentage}%)\n`
@@ -192,11 +195,11 @@ function formatContextAsMarkdownTable(data: ContextData): string {
   }
 
   // MCP tools
-  if (mcpTools.length > 0) {
+  if (visibleMcpTools.length > 0) {
     output += `### MCP Tools\n\n`
     output += `| Tool | Server | Tokens |\n`
     output += `|------|--------|--------|\n`
-    for (const tool of mcpTools) {
+    for (const tool of visibleMcpTools) {
       output += `| ${tool.name} | ${tool.serverName} | ${formatTokens(tool.tokens)} |\n`
     }
     output += `\n`
@@ -270,11 +273,11 @@ function formatContextAsMarkdownTable(data: ContextData): string {
   }
 
   // Memory files
-  if (memoryFiles.length > 0) {
+  if (visibleMemoryFiles.length > 0) {
     output += `### Memory Files\n\n`
     output += `| Type | Path | Tokens |\n`
     output += `|------|------|--------|\n`
-    for (const file of memoryFiles) {
+    for (const file of visibleMemoryFiles) {
       output += `| ${file.type} | ${file.path} | ${formatTokens(file.tokens)} |\n`
     }
     output += `\n`

@@ -206,6 +206,30 @@ export function getEstimatedCurrentUsage(messages: Message[]): {
   }
 }
 
+export function getDisplayContextTokenCount(messages: Message[]): number {
+  const usage = getCurrentUsage(messages)
+  if (usage) {
+    return getTokenCountFromUsage(usage)
+  }
+
+  const estimatedTokens = tokenCountWithEstimation(messages)
+  if (estimatedTokens > 0) {
+    return estimatedTokens
+  }
+
+  const restoredInputTokens = getTotalInputTokens()
+  const restoredOutputTokens = getTotalOutputTokens()
+  const restoredCacheCreationTokens = getTotalCacheCreationInputTokens()
+  const restoredCacheReadTokens = getTotalCacheReadInputTokens()
+
+  return (
+    restoredInputTokens +
+    restoredOutputTokens +
+    restoredCacheCreationTokens +
+    restoredCacheReadTokens
+  )
+}
+
 export function doesEstimatedContextExceed200k(
   messages: Message[],
 ): boolean {

@@ -25,7 +25,7 @@ import { createBaseHookInput, executeStatusLineCommand } from '../utils/hooks.js
 import { getLastAssistantMessage } from '../utils/messages.js';
 import { getRuntimeMainLoopModel, type ModelName, renderModelName } from '../utils/model/model.js';
 import { getCurrentSessionTitle } from '../utils/sessionStorage.js';
-import { doesEstimatedContextExceed200k, getEstimatedCurrentUsage } from '../utils/tokens.js';
+import { doesEstimatedContextExceed200k, getDisplayContextTokenCount, getEstimatedCurrentUsage } from '../utils/tokens.js';
 import { getCurrentWorktreeSession } from '../utils/worktree.js';
 import { isVimModeEnabled } from './PromptInput/utils.js';
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -162,15 +162,22 @@ function formatTokenCountForStatusLine(tokenCount: number): string {
   return `${tokenCount}`;
 }
 
+function formatUsedTokensForStatusLine(tokenCount: number): string {
+  return new Intl.NumberFormat('en-US').format(tokenCount);
+}
+
 function buildContextWindowSummary(messages: Message[], runtimeModel: ModelName): string | null {
   const usage = getEstimatedCurrentUsage(messages);
-  if (!usage) return null;
+  const totalTokens = getDisplayContextTokenCount(messages);
   const contextWindowSize = getContextWindowForModel(runtimeModel, getSdkBetas());
-  const totalTokens = usage.input_tokens + usage.output_tokens + usage.cache_creation_input_tokens + usage.cache_read_input_tokens;
   if (totalTokens <= 0 || contextWindowSize <= 0) return null;
-  const percentages = calculateContextPercentages(usage, contextWindowSize);
-  if (percentages.used === null) return null;
-  return `🧠 ${formatTokenCountForStatusLine(totalTokens)}/${formatTokenCountForStatusLine(contextWindowSize)} (${percentages.used}%)`;
+
+  const usedPercentage = usage
+    ? calculateContextPercentages(usage, contextWindowSize).used
+    : Math.round((totalTokens / contextWindowSize) * 100);
+  if (usedPercentage === null) return null;
+
+  return `🧠 ${formatUsedTokensForStatusLine(totalTokens)} / ${formatTokenCountForStatusLine(contextWindowSize)} (${usedPercentage}%)`;
 }
 
 function mergeStatusLineContext(text: string | undefined, contextSummary: string | null): string | undefined {
@@ -179,15 +186,15 @@ function mergeStatusLineContext(text: string | undefined, contextSummary: string
     return contextSummary;
   }
 
-  if (/🧠\s*N\/A\b/.test(text)) {
-    return text.replace(/🧠\s*N\/A\b/g, contextSummary);
+  if (/🧠[^|]*/.test(text)) {
+    return text.replace(/🧠[^|]*/g, contextSummary);
   }
 
-  if (/Context:\s*N\/A\b/i.test(text)) {
-    return text.replace(/Context:\s*N\/A\b/gi, contextSummary);
+  if (/Context:[^|]*/i.test(text)) {
+    return text.replace(/Context:[^|]*/gi, contextSummary);
   }
 
-  return text;
+  return `${text} | ${contextSummary}`;
 }
 function StatusLineInner({
   messagesRef,

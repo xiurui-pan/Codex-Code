@@ -11,6 +11,17 @@ test('StatusLine replaces explicit context N/A placeholders with live context us
   const source = readSource('src/components/StatusLine.tsx')
 
   assert.match(source, /function buildContextWindowSummary/)
-  assert.match(source, /if \(\/🧠\\s\*N\\\/A\\b\/\.test\(text\)\)/)
-  assert.match(source, /return text\.replace\(\/🧠\\s\*N\\\/A\\b\/g, contextSummary\)/)
+  assert.match(source, /if \(\/🧠\[\^\|]\*\/\.test\(text\)\)/)
+  assert.match(source, /return text\.replace\(\/🧠\[\^\|]\*\/g, contextSummary\)/)
+  assert.match(source, /return `\$\{text\} \| \$\{contextSummary\}`/)
+})
+
+test('StatusLine context summary uses the shared display token count helper', () => {
+  const source = readSource('src/components/StatusLine.tsx')
+
+  assert.match(source, /getDisplayContextTokenCount/)
+  assert.match(
+    source,
+    /return `🧠 \$\{formatUsedTokensForStatusLine\(totalTokens\)\} \/ \$\{formatTokenCountForStatusLine\(contextWindowSize\)\} \(\$\{usedPercentage\}%\)`/,
+  )
 })
