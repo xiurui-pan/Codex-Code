@@ -61,7 +61,10 @@ import type { SettingSource } from './settings/constants.js'
 import { jsonStringify } from './slowOperations.js'
 import { buildEffectiveSystemPrompt } from './systemPrompt.js'
 import type { Theme } from './theme.js'
-import { getDisplayContextTokenCount, getCurrentUsage } from './tokens.js'
+import {
+  getCurrentUsage,
+  getDisplayContextUsageBreakdown,
+} from './tokens.js'
 
 const RESERVED_CATEGORY_NAME = 'Autocompact buffer'
 const MANUAL_COMPACT_BUFFER_NAME = 'Compact buffer'
@@ -244,6 +247,14 @@ export interface ContextData {
     output_tokens: number
     cache_creation_input_tokens: number
     cache_read_input_tokens: number
+  } | null
+  readonly usageSnapshot: {
+    totalInputTokens: number
+    uncachedInputTokens: number
+    cachedInputTokens: number
+    outputTokens: number
+    displayTokens: number
+    cachedInputIncludedInTotalInput: boolean
   } | null
 }
 
@@ -1171,21 +1182,14 @@ export async function analyzeContextUsage(
     color: 'promptBorder',
   })
 
-  // Total for display (everything except free space)
-  const totalIncludingReserved = actualUsage
-
-  // Keep the headline total aligned with the footer/context summary.
-  // This path includes output tokens and restored aggregate totals instead of
-  // only the last API call's input-side usage.
+  // Keep the headline total aligned with the category breakdown shown below.
+  // The API usage snapshot is still exposed separately so users can compare the
+  // server-reported window with the local breakdown without mixing the two.
   const apiUsage = getCurrentUsage(originalMessages ?? messages)
-  const totalFromDisplayUsage = getDisplayContextTokenCount(
-    originalMessages ?? messages,
-  )
-
-  // Use the shared display total when available, otherwise fall back to the
-  // full local context estimate built above.
-  const finalTotalTokens =
-    totalFromDisplayUsage > 0 ? totalFromDisplayUsage : totalIncludingReserved
+  const usageSnapshot = apiUsage
+    ? getDisplayContextUsageBreakdown(apiUsage)
+    : null
+  const finalTotalTokens = actualUsage
 
   // Pre-calculate grid based on model context window and terminal width
   // For narrow screens (< 80 cols), use 5x5 for 200k models, 5x10 for 1M+ models
@@ -1392,5 +1396,6 @@ export async function analyzeContextUsage(
     isAutoCompactEnabled: isAutoCompact,
     messageBreakdown: formattedMessageBreakdown,
     apiUsage,
+    usageSnapshot,
   }
 }

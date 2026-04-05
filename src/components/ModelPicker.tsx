@@ -220,16 +220,16 @@ export function ModelPicker({
         showFastModeNotice ? (
           <Box marginBottom={1}>
             <Text dimColor>
-              Fast mode is <Text bold>ON</Text> and available with{' '}
-              {FAST_MODE_MODEL_DISPLAY} only (/fast). Switching to other models
-              turns fast mode off.
+              Fast mode is <Text bold>ON</Text> and uses{' '}
+              {FAST_MODE_MODEL_DISPLAY} for faster responses (/fast). Switching
+              to other models turns fast mode off.
             </Text>
           </Box>
         ) : isFastModeAvailable() && !isFastModeCooldown() ? (
           <Box marginBottom={1}>
             <Text dimColor>
-              Use <Text bold>/fast</Text> to turn on Fast mode ({FAST_MODE_MODEL_DISPLAY}{' '}
-              only).
+              Use <Text bold>/fast</Text> to turn on Fast mode and use{' '}
+              {FAST_MODE_MODEL_DISPLAY} for faster responses.
             </Text>
           </Box>
         ) : null

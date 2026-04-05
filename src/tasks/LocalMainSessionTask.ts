@@ -17,7 +17,9 @@ import {
   SUMMARY_TAG,
   TASK_ID_TAG,
   TASK_NOTIFICATION_TAG,
+  TASK_TYPE_TAG,
   TOOL_USE_ID_TAG,
+  TRANSCRIPT_PATH_TAG,
 } from '../constants/xml.js'
 import { type QueryParams, query } from '../query.js'
 import { roughTokenCountEstimation } from '../services/tokenEstimation.js'
@@ -252,9 +254,12 @@ function enqueueMainSessionNotification(
     : ''
 
   const outputPath = getTaskOutputPath(taskId)
+  const transcriptPath = getAgentTranscriptPath(asAgentId(taskId))
   const message = `<${TASK_NOTIFICATION_TAG}>
 <${TASK_ID_TAG}>${taskId}</${TASK_ID_TAG}>${toolUseIdLine}
+<${TASK_TYPE_TAG}>local_agent</${TASK_TYPE_TAG}>
 <${OUTPUT_FILE_TAG}>${outputPath}</${OUTPUT_FILE_TAG}>
+<${TRANSCRIPT_PATH_TAG}>${transcriptPath}</${TRANSCRIPT_PATH_TAG}>
 <${STATUS_TAG}>${status}</${STATUS_TAG}>
 <${SUMMARY_TAG}>${summary}</${SUMMARY_TAG}>
 </${TASK_NOTIFICATION_TAG}>`

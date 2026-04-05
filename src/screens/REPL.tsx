@@ -182,7 +182,7 @@ import type { AgentColorName } from '../tools/AgentTool/agentColorManager.js';
 import { fileHistoryMakeSnapshot, type FileHistoryState, fileHistoryRewind, type FileHistorySnapshot, copyFileHistoryForResume, fileHistoryEnabled, fileHistoryHasAnyChanges } from '../utils/fileHistory.js';
 import { type AttributionState, incrementPromptCount } from '../utils/commitAttribution.js';
 import { recordAttributionSnapshot } from '../utils/sessionStorage.js';
-import { computeStandaloneAgentContext, restoreAgentFromSession, restoreSessionStateFromLog, restoreWorktreeForResume, exitRestoredWorktree } from '../utils/sessionRestore.js';
+import { computeStandaloneAgentContext, restoreAgentFromSession, restoreProjectPathForResume, restoreSessionStateFromLog, restoreWorktreeForResume, exitRestoredWorktree } from '../utils/sessionRestore.js';
 import { isBgSession, updateSessionName, updateSessionActivity } from '../utils/concurrentSessions.js';
 import { isInProcessTeammateTask, type InProcessTeammateTaskState } from '../tasks/InProcessTeammateTask/types.js';
 import { restoreRemoteAgentTasks } from '../tasks/RemoteAgentTask/RemoteAgentTask.js';
@@ -1369,10 +1369,20 @@ export function REPL({
   }
 
   // Frozen state for transcript mode - stores lengths instead of cloning arrays for memory efficiency
+  const queuedTranscriptNotifications = useMemo(() => queuedCommands.filter(cmd => cmd.mode === 'task-notification' && cmd.agentId === undefined).map(cmd => createAttachmentMessage({
+    type: 'queued_command',
+    prompt: cmd.value,
+    source_uuid: cmd.uuid,
+    commandMode: cmd.mode,
+    origin: cmd.origin,
+    isMeta: cmd.isMeta
+  })), [queuedCommands]);
   const [frozenTranscriptState, setFrozenTranscriptState] = useState<{
     messagesLength: number;
     streamingToolUsesLength: number;
+    queuedTaskNotifications: ReturnType<typeof createAttachmentMessage>[];
   } | null>(null);
+  const shouldRepinTranscriptRef = useRef(false);
   // Initialize input with any early input that was captured before REPL was ready.
   // Using lazy initialization ensures cursor offset is set correctly in PromptInput.
   const [inputValue, setInputValueRaw] = useState(() => consumeEarlyInput());
@@ -1944,6 +1954,7 @@ export function REPL({
       // fork materializes its own file via recordTranscript on REPL mount.
       if (entrypoint !== 'fork') {
         exitRestoredWorktree();
+        restoreProjectPathForResume(log.projectPath);
         restoreWorktreeForResume(log.worktreeSession);
         adoptResumedSessionFile();
         void restoreRemoteAgentTasks({
@@ -3346,9 +3357,16 @@ export function REPL({
             // The normal stash restoration path (below) is skipped because
             // local-jsx commands return early from onSubmit.
             if (stashedPrompt !== undefined) {
-              setInputValue(stashedPrompt.text);
-              helpers.setCursorOffset(stashedPrompt.cursorOffset);
-              setPastedContents(stashedPrompt.pastedContents);
+              // Align with the normal submit path: do not restore slash-command
+              // stash after an immediate local-jsx command, otherwise input can
+              // accumulate into accidental prompts like "/status/exit".
+              const shouldRestore =
+                !stashedPrompt.text.trim().startsWith('/');
+              if (shouldRestore) {
+                setInputValue(stashedPrompt.text);
+                helpers.setCursorOffset(stashedPrompt.cursorOffset);
+                setPastedContents(stashedPrompt.pastedContents);
+              }
               setStashedPrompt(undefined);
             }
           };
@@ -3625,9 +3643,16 @@ export function REPL({
     // - Loading (queued): handlePromptSubmit enqueued + cleared input, then
     //   returned quickly. Restoring now places the stash back after the clear.
     if ((isSlashCommand || isLoading) && stashedPrompt !== undefined) {
-      setInputValue(stashedPrompt.text);
-      helpers.setCursorOffset(stashedPrompt.cursorOffset);
-      setPastedContents(stashedPrompt.pastedContents);
+      // Match the immediate local-jsx path above: slash commands typed while
+      // another slash dialog is open should not be restored into the prompt,
+      // otherwise hidden input can leak into malformed prompts like
+      // "/status/exit" and accidentally hit the provider.
+      const shouldRestore = !stashedPrompt.text.trim().startsWith('/');
+      if (shouldRestore) {
+        setInputValue(stashedPrompt.text);
+        helpers.setCursorOffset(stashedPrompt.cursorOffset);
+        setPastedContents(stashedPrompt.pastedContents);
+      }
       setStashedPrompt(undefined);
     }
   }, [queryGuard,
@@ -4282,16 +4307,34 @@ export function REPL({
 
   // Callback to capture frozen state when entering transcript mode
   const handleEnterTranscript = useCallback(() => {
+    shouldRepinTranscriptRef.current = true;
+    if (isLoading) {
+      setFrozenTranscriptState(null);
+      return;
+    }
     setFrozenTranscriptState({
       messagesLength: messages.length,
-      streamingToolUsesLength: streamingToolUses.length
+      streamingToolUsesLength: streamingToolUses.length,
+      queuedTaskNotifications: queuedTranscriptNotifications
     });
-  }, [messages.length, streamingToolUses.length]);
+  }, [isLoading, messages.length, queuedTranscriptNotifications, streamingToolUses.length]);
 
   // Callback to clear frozen state when exiting transcript mode
   const handleExitTranscript = useCallback(() => {
+    shouldRepinTranscriptRef.current = false;
     setFrozenTranscriptState(null);
   }, []);
+
+  useEffect(() => {
+    if (screen !== 'transcript') {
+      return;
+    }
+    if (!shouldRepinTranscriptRef.current) {
+      return;
+    }
+    shouldRepinTranscriptRef.current = false;
+    scrollRef.current?.scrollToBottom();
+  }, [screen, frozenTranscriptState]);
 
   // Props for GlobalKeybindingHandlers component (rendered inside KeybindingSetup)
   const virtualScrollActive = isFullscreenEnvEnabled() && !disableVirtualScroll;
@@ -4478,7 +4521,9 @@ export function REPL({
   };
 
   // Use frozen lengths to slice arrays, avoiding memory overhead of cloning
-  const transcriptMessages = frozenTranscriptState ? deferredMessages.slice(0, frozenTranscriptState.messagesLength) : deferredMessages;
+  const transcriptQueuedTaskNotifications = frozenTranscriptState ? frozenTranscriptState.queuedTaskNotifications : queuedTranscriptNotifications;
+  const transcriptBaseMessages = frozenTranscriptState ? deferredMessages.slice(0, frozenTranscriptState.messagesLength) : deferredMessages;
+  const transcriptMessages = transcriptQueuedTaskNotifications.length > 0 ? [...transcriptBaseMessages, ...transcriptQueuedTaskNotifications] : transcriptBaseMessages;
   const transcriptStreamingToolUses = frozenTranscriptState ? streamingToolUses.slice(0, frozenTranscriptState.streamingToolUsesLength) : streamingToolUses;
 
   // Handle shift+down for teammate navigation and background task management.

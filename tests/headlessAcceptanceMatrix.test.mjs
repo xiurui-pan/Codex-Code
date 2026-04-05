@@ -123,6 +123,7 @@ async function runStructuredHeadlessSession({
   configLines = DEFAULT_CONFIG_LINES,
   currentCwd = CLI_CWD,
   extraArgs = [],
+  extraEnv = {},
   permissionDecision,
   afterInitialize,
   initialMessages = [],
@@ -153,6 +154,7 @@ async function runStructuredHeadlessSession({
           HOME: tempHome,
           ANTHROPIC_API_KEY: 'test-key',
           CODEX_CODE_USE_CODEX_PROVIDER: '1',
+          ...extraEnv,
         },
         stdio: ['pipe', 'pipe', 'pipe'],
       },
@@ -352,8 +354,7 @@ async function runPrintOutputSession({
   })
 }
 
-async function runResumeCompactMatrixCase() {
-  const tempHome = await mkdtemp(join(tmpdir(), 'codex-resume-matrix-'))
+async function seedCrossProjectResumeFixture(tempHome) {
   const currentCwd = CLI_CWD
   const resumedCwd = join(tempHome, 'resumed-worktree-project')
   const currentProjectDir = join(
@@ -471,6 +472,20 @@ async function runResumeCompactMatrixCase() {
     'utf8',
   )
 
+  return {
+    currentCwd,
+    resumedCwd,
+    transcriptPath,
+  }
+}
+
+async function runResumeCompactMatrixCase() {
+  const tempHome = await mkdtemp(join(tmpdir(), 'codex-resume-matrix-'))
+  const {
+    currentCwd,
+    transcriptPath,
+  } = await seedCrossProjectResumeFixture(tempHome)
+
   try {
     const result = await runStructuredHeadlessSession({
       responseBatches: [],
@@ -502,6 +517,10 @@ async function runResumeCompactMatrixCase() {
 
 function sanitizePath(value) {
   return value.replace(/[^a-zA-Z0-9]/g, '-')
+}
+
+function escapeForRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 test('matrix: basic question answer works in stream-json headless mode', async () => {
@@ -629,8 +648,150 @@ test('matrix: structured tool call with allow and deny permission branches stays
   }
 })
 
+test('matrix: prompt cache key and request shape stay stable through a multi-step tool loop', async () => {
+  const result = await runStructuredHeadlessSession({
+    responseBatches: [
+      [
+        {
+          block: responseDoneItem({
+            type: 'function_call',
+            call_id: 'tool-step-1',
+            name: 'Bash',
+            arguments: JSON.stringify({
+              command: 'pwd',
+            }),
+          }),
+        },
+        { block: responseCompleted('resp-stability-1') },
+        { block: responseDone() },
+      ],
+      [
+        {
+          block: responseDoneItem({
+            type: 'function_call',
+            call_id: 'tool-step-2',
+            name: 'Bash',
+            arguments: JSON.stringify({
+              command: 'printf second',
+            }),
+          }),
+        },
+        { block: responseCompleted('resp-stability-2') },
+        { block: responseDone() },
+      ],
+      [
+        {
+          block: responseDoneItem({
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'stable done' }],
+          }),
+        },
+        { block: responseCompleted('resp-stability-3') },
+        { block: responseDone() },
+      ],
+    ],
+    initialMessages: [
+      {
+        type: 'user',
+        session_id: '',
+        parent_tool_use_id: null,
+        message: { role: 'user', content: 'run two bash steps and then finish' },
+        uuid: 'user-stability',
+      },
+    ],
+  })
+
+  assert.equal(result.code, 0, result.stderr)
+  assert.equal(result.requestBodies.length, 3)
+
+  const [firstRequest, secondRequest, thirdRequest] = result.requestBodies
+  assert.equal(firstRequest?.prompt_cache_key, secondRequest?.prompt_cache_key)
+  assert.equal(secondRequest?.prompt_cache_key, thirdRequest?.prompt_cache_key)
+  assert.equal(firstRequest?.model, secondRequest?.model)
+  assert.equal(secondRequest?.model, thirdRequest?.model)
+  assert.deepEqual(firstRequest?.reasoning, secondRequest?.reasoning)
+  assert.deepEqual(secondRequest?.reasoning, thirdRequest?.reasoning)
+  assert.equal(firstRequest?.tool_choice, secondRequest?.tool_choice)
+  assert.equal(secondRequest?.tool_choice, thirdRequest?.tool_choice)
+  assert.deepEqual(firstRequest?.tools, secondRequest?.tools)
+  assert.deepEqual(secondRequest?.tools, thirdRequest?.tools)
+  assert.deepEqual(firstRequest?.instructions, secondRequest?.instructions)
+  assert.deepEqual(secondRequest?.instructions, thirdRequest?.instructions)
+  assert.deepEqual(
+    result.requestBodies.map(request => request.input.length),
+    [1, 3, 5],
+  )
+
+  const requestCallIds = result.requestBodies.map(request =>
+    request.input
+      .filter(item => item.type === 'function_call')
+      .map(item => item.call_id),
+  )
+  assert.deepEqual(requestCallIds, [
+    [],
+    ['tool-step-1'],
+    ['tool-step-1', 'tool-step-2'],
+  ])
+})
+
 test('matrix: cross-project resume then compact keeps the resumed transcript summary', async () => {
   await runResumeCompactMatrixCase()
+})
+
+test('matrix: cross-project resume restores request workspace and prompt cwd before the first turn', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'codex-resume-cwd-'))
+  const {
+    currentCwd,
+    resumedCwd,
+    transcriptPath,
+  } = await seedCrossProjectResumeFixture(tempHome)
+
+  try {
+    const result = await runStructuredHeadlessSession({
+      responseBatches: [[
+        {
+          block: responseDoneItem({
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'cwd restored' }],
+          }),
+        },
+        { block: responseCompleted('resp-resume-cwd-1') },
+        { block: responseDone() },
+      ]],
+      currentCwd,
+      extraArgs: ['--resume', transcriptPath],
+      extraEnv: {
+        CODEX_CODE_SEND_REQUEST_IDENTITY: '1',
+      },
+      initialMessages: [
+        {
+          type: 'user',
+          session_id: '',
+          parent_tool_use_id: null,
+          message: { role: 'user', content: '请只回复 cwd restored' },
+          uuid: 'user-resume-cwd',
+        },
+      ],
+    })
+
+    assert.equal(result.code, 0, result.stderr)
+    assert.equal(result.requestBodies.length, 1)
+    assert.equal(result.requestBodies[0]?.metadata?.workspace, resumedCwd)
+
+    const promptDump = String(result.requestBodies[0]?.instructions ?? '')
+    assert.match(
+      promptDump,
+      new RegExp(`CWD: ${escapeForRegExp(resumedCwd)}`),
+    )
+    assert.doesNotMatch(
+      promptDump,
+      new RegExp(`CWD: ${escapeForRegExp(currentCwd)}`),
+    )
+  } finally {
+    await rm(tempHome, { recursive: true, force: true })
+  }
 })
 
 test('matrix: initialize model list and runtime model switch stay on Codex-only capability surface', async () => {

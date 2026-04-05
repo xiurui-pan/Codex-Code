@@ -121,7 +121,6 @@ import type {
 } from 'src/entrypoints/sdk/controlTypes.js'
 import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
 import type { PermissionMode as InternalPermissionMode } from 'src/types/permissions.js'
-import { cwd } from 'process'
 import { getCwd } from 'src/utils/cwd.js'
 import omit from 'lodash-es/omit.js'
 import reject from 'lodash-es/reject.js'
@@ -282,8 +281,10 @@ import {
   fileHistoryGetDiffStats,
 } from 'src/utils/fileHistory.js'
 import {
+  restoreProjectPathForResume,
   restoreAgentFromSession,
   restoreSessionStateFromLog,
+  restoreWorktreeForResume,
 } from 'src/utils/sessionRestore.js'
 import { SandboxManager } from 'src/utils/sandbox/sandbox-adapter.js'
 import {
@@ -1376,7 +1377,7 @@ function runHeadlessStreaming(
   // relies on this as a global state.
   let readFileState = extractReadFilesFromMessages(
     initialMessages,
-    cwd(),
+    getCwd(),
     READ_FILE_STATE_CACHE_SIZE,
   )
 
@@ -1983,7 +1984,7 @@ function runHeadlessStreaming(
     // Headless-specific: currentCommands/currentAgents are local mutable refs
     // captured by the query loop (REPL uses AppState instead). getCommands is
     // fresh because refreshActivePlugins cleared its cache.
-    currentCommands = await getCommands(cwd())
+    currentCommands = await getCommands(getCwd())
 
     // Preserve SDK-provided agents (--agents CLI flag or SDK initialize
     // control_request) — both inject via parseAgentsFromJson with
@@ -2039,7 +2040,7 @@ function runHeadlessStreaming(
   // Subscribe to skill changes for hot reloading
   const unsubscribeSkillChanges = skillChangeDetector.subscribe(() => {
     clearCommandsCache()
-    void getCommands(cwd()).then(newCommands => {
+    void getCommands(getCwd()).then(newCommands => {
       currentCommands = newCommands
     })
   })
@@ -2368,7 +2369,7 @@ function runHeadlessStreaming(
               prompt: input,
               promptUuid: cmd.uuid,
               isMeta: cmd.isMeta,
-              cwd: cwd(),
+              cwd: getCwd(),
               tools: allTools,
               verbose: options.verbose,
               mcpClients: allMcpClients,
@@ -3311,7 +3312,7 @@ function runHeadlessStreaming(
             // allSettled so one failure doesn't discard the others.
             let plugins: SDKControlReloadPluginsResponse['plugins'] = []
             const [cmdsR, mcpR, pluginsR] = await Promise.allSettled([
-              getCommands(cwd()),
+              getCommands(getCwd()),
               applyPluginMcpDiff(),
               loadAllPluginsCacheOnly(),
             ])
@@ -5052,6 +5053,8 @@ async function loadInitialMessages(
           }
         }
         restoreSessionStateFromLog(result, setAppState)
+        restoreProjectPathForResume(result.projectPath)
+        restoreWorktreeForResume(result.worktreeSession)
 
         // Restore session metadata so it's re-appended on exit via reAppendSessionMetadata
         restoreSessionMetadata(
@@ -5252,6 +5255,8 @@ async function loadInitialMessages(
         }
       }
       restoreSessionStateFromLog(result, setAppState)
+      restoreProjectPathForResume(result.projectPath)
+      restoreWorktreeForResume(result.worktreeSession)
 
       // Restore session metadata so it's re-appended on exit via reAppendSessionMetadata
       restoreSessionMetadata(

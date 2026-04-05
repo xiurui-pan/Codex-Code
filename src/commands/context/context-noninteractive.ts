@@ -104,6 +104,7 @@ export function formatContextAsMarkdownTable(data: ContextData): string {
     messageBreakdown,
     systemTools,
     systemPromptSections,
+    usageSnapshot,
   } = data
 
   const visibleMemoryFiles = memoryFiles.filter(file => file.tokens > 0)
@@ -112,6 +113,15 @@ export function formatContextAsMarkdownTable(data: ContextData): string {
   let output = `## Context Usage\n\n`
   output += `**Model:** ${model}  \n`
   output += `**Tokens:** ${formatTokens(totalTokens)} / ${formatTokens(rawMaxTokens)} (${percentage}%)\n`
+  if (usageSnapshot) {
+    output += `**Current input:** ${formatTokens(usageSnapshot.totalInputTokens)}  \n`
+    output += `**Cached input:** ${formatTokens(usageSnapshot.cachedInputTokens)}  \n`
+    output += `**Fresh input:** ${formatTokens(usageSnapshot.uncachedInputTokens)}  \n`
+    output += `**Current output:** ${formatTokens(usageSnapshot.outputTokens)}\n`
+    if (usageSnapshot.cachedInputIncludedInTotalInput) {
+      output += `**Note:** Cached input is already included in current input for this provider, so it is not added a second time.\n`
+    }
+  }
 
   // Context-collapse status. Always show when the runtime gate is on —
   // the user needs to know which strategy is managing their context

@@ -42,6 +42,7 @@ type CodexRequestOptions = {
   effortValue?: string | number | null
   getToolPermissionContext?: () => Promise<unknown>
   tools?: Tools
+  fastMode?: boolean
   extraToolSchemas?: Array<Record<string, unknown>>
   agents?: AgentDefinition[]
   allowedAgentTypes?: string[]
@@ -157,6 +158,21 @@ type ResponsesFailureEvent = {
   message?: string
 }
 
+type ResponsesReasoningSummaryPartAddedEvent = {
+  type: 'response.reasoning_summary_part.added'
+  summary_index?: number
+  item_id?: string
+  output_index?: number
+}
+
+type ResponsesReasoningSummaryTextDeltaEvent = {
+  type: 'response.reasoning_summary_text.delta'
+  delta?: string
+  summary_index?: number
+  item_id?: string
+  output_index?: number
+}
+
 type ResponsesStreamEvent =
   | ResponsesCompletedEvent
   | ResponsesOutputDoneEvent
@@ -164,6 +180,8 @@ type ResponsesStreamEvent =
   | ResponsesOutputTextDeltaEvent
   | ResponsesOutputAddedEvent
   | ResponsesFailureEvent
+  | ResponsesReasoningSummaryPartAddedEvent
+  | ResponsesReasoningSummaryTextDeltaEvent
   | { type?: string }
 
 type ResponsesInputItem =
@@ -563,6 +581,12 @@ export async function buildResponsesBody({
   // conversation. Matches codex-rs behavior (core/src/client.rs:733).
   body.prompt_cache_key = getSessionId()
 
+  // Fast mode: set service_tier to "priority" for faster response times.
+  // Matches codex-rs behavior (core/src/client.rs:745-748).
+  if (options.fastMode) {
+    body.service_tier = 'priority'
+  }
+
   return body
 }
 
@@ -806,6 +830,7 @@ export async function* queryCodexResponsesStream({
 }: CodexStreamingArgs): AsyncGenerator<CodexResponseChunk, void, unknown> {
   try {
     const startedTextBlocks = new Set<string>()
+    const startedThinkingBlocks = new Set<string>()
     const requestIdentity = buildCodexRequestIdentity()
     const requestTimeoutMs = getRequestTimeoutMs(tools)
     const response = await fetchWithRequestTimeout(getResponsesBaseUrl(), {
@@ -859,6 +884,60 @@ export async function* queryCodexResponsesStream({
                 type: 'text',
                 text: '',
               },
+            },
+          }
+        }
+        continue
+      }
+
+      // Handle reasoning summary part added (start of a thinking block)
+      if (event.type === 'response.reasoning_summary_part.added') {
+        const summaryIndex =
+          typeof event.summary_index === 'number' ? event.summary_index : 0
+        const outputIndex =
+          typeof event.output_index === 'number' ? event.output_index : 0
+        const blockKey = `thinking:${outputIndex}:${summaryIndex}`
+        if (!startedThinkingBlocks.has(blockKey)) {
+          startedThinkingBlocks.add(blockKey)
+          yield {
+            kind: 'stream_event',
+            event: {
+              type: 'content_block_start',
+              index: summaryIndex,
+              output_index: outputIndex,
+              content_block: { type: 'thinking', thinking: '' },
+            },
+          }
+        }
+        continue
+      }
+
+      // Handle reasoning summary text delta
+      if (event.type === 'response.reasoning_summary_text.delta') {
+        if (typeof event.delta === 'string' && event.delta.length > 0) {
+          const summaryIndex =
+            typeof event.summary_index === 'number' ? event.summary_index : 0
+          const outputIndex =
+            typeof event.output_index === 'number' ? event.output_index : 0
+          const blockKey = `thinking:${outputIndex}:${summaryIndex}`
+          if (!startedThinkingBlocks.has(blockKey)) {
+            startedThinkingBlocks.add(blockKey)
+            yield {
+              kind: 'stream_event',
+              event: {
+                type: 'content_block_start',
+                index: summaryIndex,
+                output_index: outputIndex,
+                content_block: { type: 'thinking', thinking: '' },
+              },
+            }
+          }
+          yield {
+            kind: 'stream_event',
+            event: {
+              type: 'content_block_delta',
+              index: summaryIndex,
+              delta: { type: 'thinking_delta', thinking: event.delta },
             },
           }
         }

@@ -13,14 +13,16 @@ import type { LocalAgentTaskState } from '../../tasks/LocalAgentTask/LocalAgentT
 import type { LocalShellTaskState } from '../../tasks/LocalShellTask/guards.js';
 import type { RemoteAgentTaskState } from '../../tasks/RemoteAgentTask/RemoteAgentTask.js';
 import type { TaskState } from '../../tasks/types.js';
+import { asAgentId } from '../../types/ids.js';
 import { AbortError } from '../../utils/errors.js';
 import { lazySchema } from '../../utils/lazySchema.js';
 import { extractTextContent } from '../../utils/messages.js';
+import { getAgentTranscriptPath } from '../../utils/sessionStorage.js';
 import { semanticBoolean } from '../../utils/semanticBoolean.js';
 import { sleep } from '../../utils/sleep.js';
 import { jsonParse } from '../../utils/slowOperations.js';
 import { countCharInString } from '../../utils/stringUtils.js';
-import { getTaskOutput } from '../../utils/task/diskOutput.js';
+import { getTaskOutput, getTaskOutputPath } from '../../utils/task/diskOutput.js';
 import { updateTaskState } from '../../utils/task/framework.js';
 import { formatTaskOutput } from '../../utils/task/outputFormatting.js';
 import type { ThemeName } from '../../utils/theme.js';
@@ -47,6 +49,9 @@ type TaskOutput = {
   // For agents
   prompt?: string;
   result?: string;
+  output_file?: string;
+  transcript_path?: string;
+  session_id?: string;
 };
 type TaskOutputToolOutput = {
   retrieval_status: 'success' | 'timeout' | 'not_ready';
@@ -77,7 +82,8 @@ async function getTaskOutputData(task: TaskState): Promise<TaskOutput> {
     task_type: task.type,
     status: task.status,
     description: task.description,
-    output
+    output,
+    output_file: getTaskOutputPath(task.id)
   };
 
   // Add type-specific fields
@@ -101,14 +107,16 @@ async function getTaskOutputData(task: TaskState): Promise<TaskOutput> {
       prompt: agentTask.prompt,
       result: cleanResult || output,
       output: cleanResult || output,
-      error: agentTask.error
+      error: agentTask.error,
+      transcript_path: getAgentTranscriptPath(asAgentId(task.id))
     };
   }
   if (task.type === 'remote_agent') {
     const remoteTask = task as RemoteAgentTaskState;
     return {
       ...baseOutput,
-      prompt: remoteTask.command
+      prompt: remoteTask.command,
+      session_id: remoteTask.sessionId
     };
   }
   return baseOutput;
@@ -287,6 +295,15 @@ export const TaskOutputTool: Tool<InputSchema, TaskOutputToolOutput> = buildTool
       parts.push(`<task_id>${data.task.task_id}</task_id>`);
       parts.push(`<task_type>${data.task.task_type}</task_type>`);
       parts.push(`<status>${data.task.status}</status>`);
+      if (data.task.output_file) {
+        parts.push(`<output_file>${data.task.output_file}</output_file>`);
+      }
+      if (data.task.transcript_path) {
+        parts.push(`<transcript_path>${data.task.transcript_path}</transcript_path>`);
+      }
+      if (data.task.session_id) {
+        parts.push(`<session_id>${data.task.session_id}</session_id>`);
+      }
       if (data.task.exitCode !== undefined && data.task.exitCode !== null) {
         parts.push(`<exit_code>${data.task.exitCode}</exit_code>`);
       }
@@ -337,9 +354,10 @@ export const TaskOutputTool: Tool<InputSchema, TaskOutputToolOutput> = buildTool
   },
   renderToolResultMessage(content, _, {
     verbose,
-    theme
+    theme,
+    isTranscriptMode = false
   }) {
-    return <TaskOutputResultDisplay content={content} verbose={verbose} theme={theme} />;
+    return <TaskOutputResultDisplay content={content} verbose={verbose} theme={theme} isTranscriptMode={isTranscriptMode} />;
   },
   renderToolUseRejectedMessage() {
     return <FallbackToolUseRejectedMessage />;

@@ -1,6 +1,6 @@
 import type { ToolUseBlock } from '@anthropic-ai/sdk/resources';
 import { getRemoteSessionUrl } from '../../constants/product.js';
-import { OUTPUT_FILE_TAG, REMOTE_REVIEW_PROGRESS_TAG, REMOTE_REVIEW_TAG, STATUS_TAG, SUMMARY_TAG, TASK_ID_TAG, TASK_NOTIFICATION_TAG, TASK_TYPE_TAG, TOOL_USE_ID_TAG, ULTRAPLAN_TAG } from '../../constants/xml.js';
+import { OUTPUT_FILE_TAG, REMOTE_REVIEW_PROGRESS_TAG, REMOTE_REVIEW_TAG, SESSION_ID_TAG, STATUS_TAG, SUMMARY_TAG, TASK_ID_TAG, TASK_NOTIFICATION_TAG, TASK_TYPE_TAG, TOOL_USE_ID_TAG, ULTRAPLAN_TAG } from '../../constants/xml.js';
 import type { SDKAssistantMessage, SDKMessage } from '../../entrypoints/agentSdkTypes.js';
 import type { SetAppState, Task, TaskContext, TaskStateBase } from '../../Task.js';
 import { createTaskStateBase, generateTaskId } from '../../Task.js';
@@ -165,12 +165,17 @@ export function formatPreconditionError(error: BackgroundRemoteSessionPreconditi
  */
 function enqueueRemoteNotification(taskId: string, title: string, status: 'completed' | 'failed' | 'killed', setAppState: SetAppState, toolUseId?: string): void {
   // Atomically check and set notified flag to prevent duplicate notifications.
-  if (!markTaskNotified(taskId, setAppState)) return;
+  const {
+    shouldEnqueue,
+    sessionId
+  } = markTaskNotified(taskId, setAppState);
+  if (!shouldEnqueue) return;
   const statusText = status === 'completed' ? 'completed successfully' : status === 'failed' ? 'failed' : 'was stopped';
   const toolUseIdLine = toolUseId ? `\n<${TOOL_USE_ID_TAG}>${toolUseId}</${TOOL_USE_ID_TAG}>` : '';
+  const sessionIdLine = sessionId ? `\n<${SESSION_ID_TAG}>${sessionId}</${SESSION_ID_TAG}>` : '';
   const outputPath = getTaskOutputPath(taskId);
   const message = `<${TASK_NOTIFICATION_TAG}>
-<${TASK_ID_TAG}>${taskId}</${TASK_ID_TAG}>${toolUseIdLine}
+<${TASK_ID_TAG}>${taskId}</${TASK_ID_TAG}>${toolUseIdLine}${sessionIdLine}
 <${TASK_TYPE_TAG}>remote_agent</${TASK_TYPE_TAG}>
 <${OUTPUT_FILE_TAG}>${outputPath}</${OUTPUT_FILE_TAG}>
 <${STATUS_TAG}>${status}</${STATUS_TAG}>
@@ -186,9 +191,14 @@ function enqueueRemoteNotification(taskId: string, title: string, status: 'compl
  * Atomically mark a task as notified. Returns true if this call flipped the
  * flag (caller should enqueue), false if already notified (caller should skip).
  */
-function markTaskNotified(taskId: string, setAppState: SetAppState): boolean {
+function markTaskNotified(taskId: string, setAppState: SetAppState): {
+  shouldEnqueue: boolean;
+  sessionId?: string;
+} {
   let shouldEnqueue = false;
-  updateTaskState(taskId, setAppState, task => {
+  let sessionId: string | undefined;
+  updateTaskState<RemoteAgentTaskState>(taskId, setAppState, task => {
+    sessionId = task.sessionId;
     if (task.notified) {
       return task;
     }
@@ -198,7 +208,10 @@ function markTaskNotified(taskId: string, setAppState: SetAppState): boolean {
       notified: true
     };
   });
-  return shouldEnqueue;
+  return {
+    shouldEnqueue,
+    sessionId
+  };
 }
 
 /**
@@ -223,11 +236,15 @@ export function extractPlanFromLog(log: SDKMessage[]): string | null {
  * useless for plan extraction).
  */
 export function enqueueUltraplanFailureNotification(taskId: string, sessionId: string, reason: string, setAppState: SetAppState): void {
-  if (!markTaskNotified(taskId, setAppState)) return;
+  const {
+    shouldEnqueue
+  } = markTaskNotified(taskId, setAppState);
+  if (!shouldEnqueue) return;
   const sessionUrl = getRemoteTaskSessionUrl(sessionId);
   const message = `<${TASK_NOTIFICATION_TAG}>
 <${TASK_ID_TAG}>${taskId}</${TASK_ID_TAG}>
 <${TASK_TYPE_TAG}>remote_agent</${TASK_TYPE_TAG}>
+<${SESSION_ID_TAG}>${sessionId}</${SESSION_ID_TAG}>
 <${STATUS_TAG}>failed</${STATUS_TAG}>
 <${SUMMARY_TAG}>Ultraplan failed: ${reason}</${SUMMARY_TAG}>
 </${TASK_NOTIFICATION_TAG}>
@@ -325,10 +342,16 @@ function extractReviewTagFromLog(log: SDKMessage[]): string | null {
  * claude.ai URL stays a durable record the user can revisit; TTL handles cleanup.
  */
 function enqueueRemoteReviewNotification(taskId: string, reviewContent: string, setAppState: SetAppState): void {
-  if (!markTaskNotified(taskId, setAppState)) return;
+  const {
+    shouldEnqueue,
+    sessionId
+  } = markTaskNotified(taskId, setAppState);
+  if (!shouldEnqueue) return;
+  const sessionIdLine = sessionId ? `\n<${SESSION_ID_TAG}>${sessionId}</${SESSION_ID_TAG}>` : '';
   const message = `<${TASK_NOTIFICATION_TAG}>
 <${TASK_ID_TAG}>${taskId}</${TASK_ID_TAG}>
 <${TASK_TYPE_TAG}>remote_agent</${TASK_TYPE_TAG}>
+${sessionIdLine}
 <${STATUS_TAG}>completed</${STATUS_TAG}>
 <${SUMMARY_TAG}>Remote review completed</${SUMMARY_TAG}>
 </${TASK_NOTIFICATION_TAG}>
@@ -345,10 +368,16 @@ ${reviewContent}`;
  * Enqueue a remote-review failure notification.
  */
 function enqueueRemoteReviewFailureNotification(taskId: string, reason: string, setAppState: SetAppState): void {
-  if (!markTaskNotified(taskId, setAppState)) return;
+  const {
+    shouldEnqueue,
+    sessionId
+  } = markTaskNotified(taskId, setAppState);
+  if (!shouldEnqueue) return;
+  const sessionIdLine = sessionId ? `\n<${SESSION_ID_TAG}>${sessionId}</${SESSION_ID_TAG}>` : '';
   const message = `<${TASK_NOTIFICATION_TAG}>
 <${TASK_ID_TAG}>${taskId}</${TASK_ID_TAG}>
 <${TASK_TYPE_TAG}>remote_agent</${TASK_TYPE_TAG}>
+${sessionIdLine}
 <${STATUS_TAG}>failed</${STATUS_TAG}>
 <${SUMMARY_TAG}>Remote review failed: ${reason}</${SUMMARY_TAG}>
 </${TASK_NOTIFICATION_TAG}>

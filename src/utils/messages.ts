@@ -116,7 +116,7 @@ import { FileEditTool } from 'src/tools/FileEditTool/FileEditTool.js'
 import {
   FILE_READ_TOOL_NAME,
   MAX_LINES_TO_READ,
-} from 'src/tools/FileReadTool/prompt.js'
+} from 'src/tools/FileReadTool/constants.js'
 import { FileWriteTool } from 'src/tools/FileWriteTool/FileWriteTool.js'
 import { GLOB_TOOL_NAME } from 'src/tools/GlobTool/prompt.js'
 import { GREP_TOOL_NAME } from 'src/tools/GrepTool/prompt.js'
@@ -2065,6 +2065,7 @@ export function normalizeMessagesForAPI(
   }
 
   const result: (UserMessage | AssistantMessage)[] = []
+  let suppressLocalCommandStdout = false
   reorderedMessages
     .filter(
       (
@@ -2085,8 +2086,26 @@ export function normalizeMessagesForAPI(
       },
     )
     .forEach(message => {
+      if (message.type !== 'system') {
+        suppressLocalCommandStdout = false
+      }
       switch (message.type) {
         case 'system': {
+          // Keep /rename and /status local-only. Their command breadcrumbs are
+          // UI feedback and should not be replayed to the provider.
+          const isRenameOrStatusCommand =
+            message.content.includes('<command-name>/rename</command-name>') ||
+            message.content.includes('<command-name>/status</command-name>')
+          if (isRenameOrStatusCommand) {
+            suppressLocalCommandStdout = true
+            return
+          }
+          if (suppressLocalCommandStdout) {
+            suppressLocalCommandStdout = false
+            if (message.content.startsWith(`<${LOCAL_COMMAND_STDOUT_TAG}>`)) {
+              return
+            }
+          }
           // local_command system messages need to be included as user messages
           // so the model can reference previous command output in later turns
           const userMsg = createUserMessage({
@@ -3756,15 +3775,11 @@ Read the team config to discover your teammates' names. Check the task list peri
           ? { kind: 'task-notification' }
           : undefined)
 
-      // Only hide from the transcript if the queued command was itself
-      // system-generated. Human input drained mid-turn has no origin and no
-      // QueuedCommand.isMeta — it should stay visible. Previously this
-      // hardcoded isMeta:true, which hid user-typed messages in brief mode
-      // (filterForBriefTool) and in normal mode (shouldShowUserMessage).
-      const metaProp =
-        origin !== undefined || attachment.isMeta
-          ? ({ isMeta: true } as const)
-          : {}
+      // Only hide commands that were explicitly marked meta by the producer.
+      // Task notifications are machine-generated, but they are also a
+      // user-visible part of the conversation and must stay renderable in the
+      // main view and Ctrl+O transcript.
+      const metaProp = attachment.isMeta ? ({ isMeta: true } as const) : {}
 
       if (Array.isArray(attachment.prompt)) {
         // Handle content blocks (may include images)

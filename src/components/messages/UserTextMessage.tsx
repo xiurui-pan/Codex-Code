@@ -164,16 +164,7 @@ export function UserTextMessage(t0) {
     return t1;
   }
   if (param.text.includes(`<${TASK_NOTIFICATION_TAG}`)) {
-    let t1;
-    if ($[26] !== addMargin || $[27] !== param) {
-      t1 = <UserAgentNotificationMessage addMargin={addMargin} param={param} />;
-      $[26] = addMargin;
-      $[27] = param;
-      $[28] = t1;
-    } else {
-      t1 = $[28];
-    }
-    return t1;
+    return <UserAgentNotificationMessage addMargin={addMargin} param={param} isTranscriptMode={isTranscriptMode} />;
   }
   if (param.text.includes("<mcp-resource-update") || param.text.includes("<mcp-polling-update")) {
     let t1;

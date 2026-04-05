@@ -11,9 +11,12 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "check": "tsc -p tsconfig.json --noEmit",
+    "install:local": "node scripts/install-local.mjs",
     "start": "node dist/cli.js",
     "start:version": "node dist/cli.js --version",
-    "start:help": "node dist/cli.js --help"
+    "test": "NODE_ENV=test node --import tsx --loader ./dist/loader.mjs --test tests/*.test.ts tests/*.test.mjs tests/*.smoke.mjs tests/*.behavior.mjs",
+    "start:help": "node dist/cli.js --help",
+    "setup:local": "pnpm build && pnpm install:local"
   },
   "devDependencies": {
     "@types/node": "^24.6.0",

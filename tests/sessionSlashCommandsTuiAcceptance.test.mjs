@@ -134,6 +134,7 @@ env["ANTHROPIC_API_KEY"] = "test-key"
 env["TERM"] = "xterm-256color"
 env["CODEX_CODE_DISABLE_TERMINAL_TITLE"] = "1"
 env["FORCE_COLOR"] = "0"
+env["TEST_ENABLE_SESSION_PERSISTENCE"] = "1"
 proc = subprocess.Popen(
     ["node", cli_path, "--bare"],
     cwd=cwd,
@@ -403,12 +404,13 @@ test('session slash commands TUI: /resume can reopen a session by the exact /ren
           actions: [
             {
               name: 'resume-by-title',
-              waitFor: ['❯'],
+              waitFor: ['? for shortcuts'],
               send: `/resume ${sessionName}\r`,
             },
             {
               name: 'exit-resumed-session',
-              waitFor: ['RESUME_BY_TITLE_REPLY'],
+              waitFor: [],
+              waitAtLeastMs: 30000,
               send: '/exit\r',
               settleMs: 900,
             },

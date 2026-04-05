@@ -417,6 +417,7 @@ export async function loadMessagesFromJsonlPath(path: string): Promise<{
   messages: SerializedMessage[]
   sessionId: UUID | undefined
   fullPath: string
+  projectPath?: string
 }> {
   const { messages: byUuid, leafUuids } = await loadTranscriptFile(path)
   let tip: (typeof byUuid extends Map<UUID, infer T> ? T : never) | null = null
@@ -429,7 +430,9 @@ export async function loadMessagesFromJsonlPath(path: string): Promise<{
       tip = m
     }
   }
-  if (!tip) return { messages: [], sessionId: undefined, fullPath: path }
+  if (!tip) {
+    return { messages: [], sessionId: undefined, fullPath: path }
+  }
   const chain = buildConversationChain(byUuid, tip)
   return {
     messages: removeExtraFields(chain),
@@ -438,6 +441,7 @@ export async function loadMessagesFromJsonlPath(path: string): Promise<{
     // loadFullLog's mostRecentLeaf.sessionId.
     sessionId: tip.sessionId as UUID | undefined,
     fullPath: path,
+    projectPath: chain[0]?.cwd,
   }
 }
 
@@ -479,6 +483,7 @@ export async function loadConversationForResume(
   prUrl?: string
   prRepository?: string
   planSlug?: string
+  projectPath?: string
   // Full path to the session file (for cross-directory resume)
   fullPath?: string
 } | null> {
@@ -524,6 +529,7 @@ export async function loadConversationForResume(
       log = {
         messages: loaded.messages as Message[],
         fullPath: loaded.fullPath,
+        projectPath: loaded.projectPath,
       } as LogOption
     } else if (typeof source === 'string') {
       // Load specific session by ID
@@ -610,6 +616,7 @@ export async function loadConversationForResume(
       prUrl: log?.prUrl,
       prRepository: log?.prRepository,
       planSlug,
+      projectPath: log?.projectPath,
       // Include full path for cross-directory resume
       fullPath: log?.fullPath,
     }

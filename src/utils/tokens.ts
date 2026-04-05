@@ -7,6 +7,7 @@ import {
 } from '../bootstrap/state.js'
 import { roughTokenCountEstimationForMessages } from '../services/tokenEstimation.js'
 import type { AssistantMessage, Message } from '../types/message.js'
+import { isCurrentPhaseCustomCodexProvider } from './currentPhase.js'
 import { getCodexEffectiveContextWindow } from './codexConfig.js'
 import { SYNTHETIC_MESSAGES, SYNTHETIC_MODEL } from './messages.js'
 import { jsonStringify } from './slowOperations.js'
@@ -45,18 +46,59 @@ function getAssistantMessageId(message: Message): string | undefined {
 
 /**
  * Calculate total context window tokens from an API response's usage data.
- * Includes input_tokens + cache tokens + output_tokens.
+ * Uses the provider-aware display total.
  *
  * This represents the full context size at the time of that API call.
  * Use tokenCountWithEstimation() when you need context size from messages.
  */
 export function getTokenCountFromUsage(usage: Usage): number {
-  return (
-    usage.input_tokens +
-    (usage.cache_creation_input_tokens ?? 0) +
-    (usage.cache_read_input_tokens ?? 0) +
-    usage.output_tokens
-  )
+  return getDisplayContextUsageBreakdown(usage).displayTokens
+}
+
+export type DisplayContextUsageBreakdown = {
+  totalInputTokens: number
+  cachedInputTokens: number
+  uncachedInputTokens: number
+  outputTokens: number
+  displayTokens: number
+  cachedInputIncludedInTotalInput: boolean
+}
+
+export function getDisplayContextUsageBreakdown(usage: {
+  input_tokens: number
+  output_tokens: number
+  cache_creation_input_tokens?: number | null
+  cache_read_input_tokens?: number | null
+}): DisplayContextUsageBreakdown {
+  const cacheCreationTokens = usage.cache_creation_input_tokens ?? 0
+  const cacheReadTokens = usage.cache_read_input_tokens ?? 0
+
+  if (isCurrentPhaseCustomCodexProvider()) {
+    const totalInputTokens = usage.input_tokens + cacheCreationTokens
+    const uncachedInputTokens = Math.max(0, usage.input_tokens - cacheReadTokens)
+
+    return {
+      totalInputTokens,
+      cachedInputTokens: cacheReadTokens,
+      uncachedInputTokens: uncachedInputTokens + cacheCreationTokens,
+      outputTokens: usage.output_tokens,
+      // OpenAI Responses already counts cached tokens inside input_tokens.
+      displayTokens: totalInputTokens + usage.output_tokens,
+      cachedInputIncludedInTotalInput: true,
+    }
+  }
+
+  const uncachedInputTokens = usage.input_tokens + cacheCreationTokens
+  const totalInputTokens = uncachedInputTokens + cacheReadTokens
+
+  return {
+    totalInputTokens,
+    cachedInputTokens: cacheReadTokens,
+    uncachedInputTokens,
+    outputTokens: usage.output_tokens,
+    displayTokens: totalInputTokens + usage.output_tokens,
+    cachedInputIncludedInTotalInput: false,
+  }
 }
 
 export function tokenCountFromLastAPIResponse(messages: Message[]): number {
@@ -163,7 +205,60 @@ export function getCurrentUsage(messages: Message[]): {
   return null
 }
 
+type ContextUsageFallbackOptions = {
+  includeRestoredTotals?: boolean
+}
+
+// Restored totals are session aggregates from a resumed conversation. They are
+// useful for cost/accounting displays, but they can exaggerate "current
+// context" surfaces because they are not tied to the active prompt window.
+function getRestoredUsageTotals(): {
+  input_tokens: number
+  output_tokens: number
+  cache_creation_input_tokens: number
+  cache_read_input_tokens: number
+} | null {
+  const restoredInputTokens = getTotalInputTokens()
+  const restoredOutputTokens = getTotalOutputTokens()
+  const restoredCacheCreationTokens = getTotalCacheCreationInputTokens()
+  const restoredCacheReadTokens = getTotalCacheReadInputTokens()
+  const restoredTotalTokens =
+    restoredInputTokens +
+    restoredOutputTokens +
+    restoredCacheCreationTokens +
+    restoredCacheReadTokens
+
+  if (restoredTotalTokens <= 0) {
+    return null
+  }
+
+  return {
+    input_tokens: restoredInputTokens,
+    output_tokens: restoredOutputTokens,
+    cache_creation_input_tokens: restoredCacheCreationTokens,
+    cache_read_input_tokens: restoredCacheReadTokens,
+  }
+}
+
 export function getEstimatedCurrentUsage(messages: Message[]): {
+  input_tokens: number
+  output_tokens: number
+  cache_creation_input_tokens: number
+  cache_read_input_tokens: number
+} | null
+export function getEstimatedCurrentUsage(
+  messages: Message[],
+  options: ContextUsageFallbackOptions,
+): {
+  input_tokens: number
+  output_tokens: number
+  cache_creation_input_tokens: number
+  cache_read_input_tokens: number
+} | null
+export function getEstimatedCurrentUsage(
+  messages: Message[],
+  options: ContextUsageFallbackOptions = {},
+): {
   input_tokens: number
   output_tokens: number
   cache_creation_input_tokens: number
@@ -176,26 +271,11 @@ export function getEstimatedCurrentUsage(messages: Message[]): {
 
   const estimatedTokens = tokenCountWithEstimation(messages)
   if (estimatedTokens <= 0) {
-    const restoredInputTokens = getTotalInputTokens()
-    const restoredOutputTokens = getTotalOutputTokens()
-    const restoredCacheCreationTokens = getTotalCacheCreationInputTokens()
-    const restoredCacheReadTokens = getTotalCacheReadInputTokens()
-    const restoredTotalTokens =
-      restoredInputTokens +
-      restoredOutputTokens +
-      restoredCacheCreationTokens +
-      restoredCacheReadTokens
-
-    if (restoredTotalTokens <= 0) {
+    if (options.includeRestoredTotals === false) {
       return null
     }
 
-    return {
-      input_tokens: restoredInputTokens,
-      output_tokens: restoredOutputTokens,
-      cache_creation_input_tokens: restoredCacheCreationTokens,
-      cache_read_input_tokens: restoredCacheReadTokens,
-    }
+    return getRestoredUsageTotals()
   }
 
   return {
@@ -206,7 +286,15 @@ export function getEstimatedCurrentUsage(messages: Message[]): {
   }
 }
 
-export function getDisplayContextTokenCount(messages: Message[]): number {
+export function getDisplayContextTokenCount(messages: Message[]): number
+export function getDisplayContextTokenCount(
+  messages: Message[],
+  options: ContextUsageFallbackOptions,
+): number
+export function getDisplayContextTokenCount(
+  messages: Message[],
+  options: ContextUsageFallbackOptions = {},
+): number {
   const usage = getCurrentUsage(messages)
   if (usage) {
     return getTokenCountFromUsage(usage)
@@ -217,17 +305,12 @@ export function getDisplayContextTokenCount(messages: Message[]): number {
     return estimatedTokens
   }
 
-  const restoredInputTokens = getTotalInputTokens()
-  const restoredOutputTokens = getTotalOutputTokens()
-  const restoredCacheCreationTokens = getTotalCacheCreationInputTokens()
-  const restoredCacheReadTokens = getTotalCacheReadInputTokens()
+  if (options.includeRestoredTotals === false) {
+    return 0
+  }
 
-  return (
-    restoredInputTokens +
-    restoredOutputTokens +
-    restoredCacheCreationTokens +
-    restoredCacheReadTokens
-  )
+  const restoredUsage = getRestoredUsageTotals()
+  return restoredUsage ? getTokenCountFromUsage(restoredUsage) : 0
 }
 
 export function doesEstimatedContextExceed200k(
@@ -272,7 +355,7 @@ export function getAssistantMessageContentLength(
  *
  * This is the CANONICAL function for measuring context size when checking
  * thresholds (autocompact, session memory init, etc.). Uses the last API
- * response's token count (input + output + cache) plus estimates for any
+ * response's provider-aware display total plus estimates for any
  * messages added since.
  *
  * Always use this instead of:

@@ -15,10 +15,12 @@ function readFeatureSet() {
   )
 }
 
+const DEFAULT_ENABLED_FEATURES = new Set([])
+
 export function feature(name) {
   const direct = process.env[`CLAUDE_CODE_FEATURE_${name}`]
   if (direct !== undefined) {
     return parseTruthy(direct)
   }
-  return readFeatureSet().has(name)
+  return readFeatureSet().has(name) || DEFAULT_ENABLED_FEATURES.has(name)
 }

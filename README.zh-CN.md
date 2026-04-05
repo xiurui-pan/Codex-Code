@@ -2,151 +2,142 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md) | [日本語](./README.ja.md)
 
-`Codex Code` 是一个以 Codex 为核心方向的编码代理项目。
-它直接以 `claude-code` 源码为基线，尽量保留已经被验证有效的本地终端体验，同时把内部运行主线逐步改造成更适合 Codex 的结构。
+Codex Code 是一个在终端里运行的本地编码代理。
+这个项目的核心目标很明确：在把模型主链路切到 Codex / OpenAI Responses 的同时，尽可能完整保留原版 Claude Code 已经被验证过的本地使用体验。
 
-这个项目不是通用多模型框架，也不是简单换一个接口地址。
-当前方向很明确：保留强项，减少包袱，让主链真正围绕 Codex 收口。
+也就是说，我们优先保留的不是一个名字，而是整套实际工作流：终端执行环境、TUI 结构、对话记录视图、工具调用、权限确认、会话恢复、上下文压缩、计划模式，以及子代理协作时的交互逻辑。
 
-## 项目介绍
+## Beta 状态
 
-这个仓库的核心判断很直接：
-Claude Code 在本地终端里的交互体验已经证明了价值，尤其是 TUI、主循环、工具执行、权限确认和结果回灌这些部分。
-这些能力值得保留。
+当前仓库已经适合以“源码安装”的方式发布 beta 版。
+推荐的 beta 使用路径是：
 
-真正需要重做的，是模型侧和中间对象层。
-一个面向 Codex 的编码代理，不应该长期依赖 Claude / Anthropic 形状的内部表示。
-所以 Codex Code 选择保留本地体验，同时持续把内部回合条目、执行对象和模型能力描述改成更贴近 Codex 的形式。
+- 克隆仓库
+- 安装依赖
+- 本地构建一次
+- 安装本地 `codex-code` 启动命令
+- 直接通过 `codex-code` 启动 TUI
 
-## 背景
+当前还不是 npm 发布版。
+这个 beta 阶段，推荐并支持的安装入口就是仓库自带的本地启动器脚本。
 
-这个项目之所以存在，是因为两边各有明显长处：
+## 我们尽量保留的体验
 
-- `claude-code` 的本地终端产品体验很强
-- Codex 更适合配一套更干净的模型层和执行对象层
+相对原版 Claude Code，本项目明确尽量保留这些东西：
 
-不少同类分支只在 provider 边界做翻译，先把 CLI 跑起来。
-这条路有价值，但不是这个项目想停留的位置。
-Codex Code 更在意的是：保留成熟的终端体验，再一步步拆掉把主链绑在 Claude 形状上的兼容层。
+- 终端里的执行环境和本地 shell 工作方式
+- TUI 布局、对话记录模式、状态区和整体交互节奏
+- 工具调用、权限确认和命令执行流程
+- 会话恢复、上下文压缩、本地记忆文件和计划模式行为
+- 后台任务与子代理协作时的交互方式
 
-## 目标
+## 主要变化
 
-当前目标很清楚：
+真正变化的部分，集中在模型执行主链路和 Codex 相关运行时：
 
-- 保留已经成熟的本地交互主线：TUI、主循环、工具执行、权限、结果回灌和本地 shell 能力
-- 把内部主线逐步换成面向 Codex 的回合条目、执行对象和能力表述
-- 当前阶段坚持 `Codex-only`，不把项目做成宽泛的兼容层
-- 把验收做成长期工作，而不是一次性的演示
+- 模型调用主线切到 Codex / OpenAI Responses
+- Codex 配置统一收口到 `~/.codex/config.toml`
+- 本地启动器默认开启 Codex provider
+- 本地启动器默认关闭自动更新，方便 beta 阶段稳定使用
 
-当前同样明确的非目标包括：
-
-- 不做通用多 provider 框架
-- 不做只改名字和界面文案的表层改造
-- 不做只靠提示词补丁的适配
-- Anthropic 特有的产品链路不在当前主线范围内
-
-## 当前已实现
-
-这个仓库已经不只是一个早期样机。
-下面这些能力，已经在真实的 `upstream/claude-code` 主链里完成验证，而不是只停留在独立样本里：
-
-- 自定义 Codex provider 已接入真实 CLI 主链
-- 非交互快速验证已经跑通
-- 真实终端里的基础 TUI 问答已经跑通
-- headless / structured 工具调用已经打通
-- `--permission-prompt-tool stdio` 权限闭环已经打通
-- 权限允许和拒绝两条分支都已验证
-- 第一版 Codex 回合条目层和执行对象层已经落下
-- 模型与 reasoning effort 的选择已经在 CLI、TUI 入口、配置入口和 headless 元数据里对齐
-
-换句话说，这已经是一个在真实主链上持续推进的迁移项目，不只是停留在概念说明。
-
-## 接下来计划
-
-下一阶段的重点，是让 Codex 主链更深、更稳，也更容易被信任。
-
-近期：
-
-- 让更多上层逻辑直接消费 Codex 执行对象
-- 继续拆掉主链里残留的 Claude / Anthropic 兼容层
-- 在继续改造的同时，稳住 TUI、headless 和权限闭环
-
-后续：
-
-- 系统性把残留的 `Claude Code` 产品文案改成 `Codex Code`
-- 把应用内模型切换正式纳入 TUI 验收，覆盖模型选择、reasoning effort、确认、取消和状态回显
-- 对照 Claude Code 官方能力清单，逐项验收所有非 Anthropic 特化能力
-- 后续再和 `co-claw-dex` 做性能与整体效果对比，不只看功能是否对齐
-
-这些计划不是装饰性的路线图，而是这个项目接下来真正要兑现的工作线。
-
-## 仓库结构
-
-- `docs/`：路线图、进展记录、分析、参考资料和验收文档
-- `packages/codex-code-proto/`：provider 与请求形状验证样本
-- `upstream/claude-code/`：导入的上游快照和当前改造工作区
-- `upstream/README.md`：上游来源和快照说明
-- `README.zh-CN.md`：中文说明
-- `README.ja.md`：日文说明
-- `LICENSE`：原创内容使用的开源许可证
-- `NOTICE`：原创内容与上游快照的许可范围说明
-
-## 快速开始
-
-环境要求：
+## 环境要求
 
 - Node.js `>=22`
 - pnpm `>=10`
-- 已配置好的自定义 Codex provider，通常来自 `~/.codex/config.toml`
+- 已配置好的 Codex provider，配置文件通常放在 `~/.codex/config.toml`
+- 一个类 Unix shell，用于本地安装启动脚本
 
-当前文档和验证示例默认使用：
-
-- model：`gpt-5.1-codex-mini`
-- reasoning effort：`medium`
-
-安装依赖：
+## 安装
 
 ```bash
 pnpm install
+pnpm build
+pnpm install:local
 ```
 
-原型验证：
+如果你只是重复做本地安装，也可以直接用：
 
 ```bash
-node packages/codex-code-proto/src/main.js --print-config
-node packages/codex-code-proto/src/main.js 'Reply with CODEX_CODE_SMOKE_OK only'
-node --test packages/codex-code-proto/test/*.test.js
+pnpm setup:local
 ```
 
-工作区快速验证：
+默认情况下，`pnpm install:local` 会把启动器写到 `~/.local/bin/codex-code`。
+如果 `~/.local/bin` 还不在 `PATH` 里，只需要配置一次：
 
 ```bash
-pnpm smoke
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
 ```
 
-构建真实 CLI 并检查入口：
+安装完成后，可以先确认命令已经可用：
 
 ```bash
-pnpm -C upstream/claude-code build
-node upstream/claude-code/dist/cli.js --version
-node upstream/claude-code/dist/cli.js --help
+codex-code --help
 ```
 
-## 为什么值得关注
+如果你想装到自定义目录，可以这样做：
 
-如果你关心真正能在终端里长期打磨的编码代理，这个项目值得关注：
+```bash
+pnpm install:local --bin-dir /custom/bin
+```
 
-- 它复用的是已经被证明有效的本地交互体验，不是从零再造一层壳
-- 它方向收得很窄，不会变成模糊的多模型包装器
-- 它改的是主链内部，不只是在 provider 边界做表面兼容
-- 它用路线图、进展记录和验收材料持续留痕
-- 它希望靠真实主链和逐项验收赢得信任，而不是靠口号
+如果你是在覆盖旧的本地启动器，使用这条命令：
 
-如果你认同这条方向，给一个 star 会很有帮助：它能让更多人看到这个项目，也能证明这条路线值得继续投入。
+```bash
+pnpm install:local --force
+```
+
+## Codex 配置示例
+
+`~/.codex/config.toml` 示例：
+
+```toml
+model_provider = "openai"
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+response_storage = false
+
+[model_providers.openai]
+base_url = "https://api.openai.com/v1"
+env_key = "OPENAI_API_KEY"
+```
+
+启动前再导出 API Key：
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+```
+
+## 启动
+
+安装完成后，直接这样启动 TUI：
+
+```bash
+codex-code
+```
+
+常用命令：
+
+```bash
+codex-code --help
+codex-code --version
+codex-code -p "Summarize this repository"
+```
+
+## 构建与测试
+
+```bash
+pnpm build
+pnpm test
+```
+
+## Beta 说明
+
+- 当前 beta 版本按“源码安装”方式分发，还不是 npm 发布版
+- 当前推荐并支持的入口是本地 `codex-code` 启动命令
+- 启动器默认固定 `CODEX_CODE_USE_CODEX_PROVIDER=1` 和 `DISABLE_AUTOUPDATER=1`
 
 ## 许可证
 
 本仓库对原创内容采用 MIT License，见 `LICENSE`。
-
-导入的上游快照和其他第三方内容，不会因为根目录的 `LICENSE` 自动改成 MIT。
-具体范围请看 `NOTICE` 和 `upstream/README.md`。
+导入的上游快照和第三方内容不会因为根目录 MIT 自动改成同一许可证，具体请看 `NOTICE` 和 `upstream/README.md`。

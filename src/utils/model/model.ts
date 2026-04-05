@@ -24,6 +24,7 @@ import { type ModelAlias, isModelAlias } from './aliases.js'
 import { capitalize } from '../stringUtils.js'
 import { isCurrentPhaseCustomCodexProvider } from '../currentPhase.js'
 import { DEFAULT_CODEX_MODEL, findCodexModelCapability, resolveCodexModelInput } from './codexModels.js'
+import { getCodexConfiguredSmallFastModel } from '../codexConfig.js'
 
 const require = createRequire(import.meta.url)
 
@@ -56,7 +57,17 @@ export type ModelName = string
 export type ModelSetting = ModelName | ModelAlias | null
 
 export function getSmallFastModel(): ModelName {
-  return process.env.ANTHROPIC_SMALL_FAST_MODEL || getDefaultHaikuModel()
+  const settings = getSettings_DEPRECATED() || {}
+  const configuredSmallFastModel =
+    getCodexConfiguredSmallFastModel() ??
+    process.env.ANTHROPIC_SMALL_FAST_MODEL ??
+    settings.small_fast_model
+
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return resolveCodexModelInput(configuredSmallFastModel ?? 'gpt-5.4-mini')
+  }
+
+  return configuredSmallFastModel || getDefaultHaikuModel()
 }
 
 export function isNonCustomOpusModel(model: ModelName): boolean {

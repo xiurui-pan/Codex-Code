@@ -76,7 +76,7 @@ export async function getBridgeDisabledReason(): Promise<string | null> {
       return 'Remote Control requires a full-scope login token. Long-lived tokens (from CODEX_CODE_OAUTH_TOKEN) are limited to inference-only for security reasons. Run `/login` to use Remote Control.'
     }
     if (!getOauthAccountInfo()?.organizationUuid) {
-      return 'Unable to determine your organization for Remote Control eligibility. Run `codex auth login` to refresh your account information.'
+      return 'Unable to determine your organization for Remote Control eligibility. Run `codex-code auth login` to refresh your account information.'
     }
     if (!(await checkGate_CACHED_OR_BLOCKING('tengu_ccr_bridge'))) {
       return 'Remote Control is not yet enabled for your account.'

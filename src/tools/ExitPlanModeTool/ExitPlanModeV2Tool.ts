@@ -252,6 +252,14 @@ export const ExitPlanModeV2Tool: Tool<InputSchema, Output> = buildTool({
       'plan' in input && typeof input.plan === 'string' ? input.plan : undefined
     const plan = inputPlan ?? getPlan(context.agentId)
 
+    // Never allow exiting plan mode with an empty plan. This keeps users in
+    // plan mode after Q&A rounds until a real, reviewable plan is available.
+    if (!plan || plan.trim() === '') {
+      throw new Error(
+        `Plan file at ${filePath} is empty. Stay in plan mode, write the full plan, then call ${EXIT_PLAN_MODE_V2_TOOL_NAME} again.`,
+      )
+    }
+
     // Sync disk so VerifyPlanExecution / Read see the edit. Re-snapshot
     // after: the only other persistFileSnapshotIfRemote call (api.ts) runs
     // in normalizeToolInput, pre-permission — it captured the old plan.

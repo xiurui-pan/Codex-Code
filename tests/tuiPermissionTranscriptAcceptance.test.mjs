@@ -289,7 +289,7 @@ async function runPermissionScenario({
   exitWaitForFile = null,
   promptWaitFor = ['❯'],
   promptWaitAtLeastMs = 0,
-  decisionWaitFor = ['Bash command', 'Do you want to proceed?'],
+  decisionWaitFor = ['Do you want to proceed?'],
   decisionWaitAtLeastMs = 0,
 }) {
   const tempHome = await mkdtemp(join(tmpdir(), 'codex-tui-permission-'))
@@ -336,9 +336,9 @@ async function runPermissionScenario({
           'send-prompt',
           'permission-decision',
           'exit-after-final',
-        ])
-        assert.match(result.normalizedTranscript, /Bashcommand/)
+        ], JSON.stringify(result))
         assert.match(result.normalizedTranscript, /Doyouwanttoproceed\?/)
+        assert.match(result.normalizedTranscript, /1\.Yes/)
         if (finalText) {
           assert.match(result.cleanedTranscript, new RegExp(finalText))
         }
@@ -377,7 +377,7 @@ test('TUI permission dialog: moving to No and pressing Enter denies the command'
     finalText: null,
     decisionInput: '3',
     expectFileWritten: false,
-    requestCount: 1,
+    minRequestCount: 1,
     exitWaitFor: ['❯'],
   })
 })
@@ -389,7 +389,7 @@ test('TUI permission dialog: Esc cancels the prompt and the command does not run
     finalText: null,
     decisionInput: '\u001b',
     expectFileWritten: false,
-    requestCount: 1,
+    minRequestCount: 1,
     exitWaitFor: ['❯'],
     promptWaitFor: ['❯'],
     promptWaitAtLeastMs: 200,

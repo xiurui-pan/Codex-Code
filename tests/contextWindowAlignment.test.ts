@@ -1,4 +1,5 @@
-import { afterEach, expect, test } from 'bun:test'
+import assert from 'node:assert/strict'
+import { afterEach, test } from 'node:test'
 
 const ENV_KEYS = [
   'CODEX_CODE_MODEL_CONTEXT_WINDOW',
@@ -46,8 +47,8 @@ test('codex-aligned context window defaults to the effective 258.4k window', asy
     '../src/services/compact/autoCompact.js'
   )
 
-  expect(getContextWindowForModel('gpt-5.4')).toBe(258_400)
-  expect(getAutoCompactThreshold('gpt-5.4')).toBe(244_800)
+  assert.equal(getContextWindowForModel('gpt-5.4'), 258_400)
+  assert.equal(getAutoCompactThreshold('gpt-5.4'), 244_800)
 })
 
 test('codex-aligned context window and auto compact limit honor ~/.codex/config.toml env projection', async () => {
@@ -61,7 +62,7 @@ test('codex-aligned context window and auto compact limit honor ~/.codex/config.
     '../src/services/compact/autoCompact.js'
   )
 
-  expect(getContextWindowForModel('gpt-5.4')).toBe(380_000)
+  assert.equal(getContextWindowForModel('gpt-5.4'), 380_000)
   // Codex CLI clamps auto compact to 90% of the raw context window.
-  expect(getAutoCompactThreshold('gpt-5.4')).toBe(360_000)
+  assert.equal(getAutoCompactThreshold('gpt-5.4'), 360_000)
 })

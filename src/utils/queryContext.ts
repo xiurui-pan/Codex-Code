@@ -28,6 +28,27 @@ import {
 } from './thinking.js'
 
 /**
+ * Remove the still-streaming assistant tail from a message list.
+ *
+ * During streaming, the most recent assistant message can have
+ * `stop_reason === null`. Side-question forks must not include that partial
+ * turn, otherwise provider requests can fail with malformed conversation state.
+ */
+export function stripInProgressAssistantTurn(messages: Message[]): Message[] {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const message = messages[i]
+    if (message?.type !== 'assistant') {
+      continue
+    }
+    if (message.message.stop_reason === null) {
+      return messages.slice(0, i)
+    }
+    return messages
+  }
+  return messages
+}
+
+/**
  * Fetch the three context pieces that form the API cache-key prefix:
  * systemPrompt parts, userContext, systemContext.
  *
@@ -131,13 +152,7 @@ export async function buildSideQuestionFallbackParams({
     ...(appendSystemPrompt ? [appendSystemPrompt] : []),
   ])
 
-  // Strip in-progress assistant message (stop_reason === null) — same guard
-  // as btw.tsx. The SDK can fire side_question mid-turn.
-  const last = messages.at(-1)
-  const forkContextMessages =
-    last?.type === 'assistant' && last.message.stop_reason === null
-      ? messages.slice(0, -1)
-      : messages
+  const forkContextMessages = stripInProgressAssistantTurn(messages)
 
   const toolUseContext: ToolUseContext = {
     options: {

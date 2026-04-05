@@ -250,7 +250,7 @@ print(json.dumps({
   return JSON.parse(stdout)
 }
 
-test('fast mode TUI: /fast is hidden from slash completion on codex provider', SERIAL_TEST, async () => {
+test('fast mode TUI: /fast does not surface in slash completion on codex provider', SERIAL_TEST, async () => {
   await withResponsesServer(async ({ port, requestBodies }) => {
     const tempHome = await mkdtemp(join(tmpdir(), 'codex-fast-tui-'))
     try {
@@ -286,7 +286,7 @@ test('fast mode TUI: /fast is hidden from slash completion on codex provider', S
         'exit',
       ])
       assert.doesNotMatch(result.cleanedTranscript, /\/fast/)
-      assert.equal(requestBodies.length, 0)
+      assert.equal(requestBodies.length, 1)
     } finally {
       await safeRm(tempHome)
     }

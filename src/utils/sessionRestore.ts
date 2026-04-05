@@ -7,9 +7,11 @@ import {
   setMainLoopModelOverride,
   setMainThreadAgentType,
   setOriginalCwd,
+  setProjectRoot,
   switchSession,
 } from '../bootstrap/state.js'
 import { clearSystemPromptSections } from '../constants/systemPromptSections.js'
+import { getSystemContext, getUserContext } from '../context.js'
 import { restoreCostStateForSession } from '../cost-tracker.js'
 import type { AppState } from '../state/AppState.js'
 import type { AgentColorName } from '../tools/AgentTool/agentColorManager.js'
@@ -323,6 +325,35 @@ type ResumeLoadResult = {
   prUrl?: string
   prRepository?: string
   planSlug?: string
+  projectPath?: string
+}
+
+export function restoreProjectPathForResume(
+  projectPath: string | undefined,
+): string {
+  if (!projectPath) {
+    return getCwd()
+  }
+
+  try {
+    process.chdir(projectPath)
+    setCwd(projectPath)
+    const resumedProjectPath = getCwd()
+    setOriginalCwd(resumedProjectPath)
+    setProjectRoot(resumedProjectPath)
+    clearMemoryFileCaches()
+    clearSystemPromptSections()
+    getUserContext.cache.clear?.()
+    getSystemContext.cache.clear?.()
+    getPlansDirectory.cache.clear?.()
+    return resumedProjectPath
+  } catch (error) {
+    logForDebugging(
+      `[resume] Failed to restore project path ${projectPath}: ${String(error)}`,
+      { level: 'warn' },
+    )
+    return getCwd()
+  }
 }
 
 /**
@@ -478,6 +509,11 @@ export async function processResumedConversation(
     await recordContentReplacement(result.contentReplacements)
   }
 
+  // Restore the session's project directory before any worktree restore so
+  // startup prompts, request metadata, and project-scoped caches all point at
+  // the resumed project instead of the shell's launch directory.
+  const resumedProjectCwd = restoreProjectPathForResume(result.projectPath)
+
   // Restore session metadata so /status shows the saved name and metadata
   // is re-appended on session exit. Fork doesn't take ownership of the
   // original session's worktree — a "Remove" on the fork's exit dialog
@@ -542,7 +578,7 @@ export async function processResumedConversation(
   void updateSessionName(result.agentName)
   const refreshedAgentDefs = await refreshAgentDefinitionsForModeSwitch(
     !!modeWarning,
-    context.currentCwd,
+    resumedProjectCwd,
     context.cliAgents,
     context.agentDefinitions,
   )

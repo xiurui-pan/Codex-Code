@@ -9,8 +9,7 @@ import test from 'node:test'
 import { projectRoot } from './helpers/projectRoot.mjs'
 
 const CLI_CWD = projectRoot
-const CLI_ENTRY = join(CLI_CWD, 'src/entrypoints/cli.tsx')
-const CLI_PRELOAD = join(CLI_CWD, 'dist/shims/runtime-globals.mjs')
+const CLI_BIN = join(CLI_CWD, 'dist/cli.js')
 const SERIAL_TEST = { concurrency: false }
 const DEFAULT_CONFIG_LINES = [
   'model_provider = "test-provider"',
@@ -116,7 +115,7 @@ import subprocess
 import sys
 import time
 
-cli_entry, cli_preload, cwd, temp_home, actions_json = sys.argv[1:6]
+cli_bin, cwd, temp_home, actions_json = sys.argv[1:5]
 actions = json.loads(actions_json)
 master, slave = pty.openpty()
 env = os.environ.copy()
@@ -128,10 +127,8 @@ env["FORCE_COLOR"] = "0"
 env["DISABLE_AUTOUPDATER"] = "1"
 proc = subprocess.Popen(
     [
-        "bun",
-        "--preload",
-        cli_preload,
-        cli_entry,
+        "node",
+        cli_bin,
         "--bare",
         "--dangerously-skip-permissions",
     ],
@@ -198,8 +195,7 @@ print(json.dumps({
     [
       '-c',
       pythonScript,
-      CLI_ENTRY,
-      CLI_PRELOAD,
+      CLI_BIN,
       CLI_CWD,
       tempHome,
       JSON.stringify(actions),

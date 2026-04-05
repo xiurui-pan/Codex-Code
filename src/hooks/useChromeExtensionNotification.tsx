@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Text } from '../ink.js';
 import { isClaudeAISubscriber } from '../utils/auth.js';
 import { isChromeExtensionInstalled, shouldEnableClaudeInChrome } from '../utils/claudeInChrome/setup.js';
+import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js';
 import { isRunningOnHomespace } from '../utils/envUtils.js';
 import { useStartupNotification } from './notifs/useStartupNotification.js';
 function getChromeFlag(): boolean | undefined {
@@ -17,6 +18,9 @@ export function useChromeExtensionNotification() {
   useStartupNotification(_temp);
 }
 async function _temp() {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return null;
+  }
   const chromeFlag = getChromeFlag();
   if (!shouldEnableClaudeInChrome(chromeFlag)) {
     return null;

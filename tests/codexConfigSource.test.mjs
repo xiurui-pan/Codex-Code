@@ -38,3 +38,12 @@ test('codex config exposes context window and auto compact helpers', async () =>
   assert.match(source, /export function getCodexEffectiveContextWindow/)
   assert.match(source, /export function getCodexAutoCompactTokenLimit/)
 })
+
+test('codex config parses and exports small_fast_model helpers', async () => {
+  const source = await readFile(SOURCE_PATH, 'utf8')
+
+  assert.match(source, /key === 'small_fast_model'/)
+  assert.match(source, /smallFastModel: parsed\.small_fast_model/)
+  assert.match(source, /CODEX_CODE_SMALL_FAST_MODEL/)
+  assert.match(source, /export function getCodexConfiguredSmallFastModel/)
+})

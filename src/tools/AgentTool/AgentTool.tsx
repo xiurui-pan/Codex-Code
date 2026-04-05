@@ -42,7 +42,7 @@ import { createAgentId } from '../../utils/uuid.js';
 import { createAgentWorktree, hasWorktreeChanges, removeAgentWorktree } from '../../utils/worktree.js';
 import { BASH_TOOL_NAME } from '../BashTool/toolName.js';
 import { BackgroundHint } from '../BashTool/UI.js';
-import { FILE_READ_TOOL_NAME } from '../FileReadTool/prompt.js';
+import { FILE_READ_TOOL_NAME } from '../FileReadTool/constants.js';
 import { spawnTeammate } from '../shared/spawnMultiAgent.js';
 import { setAgentColor } from './agentColorManager.js';
 import { agentToolResultSchema, classifyHandoffIfNeeded, emitTaskProgress, extractPartialResult, finalizeAgentTool, getLastToolUseName, runAsyncAgentLifecycle } from './agentToolUtils.js';
@@ -183,6 +183,7 @@ type TeammateSpawnedOutput = {
 export type RemoteLaunchedOutput = {
   status: 'remote_launched';
   taskId: string;
+  sessionId: string;
   sessionUrl: string;
   description: string;
   prompt: string;
@@ -469,6 +470,7 @@ export const AgentTool = buildTool({
       const remoteResult: RemoteLaunchedOutput = {
         status: 'remote_launched',
         taskId,
+        sessionId,
         sessionUrl: getRemoteTaskSessionUrl(sessionId),
         description,
         prompt,
@@ -1327,7 +1329,7 @@ The agent is now running and will receive instructions via mailbox.`
         type: 'tool_result',
         content: [{
           type: 'text',
-          text: `Remote agent launched in CCR.\ntaskId: ${r.taskId}\nsession_url: ${r.sessionUrl}\noutput_file: ${r.outputFile}\nThe agent is running remotely. You will be notified automatically when it completes.\nBriefly tell the user what you launched and end your response.`
+          text: `Remote agent launched in CCR.\ntaskId: ${r.taskId}\nsession_id: ${r.sessionId}\nsession_url: ${r.sessionUrl}\noutput_file: ${r.outputFile}\nThe agent is running remotely. You will be notified automatically when it completes.\nBriefly tell the user what you launched and end your response.`
         }]
       };
     }

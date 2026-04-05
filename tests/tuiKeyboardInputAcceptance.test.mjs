@@ -476,13 +476,19 @@ test('after interrupting an in-flight request, /exit still exits cleanly', SERIA
         tempHome,
         actions: [
           { name: 'submit-request', waitFor: ['❯'], send: 'hang please\r' },
+          { name: 'wait-in-flight', waitFor: ['esc to interrupt'], send: '', settleMs: 500 },
           { name: 'interrupt-request', waitFor: ['esc to interrupt'], send: '\u001b', settleMs: 300 },
           { name: 'exit', waitFor: ['❯'], send: '/exit\r', settleMs: 500 },
         ],
       })
 
       assert.equal(result.code, 0, JSON.stringify(result))
-      assert.deepEqual(result.sent, ['submit-request', 'interrupt-request', 'exit'])
+      assert.deepEqual(result.sent, [
+        'submit-request',
+        'wait-in-flight',
+        'interrupt-request',
+        'exit',
+      ])
       assert.equal(requestBodies.length, 1)
       assert.match(JSON.stringify(requestBodies[0]), /hang please/)
     } finally {

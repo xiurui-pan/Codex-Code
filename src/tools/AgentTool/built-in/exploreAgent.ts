@@ -1,13 +1,12 @@
 import { BASH_TOOL_NAME } from 'src/tools/BashTool/toolName.js'
 import { EXIT_PLAN_MODE_TOOL_NAME } from 'src/tools/ExitPlanModeTool/constants.js'
 import { FILE_EDIT_TOOL_NAME } from 'src/tools/FileEditTool/constants.js'
-import { FILE_READ_TOOL_NAME } from 'src/tools/FileReadTool/prompt.js'
+import { FILE_READ_TOOL_NAME } from 'src/tools/FileReadTool/constants.js'
 import { FILE_WRITE_TOOL_NAME } from 'src/tools/FileWriteTool/prompt.js'
 import { GLOB_TOOL_NAME } from 'src/tools/GlobTool/prompt.js'
 import { GREP_TOOL_NAME } from 'src/tools/GrepTool/prompt.js'
 import { NOTEBOOK_EDIT_TOOL_NAME } from 'src/tools/NotebookEditTool/constants.js'
 import { hasEmbeddedSearchTools } from 'src/utils/embeddedTools.js'
-import { isCurrentPhaseCustomCodexProvider } from 'src/utils/currentPhase.js'
 import { AGENT_TOOL_NAME } from '../constants.js'
 import type { BuiltInAgentDefinition } from '../loadAgentsDir.js'
 
@@ -74,10 +73,10 @@ export const EXPLORE_AGENT: BuiltInAgentDefinition = {
   ],
   source: 'built-in',
   baseDir: 'built-in',
-  // Codex provider sessions must stay on a Codex-compatible model. Keep the
-  // original external fast-path for non-Codex providers.
+  // Codex provider sessions map the lightweight haiku tier to gpt-5.4-mini.
+  // Ant-native sessions keep inheriting the parent model.
   model:
-    process.env.USER_TYPE === 'ant' || isCurrentPhaseCustomCodexProvider()
+    process.env.USER_TYPE === 'ant'
       ? 'inherit'
       : 'haiku',
   // Explore is a fast read-only search agent — it doesn't need commit/PR/lint

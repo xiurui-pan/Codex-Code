@@ -42,6 +42,7 @@ test('codex config centralizes base URL, model, reasoning, storage, and auth', a
     [
       'model_provider = "test-provider"',
       'model = "gpt-5.1-codex-mini"',
+      'small_fast_model = "gpt-5.4-mini"',
       'model_reasoning_effort = "high"',
       'response_storage = false',
       '',
@@ -70,6 +71,7 @@ test('codex config centralizes base URL, model, reasoning, storage, and auth', a
           getCodexConfiguredAuthEnvKey,
           getCodexConfiguredBaseUrl,
           getCodexConfiguredModel,
+          getCodexConfiguredSmallFastModel,
           getCodexConfiguredReasoningEffort,
           getCodexConfiguredResponseStorage,
           loadCodexConfig,
@@ -78,6 +80,7 @@ test('codex config centralizes base URL, model, reasoning, storage, and auth', a
         const config = await loadCodexConfig(configPath)
         assert.equal(config.baseUrl, 'https://example.invalid/v1')
         assert.equal(config.model, 'gpt-5.1-codex-mini')
+        assert.equal(config.smallFastModel, 'gpt-5.4-mini')
         assert.equal(config.reasoningEffort, 'high')
         assert.equal(config.responseStorage, false)
         assert.equal(config.modelContextWindow, undefined)
@@ -89,6 +92,7 @@ test('codex config centralizes base URL, model, reasoning, storage, and auth', a
 
         assert.equal(getCodexConfiguredBaseUrl(), 'https://example.invalid/v1')
         assert.equal(getCodexConfiguredModel(), 'gpt-5.1-codex-mini')
+        assert.equal(getCodexConfiguredSmallFastModel(), 'gpt-5.4-mini')
         assert.equal(getCodexConfiguredReasoningEffort(), 'high')
         assert.equal(getCodexConfiguredResponseStorage(), false)
         assert.equal(getCodexConfiguredAuthEnvKey(), 'TEST_CODEX_API_KEY')

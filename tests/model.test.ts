@@ -20,6 +20,18 @@ async function readModelSource(): Promise<string> {
   return readFile(modelPath, 'utf8')
 }
 
+async function readModelUtilitySource(): Promise<string> {
+  const modelPath = fileURLToPath(
+    new URL('../src/utils/model/model.ts', import.meta.url),
+  )
+  return readFile(modelPath, 'utf8')
+}
+
+async function readSource(relativePath: string): Promise<string> {
+  const sourcePath = fileURLToPath(new URL(relativePath, import.meta.url))
+  return readFile(sourcePath, 'utf8')
+}
+
 async function readCodexResponsesSource(): Promise<string> {
   const sourcePath = fileURLToPath(
     new URL('../src/services/api/codexResponses.ts', import.meta.url),
@@ -27,11 +39,82 @@ async function readCodexResponsesSource(): Promise<string> {
   return readFile(sourcePath, 'utf8')
 }
 
+function withEnv(
+  overrides: Record<string, string | undefined>,
+  fn: () => Promise<void>,
+): Promise<void> {
+  const previous = new Map<string, string | undefined>()
+  for (const [key, value] of Object.entries(overrides)) {
+    previous.set(key, process.env[key])
+    if (value === undefined) {
+      delete process.env[key]
+    } else {
+      process.env[key] = value
+    }
+  }
+
+  return Promise.resolve()
+    .then(fn)
+    .finally(() => {
+      for (const [key, value] of previous.entries()) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    })
+}
+
 test('model entry no longer imports claude facade or ANTHROPIC_MODEL', async () => {
   const source = await readModelSource()
 
   assert.equal(source.includes("'./claude.js'"), false)
   assert.equal(source.includes('ANTHROPIC_MODEL'), false)
+})
+
+test('codex small-model helpers route UI side tasks through the lightweight Codex tier', async () => {
+  const modelSource = await readModelSource()
+  const modelUtilitySource = await readModelUtilitySource()
+  const guideAgentSource = await readSource(
+    '../src/tools/AgentTool/built-in/claudeCodeGuideAgent.ts',
+  )
+  const exploreAgentSource = await readSource(
+    '../src/tools/AgentTool/built-in/exploreAgent.ts',
+  )
+  const statuslineAgentSource = await readSource(
+    '../src/tools/AgentTool/built-in/statuslineSetup.ts',
+  )
+  const magicDocsSource = await readSource(
+    '../src/services/MagicDocs/magicDocs.ts',
+  )
+
+  assert.match(
+    modelUtilitySource,
+    /configuredSmallFastModel[\s\S]*isCurrentPhaseCustomCodexProvider\(\)[\s\S]*resolveCodexModelInput\(configuredSmallFastModel \?\? 'gpt-5\.4-mini'\)/,
+  )
+  assert.match(modelSource, /model: args\.options\?\.model \?\? getSmallFastModel\(\)/)
+  assert.match(guideAgentSource, /model: 'haiku'/)
+  assert.match(exploreAgentSource, /process\.env\.USER_TYPE === 'ant'[\s\S]*: 'haiku'/)
+  assert.match(statuslineAgentSource, /model: 'haiku'/)
+  assert.match(magicDocsSource, /model: 'haiku'/)
+})
+
+test('custom provider helper agents resolve haiku through small_fast_model', async () => {
+  await withEnv(
+    {
+      CODEX_CODE_USE_CODEX_PROVIDER: '1',
+      CODEX_CODE_SMALL_FAST_MODEL: 'gpt-5.1-codex-mini',
+      ANTHROPIC_SMALL_FAST_MODEL: undefined,
+    },
+    async () => {
+      const { getSmallFastModel } = await import('../src/utils/model/model.ts')
+      const { getAgentModel } = await import('../src/utils/model/agent.ts')
+
+      assert.equal(getSmallFastModel(), 'gpt-5.1-codex-mini')
+      assert.equal(getAgentModel('haiku', 'gpt-5.4'), 'gpt-5.1-codex-mini')
+    },
+  )
 })
 
 test('preferred response conversion keeps payload first and only wraps at the outer assistant edge', () => {

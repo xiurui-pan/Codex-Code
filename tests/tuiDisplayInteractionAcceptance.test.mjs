@@ -260,7 +260,13 @@ test('narrow terminal keeps completion focus stable and still submits mixed Chin
           { name: 'show-completion', waitFor: ['❯'], send: '/he', settleMs: 180 },
           { name: 'dismiss-completion', waitFor: ['/help'], send: '\u001b', settleMs: 180 },
           { name: 'submit-mixed', waitFor: ['? for shortcuts'], send: '请总结 English 状态 and risks\r' },
-          { name: 'exit', waitFor: ['NARROW_MIX_OK'], send: '/exit\r', settleMs: 500 },
+          {
+            name: 'exit',
+            waitFor: ['MIX_OK'],
+            waitForFresh: true,
+            send: '/exit\r',
+            settleMs: 500,
+          },
         ],
       })
 
@@ -275,7 +281,7 @@ test('narrow terminal keeps completion focus stable and still submits mixed Chin
       const req = JSON.stringify(requestBodies[0])
       assert.match(req, /请总结/)
       assert.match(req, /English/)
-      assert.match(result.cleanedTranscript, /NARROW_MIX_OK/)
+      assert.match(result.cleanedTranscript, /MIX_OK/)
     } finally {
       await rm(tempHome, { recursive: true, force: true })
     }

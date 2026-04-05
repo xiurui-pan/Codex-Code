@@ -108,14 +108,17 @@ test('main help and session copy use Codex-facing wording', async () => {
   const oauthSource = await readFile(`${ROOT}/components/ConsoleOAuthFlow.tsx`, 'utf8')
   const resumeSource = await readFile(`${ROOT}/components/ResumeTask.tsx`, 'utf8')
 
-  assert.match(mainSource, /program\.name\('codex'\)/)
-  assert.match(mainSource, /launch Codex Code with just `codex`/)
+  assert.match(mainSource, /const cliCommandName = 'codex-code'/)
+  assert.match(mainSource, /program\.name\(cliCommandName\)/)
+  assert.match(mainSource, /launch Codex Code with just `codex-code`/)
   assert.match(mainSource, /Start the Codex Code MCP server/)
   assert.match(mainSource, /Manage Codex Code plugins/)
   assert.match(mainSource, /Manage Codex Code marketplaces/)
   assert.match(mainSource, /Check the health of your Codex Code auto-updater/)
-  assert.match(mainSource, /Usage: codex ssh/)
-  assert.match(mainSource, /Usage: codex assistant/)
+  assert.match(mainSource, /Usage: codex-code ssh/)
+  assert.match(mainSource, /Usage: codex-code assistant/)
+  assert.doesNotMatch(mainSource, /when Claude is run with the -p mode/)
+  assert.doesNotMatch(mainSource, /Anthropic auth is strictly ANTHROPIC_API_KEY/)
   assert.doesNotMatch(mainSource, /program\.name\('claude'\)/)
   assert.doesNotMatch(mainSource, /launch Claude Code with just `claude`/)
 
@@ -159,6 +162,32 @@ test('secondary TUI copy no longer tells users to ask Claude', async () => {
   assert.match(hooksMenuSource, /ask Codex Code\./)
 })
 
+test('tips, status notices, and chrome startup copy avoid stale Claude wording in Codex mode', async () => {
+  const tipSource = await readFile(`${ROOT}/services/tips/tipRegistry.ts`, 'utf8')
+  const statusSource = await readFile(`${ROOT}/utils/statusNoticeDefinitions.tsx`, 'utf8')
+  const chromeSource = await readFile(
+    `${ROOT}/hooks/useChromeExtensionNotification.tsx`,
+    'utf8',
+  )
+
+  assert.match(tipSource, /codex-code --continue or codex-code --resume/)
+  assert.doesNotMatch(tipSource, /claude --continue/)
+  assert.doesNotMatch(tipSource, /@claude/)
+  assert.doesNotMatch(tipSource, /clau\.de\/web/)
+  assert.doesNotMatch(tipSource, /Claude desktop app/)
+  assert.match(tipSource, /currentStageDisableClaudeProductTips/)
+
+  assert.doesNotMatch(statusSource, /claude \/logout/)
+  assert.doesNotMatch(statusSource, /docs\.claude\.com/)
+  assert.doesNotMatch(statusSource, /Anthropic Console key/)
+  assert.doesNotMatch(statusSource, /instead of Claude account/)
+  assert.match(statusSource, /isCurrentPhaseCustomCodexProvider\(\)/)
+  assert.match(statusSource, /run `\/logout`/)
+
+  assert.match(chromeSource, /isCurrentPhaseCustomCodexProvider\(\)/)
+  assert.match(chromeSource, /return null;/)
+})
+
 test('command descriptions avoid stale Claude Code wording', async () => {
   const statuslineSource = await readFile(`${ROOT}/commands/statusline.tsx`, 'utf8')
   const statsSource = await readFile(`${ROOT}/commands/stats/index.ts`, 'utf8')
@@ -168,6 +197,9 @@ test('command descriptions avoid stale Claude Code wording', async () => {
   const ultraplanSource = await readFile(`${ROOT}/commands/ultraplan.tsx`, 'utf8')
   const installSource = await readFile(`${ROOT}/commands/install.tsx`, 'utf8')
   const desktopCommandSource = await readFile(`${ROOT}/commands/desktop/index.ts`, 'utf8')
+  const fastCommandSource = await readFile(`${ROOT}/commands/fast/index.ts`, 'utf8')
+  const fastPickerSource = await readFile(`${ROOT}/commands/fast/fast.tsx`, 'utf8')
+  const settingsConfigSource = await readFile(`${ROOT}/components/Settings/Config.tsx`, 'utf8')
 
   assert.match(statuslineSource, /Set up Codex Code's status line UI/)
   assert.match(statsSource, /Show your Codex Code usage statistics and activity/)
@@ -177,6 +209,12 @@ test('command descriptions avoid stale Claude Code wording', async () => {
   assert.match(ultraplanSource, /Codex Code web session drafts an advanced plan/)
   assert.match(installSource, /Install Codex Code native build/)
   assert.match(desktopCommandSource, /Continue the current session in Codex Code Desktop/)
+  assert.match(fastCommandSource, /Toggle fast mode \(\$\{FAST_MODE_MODEL_DISPLAY\} for faster responses\)/)
+  assert.match(fastPickerSource, /High-speed mode that uses \$\{FAST_MODE_MODEL_DISPLAY\} for faster responses\./)
+  assert.match(settingsConfigSource, /Fast mode \(\$\{FAST_MODE_MODEL_DISPLAY\} for faster responses\)/)
+  assert.doesNotMatch(fastCommandSource, /Opus 4\.6 only/)
+  assert.doesNotMatch(fastPickerSource, /Opus 4\.6 only/)
+  assert.doesNotMatch(settingsConfigSource, /Opus 4\.6 only/)
   assert.doesNotMatch(reviewSource, /Runs in Claude Code on the web\./)
   assert.doesNotMatch(ultraplanSource, /Claude Code on the web drafts an advanced plan/)
 })

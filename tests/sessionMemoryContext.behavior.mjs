@@ -82,10 +82,27 @@ async function writeSessionMemorySummary({
     await new Promise(resolve => setTimeout(resolve, 2000))
   }
 
-  const candidateMemoryPaths = await collectCandidateMemoryPaths()
-  for (const candidateMemoryPath of candidateMemoryPaths) {
-    await mkdir(join(candidateMemoryPath, '..'), { recursive: true })
-    await writeFile(candidateMemoryPath, content, 'utf8')
+  const deadline = Date.now() + 2500
+  do {
+    const candidateMemoryPaths = await collectCandidateMemoryPaths()
+    for (const candidateMemoryPath of candidateMemoryPaths) {
+      await mkdir(join(candidateMemoryPath, '..'), { recursive: true })
+      await writeFile(candidateMemoryPath, content, 'utf8')
+    }
+    if (Date.now() >= deadline) {
+      break
+    }
+    await new Promise(resolve => setTimeout(resolve, 250))
+  } while (true)
+}
+
+function withTempClaudeEnv(tempHome) {
+  return {
+    ...process.env,
+    HOME: tempHome,
+    CLAUDE_CONFIG_DIR: join(tempHome, '.claude'),
+    ANTHROPIC_API_KEY: 'test-key',
+    CODEX_CODE_USE_CODEX_PROVIDER: '1',
   }
 }
 
@@ -171,12 +188,7 @@ async function runSession({ queries, responseBatches }) {
     ],
     {
       cwd,
-      env: {
-        ...process.env,
-        HOME: tempHome,
-        ANTHROPIC_API_KEY: 'test-key',
-        CODEX_CODE_USE_CODEX_PROVIDER: '1',
-      },
+      env: withTempClaudeEnv(tempHome),
       stdio: ['pipe', 'pipe', 'pipe'],
     },
   )
@@ -241,6 +253,22 @@ async function runSession({ queries, responseBatches }) {
   const transcriptPath = join(projectDir, `${sessionId}.jsonl`)
 
   async function getObservedSessionId() {
+    const stdoutSessionId =
+      stdoutMessages.find(
+        message =>
+          (typeof message.session_id === 'string' && message.session_id) ||
+          (typeof message.sessionId === 'string' && message.sessionId),
+      )?.session_id ??
+      stdoutMessages.find(
+        message =>
+          (typeof message.session_id === 'string' && message.session_id) ||
+          (typeof message.sessionId === 'string' && message.sessionId),
+      )?.sessionId ??
+      null
+    if (stdoutSessionId) {
+      return stdoutSessionId
+    }
+
     try {
       const globalConfig = JSON.parse(await readFile(globalConfigPath, 'utf8'))
       const projectConfigs = Object.values(globalConfig.projects ?? {})
@@ -287,22 +315,6 @@ async function runSession({ queries, responseBatches }) {
         return transcriptIds[0]
       }
     } catch {}
-
-    const stdoutSessionId =
-      stdoutMessages.find(
-        message =>
-          (typeof message.session_id === 'string' && message.session_id) ||
-          (typeof message.sessionId === 'string' && message.sessionId),
-      )?.session_id ??
-      stdoutMessages.find(
-        message =>
-          (typeof message.session_id === 'string' && message.session_id) ||
-          (typeof message.sessionId === 'string' && message.sessionId),
-      )?.sessionId ??
-      null
-    if (stdoutSessionId) {
-      return stdoutSessionId
-    }
 
     return sessionId
   }
@@ -471,12 +483,7 @@ async function runResumeCompactSession({
     ],
     {
       cwd: currentCwd,
-      env: {
-        ...process.env,
-        HOME: homeDir,
-        ANTHROPIC_API_KEY: 'test-key',
-        CODEX_CODE_USE_CODEX_PROVIDER: '1',
-      },
+      env: withTempClaudeEnv(homeDir),
       stdio: ['pipe', 'pipe', 'pipe'],
     },
   )
@@ -678,22 +685,13 @@ test('resume-like first compact reuses stored session memory summary', async () 
             waitForExistingSummary: true,
           })
         },
-        async afterResult({ projectDir, stderr }) {
-          await new Promise(resolve => setTimeout(resolve, 500))
-          const transcriptEntries = await readdir(projectDir, {
-            withFileTypes: true,
-          })
-          const transcriptContents = await Promise.all(
-            transcriptEntries
-              .filter(entry => entry.isFile() && entry.name.endsWith('.jsonl'))
-              .map(entry => readFile(join(projectDir, entry.name), 'utf8')),
-          )
-          const transcript = transcriptContents.join('\n')
+        async afterResult({ messages, stderr }) {
+          const compactOutput = messages.map(message => JSON.stringify(message)).join('\n')
           assert.match(
-            transcript,
+            compactOutput,
             /Resume from stored summary on first compact/,
           )
-          assert.doesNotMatch(transcript, /Compaction interrupted/)
+          assert.doesNotMatch(compactOutput, /Compaction interrupted/)
         },
       },
     ],

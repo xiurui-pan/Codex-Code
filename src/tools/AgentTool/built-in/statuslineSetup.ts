@@ -1,5 +1,4 @@
 import type { BuiltInAgentDefinition } from '../loadAgentsDir.js'
-import { isCurrentPhaseCustomCodexProvider } from '../../../utils/currentPhase.js'
 
 const STATUSLINE_SYSTEM_PROMPT = `You are a status line setup agent for Codex Code. Your job is to create or update the statusLine command in the user's Codex Code settings.
 
@@ -139,7 +138,7 @@ export const STATUSLINE_SETUP_AGENT: BuiltInAgentDefinition = {
   tools: ['Read', 'Edit'],
   source: 'built-in',
   baseDir: 'built-in',
-  model: isCurrentPhaseCustomCodexProvider() ? 'inherit' : 'sonnet',
+  model: 'haiku',
   color: 'orange',
   getSystemPrompt: () => STATUSLINE_SYSTEM_PROMPT,
 }

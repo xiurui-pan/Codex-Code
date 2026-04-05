@@ -4,10 +4,12 @@ import { MODEL_ALIASES, type ModelAlias } from './aliases.js'
 import { applyBedrockRegionPrefix, getBedrockRegionPrefix } from './bedrock.js'
 import {
   getCanonicalName,
+  getSmallFastModel,
   getRuntimeMainLoopModel,
   parseUserSpecifiedModel,
 } from './model.js'
 import { getAPIProvider } from './providers.js'
+import { isCurrentPhaseCustomCodexProvider } from '../currentPhase.js'
 
 export const AGENT_MODEL_OPTIONS = [...MODEL_ALIASES, 'inherit'] as const
 export type AgentModelAlias = (typeof AGENT_MODEL_OPTIONS)[number]
@@ -68,6 +70,13 @@ export function getAgentModel(
 
   // Prioritize tool-specified model if provided
   if (toolSpecifiedModel) {
+    if (
+      isCurrentPhaseCustomCodexProvider() &&
+      toolSpecifiedModel.toLowerCase() === 'haiku'
+    ) {
+      return getSmallFastModel()
+    }
+
     if (aliasMatchesParentTier(toolSpecifiedModel, parentModel)) {
       return parentModel
     }
@@ -85,6 +94,13 @@ export function getAgentModel(
       mainLoopModel: parentModel,
       exceeds200kTokens: false,
     })
+  }
+
+  if (
+    isCurrentPhaseCustomCodexProvider() &&
+    agentModelWithExp.toLowerCase() === 'haiku'
+  ) {
+    return getSmallFastModel()
   }
 
   if (aliasMatchesParentTier(agentModelWithExp, parentModel)) {

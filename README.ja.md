@@ -2,153 +2,143 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md) | [日本語](./README.ja.md)
 
-`Codex Code` は、Codex を主軸に据えたコーディングエージェントのプロジェクトです。
-`claude-code` のソースを直接の基線として取り込み、すでに価値が証明されているローカルの端末体験をできるだけ残しながら、内部の実行経路を Codex に合う形へ段階的に作り替えています。
+Codex Code は、ターミナルで動くローカルのコーディングエージェントです。
+このプロジェクトの狙いは、モデル実行の主経路を Codex / OpenAI Responses に切り替えつつ、元の Claude Code で評価されていたローカル体験をできるだけそのまま残すことです。
 
-このプロジェクトは、汎用のマルチモデル基盤ではありません。
-単なる API の差し替えでもありません。
-方向は明確で、強みを残し、余計な互換層を減らし、主経路を Codex に寄せていくことにあります。
+つまり残したいのは名前ではなく体験です。
+端末の実行環境、TUI の構成、会話記録表示、ツール呼び出し、権限確認、セッション再開、コンパクト、計画モード、サブエージェントのやり取りまで、実際の操作感を崩さないことを重視しています。
 
-## プロジェクト紹介
+## Beta 状態
 
-このリポジトリの出発点はシンプルです。
-Claude Code は、TUI、メインループ、ツール実行、権限確認、結果の受け渡しといったローカルの端末体験で、すでに強さを示しています。
-その部分は残す価値があります。
+このリポジトリは、ソースから導入する beta 版として使える状態です。
+推奨する導入手順は次の通りです。
 
-一方で、モデル側と中間オブジェクトの形は作り直す必要があります。
-Codex 向けのコーディングエージェントが、いつまでも Claude / Anthropic 由来の内部表現に縛られるべきではありません。
-そのため Codex Code は、ローカル体験を守りながら、turn items、execution objects、モデル能力の表し方を Codex 向けに整理していきます。
+- リポジトリを取得する
+- 依存関係を入れる
+- 一度ビルドする
+- ローカル `codex-code` ランチャーを入れる
+- `codex-code` で TUI を起動する
 
-## 背景
+まだ npm 公開版ではありません。
+この beta では、同梱しているローカルランチャーを使う導入方法を正式な手順としています。
 
-このプロジェクトが存在する理由は、両側に明確な強みがあるからです。
+## できるだけ維持している体験
 
-- `claude-code` には優れたローカル端末体験がある
-- Codex には、より素直なモデル層と実行オブジェクト層が合っている
+元の Claude Code と比べて、次の体験は意図的に維持しています。
 
-近い方向の fork の中には、provider の境界で翻訳して CLI を動かすところで止まるものもあります。
-それ自体は有用ですが、このプロジェクトの到達点ではありません。
-Codex Code が重視しているのは、実績のある端末体験を保ちながら、主経路を Claude 固有の形に縛る互換層を少しずつ外していくことです。
+- ターミナルの実行環境とローカル shell 中心の流れ
+- TUI レイアウト、会話記録モード、状態表示、操作のリズム
+- ツール呼び出し、権限確認、コマンド実行の流れ
+- セッション再開、コンパクト、ローカル memory ファイル、計画モード
+- バックグラウンド task とサブエージェントのやり取り
 
-## 目標
+## 変わる部分
 
-現在の目標ははっきりしています。
+主に変わるのは、モデル実行経路と Codex 向けの周辺実装です。
 
-- TUI、メインループ、ツール実行、権限、結果の受け渡し、ローカル shell など、実績のあるローカル主経路を保つこと
-- 内部の主経路を、Codex 向けの turn items、execution objects、能力表現へ段階的に置き換えること
-- 当面は `Codex-only` を維持し、広すぎる互換層にはしないこと
-- 検証を一度きりのデモではなく、継続的な作業として積み上げること
+- メインのモデル経路は Codex / OpenAI Responses
+- Codex 設定は `~/.codex/config.toml` に集約
+- ローカルランチャーは Codex provider を既定で有効化
+- ローカルランチャーは beta 安定化のため auto-update を既定で無効化
 
-同時に、現在の非目標も明確です。
-
-- 汎用の multi-provider 基盤にはしない
-- 名前や見た目だけを変える表面的な改修にはしない
-- prompt だけで合わせる方針は取らない
-- Anthropic 固有の製品経路は現在の主線に含めない
-
-## 現在できていること
-
-このリポジトリは、すでに初期サンプルの段階を越えています。
-次の項目は、独立した実験ではなく、実際の `upstream/claude-code` 主経路で確認されています。
-
-- カスタム Codex provider を実際の CLI 経路へ接続済み
-- 非対話の最小検証が通る
-- 実端末で基本的な TUI Q&A が動く
-- headless / structured のツール呼び出しが主経路で動く
-- `--permission-prompt-tool stdio` による権限ループが動く
-- 許可と拒否の両分岐を確認済み
-- Codex 向けの turn-item 層と execution-item 層の初期版を導入済み
-- モデル選択と reasoning effort の扱いを CLI、TUI 側入口、設定入口、headless metadata でそろえている
-
-つまりこれは、概念メモではなく、実経路で進み続けている移行プロジェクトです。
-
-## 今後の計画
-
-次の段階では、Codex 主経路をさらに深く、安定して、信頼しやすい形にしていきます。
-
-近い計画：
-
-- より多くの上位層が Codex execution objects を直接扱えるようにする
-- 主経路に残る Claude / Anthropic 由来の互換層をさらに減らす
-- 改修を続けながら、TUI、headless、権限ループを安定させる
-
-その後の計画：
-
-- 残っている `Claude Code` の文言を `Codex Code` に順次統一する
-- アプリ内のモデル切り替えを正式な TUI 受け入れ項目にし、モデル選択、reasoning effort、確認、キャンセル、表示更新まで含めて検証する
-- 公式 Claude Code の能力一覧を基準に、Anthropic 固有ではない能力を一つずつ検証する
-- 将来的には `co-claw-dex` と性能や総合的な使い勝手も比較する
-
-これらは飾りの計画ではなく、このプロジェクトが次に本当に進める作業線です。
-
-## リポジトリ構成
-
-- `docs/` - ロードマップ、進捗、分析、参考資料、受け入れメモ
-- `packages/codex-code-proto/` - provider とリクエスト形状の確認用サンプル
-- `upstream/claude-code/` - 取り込んだ上流スナップショットと現在の作業領域
-- `upstream/README.md` - 上流ソースの由来とスナップショットの記録
-- `README.zh-CN.md` - 中国語 README
-- `README.ja.md` - 日本語 README
-- `LICENSE` - オリジナル内容に適用するオープンソースライセンス
-- `NOTICE` - オリジナル内容と上流スナップショットの適用範囲メモ
-
-## クイックスタート
-
-必要な環境：
+## 必要環境
 
 - Node.js `>=22`
 - pnpm `>=10`
-- 設定済みのカスタム Codex provider。通常は `~/.codex/config.toml` を使います
+- `~/.codex/config.toml` に設定された Codex provider
+- ローカルランチャー用の Unix 系シェル
 
-現在の文書と検証例で使っている既定値：
-
-- model: `gpt-5.1-codex-mini`
-- reasoning effort: `medium`
-
-依存関係のインストール：
+## インストール
 
 ```bash
 pnpm install
+pnpm build
+pnpm install:local
 ```
 
-プロトタイプ確認：
+ローカル導入を繰り返す場合は、次でもまとめて実行できます。
 
 ```bash
-node packages/codex-code-proto/src/main.js --print-config
-node packages/codex-code-proto/src/main.js 'Reply with CODEX_CODE_SMOKE_OK only'
-node --test packages/codex-code-proto/test/*.test.js
+pnpm setup:local
 ```
 
-ワークスペースの簡易確認：
+標準では `~/.local/bin/codex-code` にランチャーを作成します。
+`~/.local/bin` が `PATH` に入っていない場合は、一度だけ追加してください。
 
 ```bash
-pnpm smoke
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
 ```
 
-実際の CLI をビルドして入口を確認：
+インストール後は、まずコマンドが使えることを確認できます。
 
 ```bash
-pnpm -C upstream/claude-code build
-node upstream/claude-code/dist/cli.js --version
-node upstream/claude-code/dist/cli.js --help
+codex-code --help
 ```
 
-## なぜ注目する価値があるのか
+別の bin ディレクトリに入れる場合は次を使います。
 
-端末で本気で育てていけるコーディングエージェントに関心があるなら、このプロジェクトは追う価値があります。
+```bash
+pnpm install:local --bin-dir /custom/bin
+```
 
-- すでに実績のあるローカル体験を活かしている
-- 方向が明確で、曖昧なマルチモデル包みにはしていない
-- provider 境界の表面互換だけで終わらず、主経路そのものを作り替えようとしている
-- ロードマップ、進捗、受け入れ資料で前進を記録している
-- 実経路を動かし、機能ごとに確かめることで信頼を積み上げようとしている
+古いローカルランチャーを上書きする場合は次を使います。
 
-この方向に価値を感じるなら、star は大きな後押しになります。
-より多くの人に届き、この路線を続ける理由にもなります。
+```bash
+pnpm install:local --force
+```
 
-## ライセンス
+## Codex 設定例
 
-このリポジトリのオリジナル内容には MIT License を適用します。詳細は `LICENSE` を参照してください。
+`~/.codex/config.toml`:
 
-取り込まれた上流スナップショットやその他の第三者素材は、ルートの `LICENSE` によって再ライセンスされません。
-適用範囲は `NOTICE` と `upstream/README.md` を確認してください。
+```toml
+model_provider = "openai"
+model = "gpt-5.4"
+model_reasoning_effort = "high"
+response_storage = false
+
+[model_providers.openai]
+base_url = "https://api.openai.com/v1"
+env_key = "OPENAI_API_KEY"
+```
+
+起動前に API キーも設定します。
+
+```bash
+export OPENAI_API_KEY="your-api-key"
+```
+
+## 起動
+
+インストール後は、そのまま TUI を起動できます。
+
+```bash
+codex-code
+```
+
+よく使うコマンド:
+
+```bash
+codex-code --help
+codex-code --version
+codex-code -p "Summarize this repository"
+```
+
+## ビルドとテスト
+
+```bash
+pnpm build
+pnpm test
+```
+
+## Beta メモ
+
+- この beta は npm 公開ではなく、ソース導入前提です
+- 正式な入口はローカル `codex-code` ランチャーです
+- ランチャーは `CODEX_CODE_USE_CODEX_PROVIDER=1` と `DISABLE_AUTOUPDATER=1` を既定で設定します
+
+## License
+
+オリジナルのリポジトリ内容には MIT を適用します。詳細は `LICENSE` を参照してください。
+取り込まれた上流スナップショットや第三者素材は root の MIT で再ライセンスされません。`NOTICE` と `upstream/README.md` を確認してください。

@@ -376,6 +376,10 @@ export const SettingsSchema = lazySchema(() =>
         .string()
         .optional()
         .describe('Override the default model used by Codex Code'),
+      small_fast_model: z
+        .string()
+        .optional()
+        .describe('Override the small fast model used by helper calls'),
       // Enterprise allowlist of models
       availableModels: z
         .array(z.string())
@@ -951,7 +955,7 @@ export const SettingsSchema = lazySchema(() =>
         .boolean()
         .optional()
         .describe(
-          'Enable background memory consolidation (auto-dream). When set, overrides the server-side default.',
+          'Enable background memory consolidation (auto-dream). Defaults to true in Codex Code when unset; set false here to disable it.',
         ),
       showThinkingSummaries: z
         .boolean()

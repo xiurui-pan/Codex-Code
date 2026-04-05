@@ -133,7 +133,9 @@ os.close(slave)
 ansi_re = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\].*?(?:\x07|\x1b\\)")
 buffer = b""
 sent = []
+action_index = 0
 timeout_at = time.time() + 60
+last_action_clean_len = 0
 
 while time.time() < timeout_at:
     if proc.poll() is not None:
@@ -147,30 +149,31 @@ while time.time() < timeout_at:
         if not chunk:
             break
         buffer += chunk
-        clean = ansi_re.sub("", buffer.decode("utf-8", "ignore"))
-        normalized = re.sub(r"\s+", "", clean)
-        for action in actions:
-            if action["name"] in sent:
-                continue
-            wait_for = action.get("waitFor", [])
-            if all(re.sub(r"\s+", "", token) in normalized for token in wait_for):
-                pre_delay_ms = action.get("preDelayMs", 0)
-                if pre_delay_ms > 0:
-                    time.sleep(pre_delay_ms / 1000.0)
-                if "sendParts" in action:
-                    delay_ms = action.get("delayMs", 100)
-                    for part in action["sendParts"]:
-                        os.write(master, part.encode("utf-8"))
-                        time.sleep(delay_ms / 1000.0)
-                else:
-                    os.write(master, action["send"].encode("utf-8"))
-                sent.append(action["name"])
-                if len(sent) == len(actions):
-                    settle_ms = action.get("settleMs", 500)
-                    if settle_ms > 0:
-                        time.sleep(settle_ms / 1000.0)
-                    timeout_at = time.time()
-                break
+    clean = ansi_re.sub("", buffer.decode("utf-8", "ignore"))
+    if action_index < len(actions):
+        action = actions[action_index]
+        wait_for = action.get("waitFor", [])
+        scope_text = clean[last_action_clean_len:] if action.get("waitForFresh", False) else clean
+        scope_normalized = re.sub(r"\s+", "", scope_text)
+        if all(re.sub(r"\s+", "", token) in scope_normalized for token in wait_for):
+            pre_delay_ms = action.get("preDelayMs", 0)
+            if pre_delay_ms > 0:
+                time.sleep(pre_delay_ms / 1000.0)
+            if "sendParts" in action:
+                delay_ms = action.get("delayMs", 100)
+                for part in action["sendParts"]:
+                    os.write(master, part.encode("utf-8"))
+                    time.sleep(delay_ms / 1000.0)
+            else:
+                os.write(master, action["send"].encode("utf-8"))
+            sent.append(action["name"])
+            action_index += 1
+            last_action_clean_len = len(clean)
+            settle_ms = action.get("settleMs", 0)
+            if settle_ms > 0:
+                time.sleep(settle_ms / 1000.0)
+            if action_index == len(actions):
+                timeout_at = min(timeout_at, time.time() + 2.5)
 
 if proc.poll() is None:
     proc.send_signal(signal.SIGTERM)
@@ -239,7 +242,7 @@ test('model and effort TUI: /model picker changes model and reasoning, then /eff
           { name: 'open-model', waitFor: ['❯'], send: '/model\r' },
           {
             name: 'choose-model-and-effort',
-            waitFor: ['Select model', 'gpt-5.1-codex-mini', 'gpt-5.1-codex'],
+            waitFor: ['gpt-5.1-codex-mini', 'Enter to confirm'],
             sendParts: ['\u001b[B', '\u001b[C', '\r'],
             preDelayMs: 250,
             delayMs: 120,
@@ -247,16 +250,19 @@ test('model and effort TUI: /model picker changes model and reasoning, then /eff
           {
             name: 'check-model-status',
             waitFor: ['Set model to gpt-5.1-codex'],
+            waitForFresh: true,
             send: '/model status\r',
           },
           {
             name: 'check-effort-status',
             waitFor: ['Current model: gpt-5.1-codex', 'reasoning: high'],
+            waitForFresh: true,
             send: '/effort status\r',
           },
           {
             name: 'exit',
             waitFor: ['Current effort level: high'],
+            waitForFresh: true,
             send: '/exit\r',
             settleMs: 800,
           },
@@ -301,6 +307,7 @@ test('model and effort TUI: Esc cancels /model changes and keeps the original ef
           {
             name: 'open-model',
             waitFor: ['Set effort level to high'],
+            waitForFresh: true,
             send: '/model\r',
           },
           {
@@ -313,16 +320,19 @@ test('model and effort TUI: Esc cancels /model changes and keeps the original ef
           {
             name: 'check-model-status',
             waitFor: ['Kept model as gpt-5.1-codex-mini', 'reasoning: high'],
+            waitForFresh: true,
             send: '/model status\r',
           },
           {
             name: 'check-effort-status',
             waitFor: ['Current model: gpt-5.1-codex-mini', 'reasoning: high'],
+            waitForFresh: true,
             send: '/effort status\r',
           },
           {
             name: 'exit',
             waitFor: ['Current effort level: high'],
+            waitForFresh: true,
             send: '/exit\r',
             settleMs: 800,
           },

@@ -22,6 +22,15 @@ test('codex responses stream starts text rendering from content_part added event
   assert.match(source, /type: 'text'/)
 })
 
+test('codex responses stream maps reasoning summary events into thinking deltas', async () => {
+  const source = await readFile(SOURCE_PATH, 'utf8')
+
+  assert.match(source, /event\.type === 'response\.reasoning_summary_part\.added'/)
+  assert.match(source, /event\.type === 'response\.reasoning_summary_text\.delta'/)
+  assert.match(source, /type: 'thinking'/)
+  assert.match(source, /type: 'thinking_delta'/)
+})
+
 test('codex responses stream normalizes status-less web search done events to completed', async () => {
   const source = await readFile(SOURCE_PATH, 'utf8')
 

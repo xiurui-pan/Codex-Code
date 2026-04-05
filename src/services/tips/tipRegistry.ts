@@ -43,6 +43,7 @@ import {
   getCurrentSessionAgentColor,
   isCustomTitleEnabled,
 } from '../../utils/sessionStorage.js'
+import { isCurrentPhaseCustomCodexProvider } from '../../utils/currentPhase.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../analytics/growthbook.js'
 import {
   formatGrantAmount,
@@ -57,6 +58,9 @@ import { getSessionsSinceLastShown } from './tipHistory.js'
 import type { Tip, TipContext } from './types.js'
 
 let _isOfficialMarketplaceInstalledCache: boolean | undefined
+const currentStageDisableClaudeProductTips =
+  isCurrentPhaseCustomCodexProvider()
+
 async function isOfficialMarketplaceInstalled(): Promise<boolean> {
   if (_isOfficialMarketplaceInstalledCache !== undefined) {
     return _isOfficialMarketplaceInstalledCache
@@ -325,15 +329,19 @@ const externalTips: Tip[] = [
   {
     id: 'install-github-app',
     content: async () =>
-      'Run /install-github-app to tag @claude right from your Github issues and PRs',
+      'Run /install-github-app to connect GitHub issues and PRs to Codex Code',
     cooldownSessions: 10,
-    isRelevant: async () => !getGlobalConfig().githubActionSetupCount,
+    isRelevant: async () =>
+      !currentStageDisableClaudeProductTips &&
+      !getGlobalConfig().githubActionSetupCount,
   },
   {
     id: 'install-slack-app',
     content: async () => 'Run /install-slack-app to use Codex Code in Slack',
     cooldownSessions: 10,
-    isRelevant: async () => !getGlobalConfig().slackAppInstallCount,
+    isRelevant: async () =>
+      !currentStageDisableClaudeProductTips &&
+      !getGlobalConfig().slackAppInstallCount,
   },
   {
     id: 'permissions',
@@ -376,7 +384,7 @@ const externalTips: Tip[] = [
   {
     id: 'continue',
     content: async () =>
-      'Run claude --continue or claude --resume to resume a conversation',
+      'Run codex-code --continue or codex-code --resume to resume a conversation',
     cooldownSessions: 10,
     isRelevant: async () => true,
   },
@@ -436,10 +444,10 @@ const externalTips: Tip[] = [
   },
   {
     id: 'desktop-app',
-    content: async () =>
-      'Run Codex Code locally or remotely using the Claude desktop app: clau.de/desktop',
+    content: async () => 'Open Codex Code Desktop to continue locally or remotely',
     cooldownSessions: 15,
-    isRelevant: async () => getPlatform() !== 'linux',
+    isRelevant: async () =>
+      !currentStageDisableClaudeProductTips && getPlatform() !== 'linux',
   },
   {
     id: 'desktop-shortcut',
@@ -449,6 +457,7 @@ const externalTips: Tip[] = [
     },
     cooldownSessions: 15,
     isRelevant: async () => {
+      if (currentStageDisableClaudeProductTips) return false
       if (!getDesktopUpsellConfig().enable_shortcut_tip) return false
       return (
         process.platform === 'darwin' ||
@@ -458,17 +467,16 @@ const externalTips: Tip[] = [
   },
   {
     id: 'web-app',
-    content: async () =>
-      'Run tasks in the cloud while you keep coding locally · clau.de/web',
+    content: async () => 'Run tasks in the cloud while you keep coding locally',
     cooldownSessions: 15,
-    isRelevant: async () => true,
+    isRelevant: async () => !currentStageDisableClaudeProductTips,
   },
   {
     id: 'mobile-app',
     content: async () =>
       '/mobile to use Codex Code from the Codex Code app on your phone',
     cooldownSessions: 15,
-    isRelevant: async () => true,
+    isRelevant: async () => !currentStageDisableClaudeProductTips,
   },
   {
     id: 'opusplan-mode-reminder',
@@ -677,7 +685,20 @@ export async function getRelevantTips(context?: TipContext): Promise<Tip[]> {
 
   // Otherwise, filter built-in tips as before and combine with custom
   const tips = [...externalTips, ...internalOnlyTips]
-  const isRelevant = await Promise.all(tips.map(_ => _.isRelevant(context)))
+  const isRelevant = await Promise.all(
+    tips.map(async tip => {
+      try {
+        return await tip.isRelevant(context)
+      } catch (error) {
+        logForDebugging(
+          `[tipRegistry] skip startup tip "${tip.id}" because isRelevant threw`,
+          { level: 'warn' },
+          error,
+        )
+        return false
+      }
+    }),
+  )
   const filtered = tips
     .filter((_, index) => isRelevant[index])
     .filter(_ => getSessionsSinceLastShown(_.id) >= _.cooldownSessions)

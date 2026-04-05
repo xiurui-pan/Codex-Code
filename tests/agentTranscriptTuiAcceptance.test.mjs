@@ -1,0 +1,330 @@
+import assert from 'node:assert/strict'
+import { spawn } from 'node:child_process'
+import { once } from 'node:events'
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
+import http from 'node:http'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import test from 'node:test'
+import { projectRoot } from './helpers/projectRoot.mjs'
+
+const CLI_CWD = projectRoot
+const CLI_BIN = join(CLI_CWD, 'dist/cli.js')
+const SERIAL_TEST = { concurrency: false }
+const DEFAULT_CONFIG_LINES = [
+  'model_provider = "test-provider"',
+  'model = "gpt-5.1-codex-mini"',
+  'model_reasoning_effort = "medium"',
+  'response_storage = false',
+]
+
+function sseBlock(item) {
+  return (
+    'event: response.output_item.done\n' +
+    `data: ${JSON.stringify({ type: 'response.output_item.done', item })}\n\n`
+  )
+}
+
+function sseCompleted(id) {
+  return (
+    'event: response.completed\n' +
+    `data: ${JSON.stringify({ type: 'response.completed', response: { id } })}\n\n` +
+    'data: [DONE]\n\n'
+  )
+}
+
+async function withResponsesServer(responseBodies, run) {
+  const requestBodies = []
+  const sockets = new Set()
+  let requestIndex = 0
+
+  const server = http.createServer((req, res) => {
+    if (req.method !== 'POST' || req.url !== '/responses') {
+      res.statusCode = 404
+      res.end('not found')
+      return
+    }
+
+    let body = ''
+    req.on('data', chunk => {
+      body += chunk.toString()
+    })
+    req.on('end', () => {
+      requestBodies.push(JSON.parse(body))
+      const responseBody =
+        responseBodies[requestIndex] ?? responseBodies.at(-1) ?? ''
+      requestIndex += 1
+
+      res.writeHead(200, {
+        'content-type': 'text/event-stream',
+        connection: 'keep-alive',
+        'cache-control': 'no-cache',
+      })
+      res.write(responseBody)
+      res.end()
+    })
+  })
+
+  server.on('connection', socket => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+  })
+
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('failed to bind agent transcript test server')
+  }
+
+  try {
+    return await run({ port: address.port, requestBodies })
+  } finally {
+    for (const socket of sockets) {
+      socket.destroy()
+    }
+    await new Promise(resolve => server.close(resolve))
+  }
+}
+
+async function writeCodexConfig(homeDir, port) {
+  const codexDir = join(homeDir, '.codex')
+  await mkdir(codexDir, { recursive: true })
+  await writeFile(
+    join(codexDir, 'config.toml'),
+    [
+      ...DEFAULT_CONFIG_LINES,
+      '',
+      '[model_providers.test-provider]',
+      `base_url = "http://127.0.0.1:${port}"`,
+      'env_key = "ANTHROPIC_API_KEY"',
+      '',
+    ].join('\n'),
+    'utf8',
+  )
+}
+
+async function runInteractiveTuiFlow({ tempHome, actions }) {
+  const pythonScript = String.raw`
+import json
+import os
+import pty
+import re
+import select
+import signal
+import subprocess
+import sys
+import time
+
+cli_bin, cwd, temp_home, actions_json = sys.argv[1:5]
+actions = json.loads(actions_json)
+master, slave = pty.openpty()
+env = os.environ.copy()
+env["HOME"] = temp_home
+env["ANTHROPIC_API_KEY"] = "test-key"
+env["TERM"] = "xterm-256color"
+env["CODEX_CODE_DISABLE_TERMINAL_TITLE"] = "1"
+env["FORCE_COLOR"] = "0"
+env["DISABLE_AUTOUPDATER"] = "1"
+proc = subprocess.Popen(
+    ["node", cli_bin, "--dangerously-skip-permissions"],
+    cwd=cwd,
+    env=env,
+    stdin=slave,
+    stdout=slave,
+    stderr=slave,
+    close_fds=True,
+)
+os.close(slave)
+ansi_re = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\].*?(?:\x07|\x1b\\)")
+buffer = b""
+clean = ""
+normalized = ""
+sent = []
+timeout_at = time.time() + 90
+
+while time.time() < timeout_at:
+    if proc.poll() is not None:
+        break
+    ready, _, _ = select.select([master], [], [], 0.1)
+    if ready:
+        try:
+            chunk = os.read(master, 65536)
+        except OSError:
+            break
+        if not chunk:
+            break
+        buffer += chunk
+        clean = ansi_re.sub("", buffer.decode("utf-8", "ignore"))
+        normalized = re.sub(r"\s+", "", clean)
+    if len(sent) < len(actions):
+        action = actions[len(sent)]
+        wait_for = action.get("waitFor", [])
+        if all(re.sub(r"\s+", "", token) in normalized for token in wait_for):
+            os.write(master, action["send"].encode("utf-8"))
+            sent.append(action["name"])
+            settle_ms = action.get("settleMs", 0)
+            if settle_ms > 0:
+                time.sleep(settle_ms / 1000.0)
+            if len(sent) == len(actions):
+                timeout_at = time.time() + 2.5
+
+if proc.poll() is None:
+    proc.send_signal(signal.SIGTERM)
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=5)
+
+clean = ansi_re.sub("", buffer.decode("utf-8", "ignore"))
+print(json.dumps({
+    "code": proc.returncode,
+    "sent": sent,
+    "cleanedTranscript": clean,
+    "normalizedTranscript": re.sub(r"\s+", "", clean),
+}))
+`
+
+  const child = spawn(
+    'python3',
+    [
+      '-c',
+      pythonScript,
+      CLI_BIN,
+      CLI_CWD,
+      tempHome,
+      JSON.stringify(actions),
+    ],
+    {
+      cwd: CLI_CWD,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+    },
+  )
+
+  let stdout = ''
+  let stderr = ''
+  child.stdout.setEncoding('utf8')
+  child.stderr.setEncoding('utf8')
+  child.stdout.on('data', chunk => {
+    stdout += chunk
+  })
+  child.stderr.on('data', chunk => {
+    stderr += chunk
+  })
+
+  const [code] = await Promise.race([
+    once(child, 'close'),
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        child.kill('SIGKILL')
+        reject(
+          new Error(
+            `agent transcript TUI timed out\nstdout=${stdout}\nstderr=${stderr}`,
+          ),
+        )
+      }, 95000)
+    }),
+  ])
+
+  if (!stdout.trim()) {
+    throw new Error(stderr || `python TUI driver exited with ${code}`)
+  }
+
+  return JSON.parse(stdout)
+}
+
+test(
+  'TUI transcript: agent final reply stays visible after the agent uses a tool',
+  SERIAL_TEST,
+  async () => {
+    await withResponsesServer(
+      [
+        [
+          sseBlock({
+            type: 'function_call',
+            call_id: 'agent-call-1',
+            name: 'Agent',
+            arguments: JSON.stringify({
+              description: 'probe transcript',
+              prompt:
+                'Run pwd with Bash, then reply with exactly AGENT_TOOL_FINAL_OK.',
+              subagent_type: 'general-purpose',
+            }),
+          }),
+          sseCompleted('resp-main-1'),
+        ].join(''),
+        [
+          sseBlock({
+            type: 'function_call',
+            call_id: 'agent-bash-1',
+            name: 'Bash',
+            arguments: JSON.stringify({
+              command: 'pwd',
+              description: 'Print working directory',
+            }),
+          }),
+          sseCompleted('resp-agent-1'),
+        ].join(''),
+        [
+          sseBlock({
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'AGENT_TOOL_FINAL_OK' }],
+          }),
+          sseCompleted('resp-agent-2'),
+        ].join(''),
+        [
+          sseBlock({
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'MAIN_DONE' }],
+          }),
+          sseCompleted('resp-main-2'),
+        ].join(''),
+      ],
+      async ({ port, requestBodies }) => {
+        const tempHome = await mkdtemp(join(tmpdir(), 'codex-agent-transcript-'))
+        try {
+          await writeCodexConfig(tempHome, port)
+          const result = await runInteractiveTuiFlow({
+            tempHome,
+            actions: [
+              {
+                name: 'prompt',
+                waitFor: ['\u276f'],
+                send: 'please use Agent then finish\r',
+              },
+              {
+                name: 'enter-transcript',
+                waitFor: ['MAIN_DONE'],
+                send: '\u000f',
+              },
+              {
+                name: 'exit',
+                waitFor: ['Showing detailed transcript'],
+                send: '/exit\r',
+                settleMs: 1600,
+              },
+            ],
+          })
+
+          const normalizedTranscript = result.normalizedTranscript
+          assert.deepEqual(result.sent, ['prompt', 'enter-transcript', 'exit'])
+          assert.equal(requestBodies.length, 4)
+          assert.match(normalizedTranscript, /Showingdetailedtranscript/i)
+          assert.match(
+            normalizedTranscript,
+            /Prompt:RunpwdwithBash,thenreplywithexactlyAGENT_TOOL_FINAL_OK\./i,
+          )
+          assert.match(normalizedTranscript, /Bash\(pwd\)/i)
+          assert.match(normalizedTranscript, /Response:AGENT_TOOL_FINAL_OK/i)
+          assert.match(normalizedTranscript, /MAIN_DONE/i)
+        } finally {
+          await rm(tempHome, { recursive: true, force: true })
+        }
+      },
+    )
+  },
+)

@@ -8,11 +8,11 @@ function readSource(path) {
   return readFileSync(join(projectRoot, path), 'utf8')
 }
 
-test('/context headline uses the shared display token count helper', () => {
+test('/context headline total stays aligned with the category breakdown', () => {
   const source = readSource('src/utils/analyzeContext.ts')
 
-  assert.match(source, /getDisplayContextTokenCount/)
-  assert.match(source, /totalFromDisplayUsage > 0 \? totalFromDisplayUsage : totalIncludingReserved/)
+  assert.match(source, /const finalTotalTokens = actualUsage/)
+  assert.doesNotMatch(source, /totalFromDisplayUsage > 0 \? totalFromDisplayUsage : totalIncludingReserved/)
 })
 
 test('/context detail sections filter out zero-token MCP and memory rows', () => {

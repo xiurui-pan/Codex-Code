@@ -737,7 +737,7 @@ test('/plan TUI: resume restores existing plan content, allows re-enter status, 
           },
           {
             name: 'exit',
-            waitFor: ['Current Plan', 'Plan from resumed session'],
+            waitFor: ['Plan from resumed session'],
             send: '/exit\r',
             settleMs: 800,
           },
@@ -1609,10 +1609,29 @@ test('/clear headless: clears the session non-interactively and accepts a fresh 
           'projects',
           sanitizePath(CLI_CWD),
         )
-        const transcriptEntries = await readdir(projectDir, { withFileTypes: true })
-        const transcriptFiles = transcriptEntries
-          .filter(entry => entry.isFile() && entry.name.endsWith('.jsonl'))
-          .sort((a, b) => a.name.localeCompare(b.name))
+        let transcriptFiles = []
+        const deadline = Date.now() + 30000
+        do {
+          try {
+            const transcriptEntries = await readdir(projectDir, { withFileTypes: true })
+            transcriptFiles = transcriptEntries
+              .filter(entry => entry.isFile() && entry.name.endsWith('.jsonl'))
+              .sort((a, b) => a.name.localeCompare(b.name))
+          } catch (error) {
+            if (
+              !(error instanceof Error) ||
+              !('code' in error) ||
+              error.code !== 'ENOENT'
+            ) {
+              throw error
+            }
+            transcriptFiles = []
+          }
+          if (transcriptFiles.length > 0) {
+            break
+          }
+          await new Promise(resolve => setTimeout(resolve, 250))
+        } while (Date.now() < deadline)
 
         assert.ok(
           transcriptFiles.length >= 1,

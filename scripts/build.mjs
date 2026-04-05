@@ -276,7 +276,7 @@ const currentStageDisabledImportEntries = [
   ],
   [
     path.join('src', 'commands.ts'),
-    new Set(['./services/skillSearch/localSearch.js']),
+    new Set(['./services/skillSearch/localSearch.js', './commands/buddy/index.js']),
   ],
   [
     path.join('src', 'query', 'stopHooks.ts'),
@@ -665,6 +665,107 @@ await fs.copyFile(path.join(root, 'tsconfig.json'), path.join(dist, 'tsconfig.js
 await writeJsEntryShims(path.join(dist, 'src'))
 await writeJsEntryShims(path.join(dist, 'shims'))
 
+// ═══ Phase: Pre-compile .ts/.tsx → .js ═══════════════════════════════════════
+// This eliminates the need for tsx at runtime, cutting startup from ~10s to <1s.
+// esbuild transformSync is the same transform that loader.mjs does at runtime,
+// but here we do it once at build time instead of on every import.
+
+const { transformSync: compileTransform } = await import('esbuild')
+
+const srcDir = path.join(dist, 'src')
+const shimsDir = path.join(dist, 'shims')
+
+async function preCompile(dir) {
+  let entries
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true })
+  } catch {
+    return
+  }
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      await preCompile(fullPath)
+      continue
+    }
+
+    // Skip non-TS files and .d.ts declarations
+    if (!entry.isFile() || entry.name.endsWith('.d.ts')) continue
+    const isTsx = entry.name.endsWith('.tsx')
+    const isTs = entry.name.endsWith('.ts')
+    const isJsx = entry.name.endsWith('.jsx')
+    if (!isTs && !isTsx && !isJsx) continue
+
+    // Read, transform, write .js, delete original
+    const source = await fs.readFile(fullPath, 'utf8')
+    const loader = isTsx ? 'tsx' : isJsx ? 'jsx' : 'ts'
+    const result = compileTransform(source, {
+      format: 'esm',
+      loader,
+      jsx: 'automatic',
+      sourcefile: fullPath,
+    })
+
+    const outPath = fullPath.replace(/\.(ts|tsx|jsx)$/, '.js')
+    await fs.writeFile(outPath, result.code, 'utf8')
+    await fs.unlink(fullPath)
+  }
+}
+
+console.log('Pre-compiling TypeScript files...')
+await preCompile(srcDir)
+await preCompile(shimsDir)
+console.log('Pre-compilation done.')
+
+// ═══ Phase: Rewrite bare src/ require() specifiers ══════════════════════════
+// require('src/...') is a bare specifier that Node CJS can't resolve — it bypasses
+// the ESM loader hooks. Rewrite them to relative paths at build time.
+
+const bareSrcRequirePattern = /(require\d?)\(\s*['"]src\/([^'"]+)['"]\s*\)/g
+
+async function rewriteBareSrcRequires(dir) {
+  let entries
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true })
+  } catch {
+    return
+  }
+
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      await rewriteBareSrcRequires(fullPath)
+      continue
+    }
+    if (!entry.isFile() || !entry.name.endsWith('.js')) continue
+
+    const source = await fs.readFile(fullPath, 'utf8')
+    if (!bareSrcRequirePattern.test(source)) {
+      bareSrcRequirePattern.lastIndex = 0
+      continue
+    }
+    bareSrcRequirePattern.lastIndex = 0
+
+    const fileDir = path.dirname(fullPath)
+    const relToSrc = path.relative(fileDir, srcDir).replace(/\\/g, '/')
+
+    const rewritten = source.replace(bareSrcRequirePattern, (match, reqName, specifier) => {
+      let resolved = relToSrc ? relToSrc + '/' + specifier : './' + specifier
+      if (!resolved.startsWith('.')) resolved = './' + resolved
+      return `${reqName}('${resolved}')`
+    })
+
+    if (rewritten !== source) {
+      await fs.writeFile(fullPath, rewritten, 'utf8')
+    }
+  }
+}
+
+console.log('Rewriting bare src/ require() specifiers...')
+await rewriteBareSrcRequires(srcDir)
+console.log('Rewrite done.')
+
 await fs.writeFile(
   path.join(dist, 'loader.mjs'),
   `import fs from 'node:fs'
@@ -701,14 +802,14 @@ export async function resolve(specifier, context, nextResolve) {
   if (specifier === 'bun:bundle') {
     return {
       shortCircuit: true,
-      url: pathToFileURL(path.join(distRoot, 'shims', 'bun-bundle.ts')).href,
+      url: pathToFileURL(path.join(distRoot, 'shims', 'bun-bundle.js')).href,
     }
   }
 
   if (specifier === 'bun:ffi') {
     return {
       shortCircuit: true,
-      url: pathToFileURL(path.join(distRoot, 'shims', 'bun-ffi.ts')).href,
+      url: pathToFileURL(path.join(distRoot, 'shims', 'bun-ffi.js')).href,
     }
   }
 
@@ -803,7 +904,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
-const entry = path.join(__dirname, 'src', 'entrypoints', 'cli.tsx')
+const entry = path.join(__dirname, 'src', 'entrypoints', 'cli.js')
 const loader = path.join(__dirname, 'loader.mjs')
 const globals = path.join(__dirname, 'shims', 'runtime-globals.mjs')
 
@@ -814,8 +915,6 @@ const child = spawn(
   [
     '--import',
     globals,
-    '--import',
-    'tsx',
     '--import',
     registerLoader,
     entry,
@@ -842,3 +941,16 @@ child.on('exit', (code, signal) => {
 )
 
 await fs.chmod(path.join(dist, 'cli.js'), 0o755)
+
+// Patch @alcalzone/ansi-tokenize package.json to add "require" export condition.
+// The package only defines "import" in its exports map, but our code uses
+// createRequire() in print.ts which triggers CJS resolution and fails.
+const ansiTokenizePkgPath = path.join(__dirname, '..', 'node_modules', '@alcalzone', 'ansi-tokenize', 'package.json')
+try {
+  const raw = await fs.readFile(ansiTokenizePkgPath, 'utf8')
+  const pkg = JSON.parse(raw)
+  if (pkg.exports?.['.']?.import && !pkg.exports?.['.']?.require) {
+    pkg.exports['.'].require = pkg.exports['.'].import
+    await fs.writeFile(ansiTokenizePkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8')
+  }
+} catch {}

@@ -6,6 +6,7 @@ import { isEnvTruthy } from './envUtils.js'
 import { getCanonicalName } from './model/model.js'
 import { getModelCapability } from './model/modelCapabilities.js'
 import { resolveAntModel } from './model/antModels.js'
+import { getDisplayContextUsageBreakdown } from './tokens.js'
 
 // Codex CLI uses a 272k raw model window with 95% effective usable context
 // when no narrower runtime model metadata is available.
@@ -132,15 +133,25 @@ export function calculateContextPercentages(
   } | null,
   contextWindowSize: number,
 ): { used: number | null; remaining: number | null } {
-  if (!currentUsage) {
+  if (
+    !currentUsage ||
+    !Number.isFinite(contextWindowSize) ||
+    contextWindowSize <= 0
+  ) {
+    return { used: null, remaining: null }
+  }
+
+  if (
+    !Number.isFinite(currentUsage.input_tokens) ||
+    !Number.isFinite(currentUsage.output_tokens) ||
+    !Number.isFinite(currentUsage.cache_creation_input_tokens) ||
+    !Number.isFinite(currentUsage.cache_read_input_tokens)
+  ) {
     return { used: null, remaining: null }
   }
 
   const totalContextTokens =
-    currentUsage.input_tokens +
-    currentUsage.output_tokens +
-    currentUsage.cache_creation_input_tokens +
-    currentUsage.cache_read_input_tokens
+    getDisplayContextUsageBreakdown(currentUsage).displayTokens
 
   const usedPercentage = Math.round(
     (totalContextTokens / contextWindowSize) * 100,

@@ -235,6 +235,29 @@ export function AgentResponseDisplay(t0) {
   }
   return t3;
 }
+function getResponseContentFromProgressMessages(progressMessages: ProgressMessage<Progress>[]): Array<{
+  type: 'text';
+  text: string;
+}> {
+  for (let i = progressMessages.length - 1; i >= 0; i--) {
+    const progress = progressMessages[i];
+    if (!progress || !hasProgressMessage(progress.data)) {
+      continue;
+    }
+    const agentMessage = progress.data.message;
+    if (agentMessage.type !== 'assistant') {
+      continue;
+    }
+    const textBlocks = agentMessage.message.content.filter(block => block.type === 'text').map(block => ({
+      type: 'text' as const,
+      text: block.text
+    }));
+    if (textBlocks.length > 0) {
+      return textBlocks;
+    }
+  }
+  return [];
+}
 function _temp(block, index) {
   return <Box key={index} paddingLeft={2} marginTop={index === 0 ? 0 : 1}><Markdown>{block.text}</Markdown></Box>;
 }
@@ -267,7 +290,7 @@ function VerboseAgentTranscript(t0) {
     const filteredMessages = progressMessages.filter(_temp4);
     let t3;
     if ($[8] !== agentLookups || $[9] !== inProgressToolUseIDs || $[10] !== tools || $[11] !== verbose) {
-      t3 = progressMessage => <MessageResponse key={progressMessage.uuid} height={1}><MessageComponent message={progressMessage.data.message} lookups={agentLookups} addMargin={false} tools={tools} commands={[]} verbose={verbose} inProgressToolUseIDs={inProgressToolUseIDs} progressMessagesForMessage={[]} shouldAnimate={false} shouldShowDot={false} isTranscriptMode={false} isStatic={true} /></MessageResponse>;
+      t3 = progressMessage => <MessageResponse key={progressMessage.uuid} height={1}><MessageComponent message={progressMessage.data.message} lookups={agentLookups} addMargin={false} tools={tools} commands={[]} verbose={verbose} inProgressToolUseIDs={inProgressToolUseIDs} progressMessagesForMessage={[]} shouldAnimate={false} shouldShowDot={false} isTranscriptMode={true} isStatic={true} /></MessageResponse>;
       $[8] = agentLookups;
       $[9] = inProgressToolUseIDs;
       $[10] = tools;
@@ -332,14 +355,24 @@ export function renderToolResultMessage(data: Output, progressMessagesForMessage
           <Text>
             Remote agent launched{' '}
             <Text dimColor>
-              · {internal.taskId} · {internal.sessionUrl}
+              · {internal.taskId}
             </Text>
           </Text>
         </MessageResponse>
+        {isTranscriptMode && <MessageResponse>
+            <Box flexDirection="column">
+              <Text dimColor>Task: {internal.taskId} · remote_agent</Text>
+              <Text dimColor wrap="wrap">Session: {internal.sessionId}</Text>
+              <Text dimColor wrap="wrap">Session URL: {internal.sessionUrl}</Text>
+              <Text dimColor wrap="wrap">Output file: {internal.outputFile}</Text>
+            </Box>
+          </MessageResponse>}
       </Box>;
   }
   if (data.status === 'async_launched') {
     const {
+      agentId,
+      outputFile,
       prompt
     } = data;
     return <Box flexDirection="column">
@@ -356,6 +389,12 @@ export function renderToolResultMessage(data: Output, progressMessagesForMessage
               </Text>}
           </Text>
         </MessageResponse>
+        {isTranscriptMode && <MessageResponse>
+            <Box flexDirection="column">
+              <Text dimColor>Task: {agentId} · local_agent</Text>
+              <Text dimColor wrap="wrap">Output file: {outputFile}</Text>
+            </Box>
+          </MessageResponse>}
         {isTranscriptMode && prompt && <MessageResponse>
             <AgentPromptDisplay prompt={prompt} theme={theme} />
           </MessageResponse>}
@@ -373,6 +412,7 @@ export function renderToolResultMessage(data: Output, progressMessagesForMessage
     content,
     prompt
   } = data;
+  const transcriptResponseContent = isTranscriptMode && content.length === 0 ? getResponseContentFromProgressMessages(progressMessagesForMessage) : content;
   const result = [totalToolUseCount === 1 ? '1 tool use' : `${totalToolUseCount} tool uses`, formatNumber(totalTokens) + ' tokens', formatDuration(totalDurationMs)];
   const completionMessage = `Done (${result.join(' · ')})`;
   const finalAssistantMessage = createAssistantMessage({
@@ -396,8 +436,8 @@ export function renderToolResultMessage(data: Output, progressMessagesForMessage
       {isTranscriptMode ? <SubAgentProvider>
           <VerboseAgentTranscript progressMessages={progressMessagesForMessage} tools={tools} verbose={verbose} />
         </SubAgentProvider> : null}
-      {isTranscriptMode && content && content.length > 0 && <MessageResponse>
-          <AgentResponseDisplay content={content} theme={theme} />
+      {isTranscriptMode && transcriptResponseContent.length > 0 && <MessageResponse>
+          <AgentResponseDisplay content={transcriptResponseContent} theme={theme} />
         </MessageResponse>}
       <MessageResponse height={1}>
         <MessageComponent message={finalAssistantMessage} lookups={EMPTY_LOOKUPS} addMargin={false} tools={tools} commands={[]} verbose={verbose} inProgressToolUseIDs={new Set()} progressMessagesForMessage={[]} shouldAnimate={false} shouldShowDot={false} isTranscriptMode={false} isStatic={true} />
@@ -558,7 +598,7 @@ export function renderToolUseProgressMessage(progressMessages: ProgressMessage<P
           // content (tool not found, renderToolUseMessage returns null)
           // doesn't leave a blank line. Tool call headers are single-line
           // anyway so truncation isn't needed.
-          return <MessageComponent key={processed.message.uuid} message={processed.message.data.message} lookups={subagentLookups} addMargin={false} tools={tools} commands={[]} verbose={verbose} inProgressToolUseIDs={collapsedInProgressIDs} progressMessagesForMessage={[]} shouldAnimate={false} shouldShowDot={false} style="condensed" isTranscriptMode={false} isStatic={true} />;
+          return <MessageComponent key={processed.message.uuid} message={processed.message.data.message} lookups={subagentLookups} addMargin={false} tools={tools} commands={[]} verbose={verbose} inProgressToolUseIDs={collapsedInProgressIDs} progressMessagesForMessage={[]} shouldAnimate={false} shouldShowDot={false} style="condensed" isTranscriptMode={isTranscriptMode} isStatic={true} />;
         })}
         </SubAgentProvider>
         {hiddenToolUseCount > 0 && <Text dimColor>

@@ -35,6 +35,7 @@ export type LoadedCodexConfig = {
   provider: MinimalCodexProvider
   baseUrl?: string
   model?: string
+  smallFastModel?: string
   modelContextWindow?: number
   modelAutoCompactTokenLimit?: number
   reasoningEffort?: string
@@ -202,6 +203,7 @@ function parsePositiveIntegerEnvValue(value: string | undefined): number | undef
 function parseMinimalToml(source: string): {
   model_provider?: string
   model?: string
+  small_fast_model?: string
   model_context_window?: number
   model_auto_compact_token_limit?: number
   model_reasoning_effort?: string
@@ -216,6 +218,7 @@ function parseMinimalToml(source: string): {
   const root: {
     model_provider?: string
     model?: string
+    small_fast_model?: string
     model_context_window?: number
     model_auto_compact_token_limit?: number
     model_reasoning_effort?: string
@@ -293,6 +296,8 @@ function parseMinimalToml(source: string): {
         root.model_provider = String(value)
       } else if (key === 'model') {
         root.model = String(value)
+      } else if (key === 'small_fast_model') {
+        root.small_fast_model = String(value)
       } else if (key === 'model_context_window' && typeof value === 'number') {
         root.model_context_window = value
       } else if (
@@ -353,6 +358,7 @@ export async function loadCodexConfig(
     provider,
     baseUrl: provider.base_url,
     model: parsed.model,
+    smallFastModel: parsed.small_fast_model,
     modelContextWindow: parsed.model_context_window,
     modelAutoCompactTokenLimit: parsed.model_auto_compact_token_limit,
     reasoningEffort: parsed.model_reasoning_effort,
@@ -387,6 +393,10 @@ export function applyCodexConfigToEnv(config: LoadedCodexConfig): void {
 
   if (config.model) {
     process.env.CODEX_CODE_MODEL = config.model
+  }
+
+  if (config.smallFastModel) {
+    process.env.CODEX_CODE_SMALL_FAST_MODEL = config.smallFastModel
   }
 
   if (config.modelContextWindow) {
@@ -444,6 +454,10 @@ export function getCodexConfiguredBaseUrl(): string | undefined {
 
 export function getCodexConfiguredModel(): string | undefined {
   return process.env.CODEX_CODE_MODEL ?? process.env.ANTHROPIC_MODEL
+}
+
+export function getCodexConfiguredSmallFastModel(): string | undefined {
+  return process.env.CODEX_CODE_SMALL_FAST_MODEL
 }
 
 export function getCodexConfiguredModelContextWindow(): number | undefined {

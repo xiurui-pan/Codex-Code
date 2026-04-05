@@ -8,6 +8,7 @@ import { relative } from 'path';
 import { formatNumber } from './format.js';
 import type { getGlobalConfig } from './config.js';
 import { getAnthropicApiKeyWithSource, getApiKeyFromConfigOrMacOSKeychain, getAuthTokenSource, isClaudeAISubscriber } from './auth.js';
+import { isCurrentPhaseCustomCodexProvider } from './currentPhase.js';
 import type { AgentDefinitionsResult } from '../tools/AgentTool/loadAgentsDir.js';
 import { getAgentDescriptionsTotalTokens, AGENT_DESCRIPTIONS_THRESHOLD } from './statusNoticeHelpers.js';
 import { isSupportedJetBrainsTerminal, toIDEDisplayName, getTerminalIdeType } from './ide.js';
@@ -54,6 +55,9 @@ const claudeAiSubscriberExternalTokenNotice: StatusNoticeDefinition = {
   id: 'claude-ai-external-token',
   type: 'warning',
   isActive: () => {
+    if (isCurrentPhaseCustomCodexProvider()) {
+      return false;
+    }
     const authTokenInfo = getAuthTokenSource();
     return isClaudeAISubscriber() && (authTokenInfo.source === 'ANTHROPIC_AUTH_TOKEN' || authTokenInfo.source === 'apiKeyHelper');
   },
@@ -62,9 +66,8 @@ const claudeAiSubscriberExternalTokenNotice: StatusNoticeDefinition = {
     return <Box flexDirection="row" marginTop={1}>
         <Text color="warning">{figures.warning}</Text>
         <Text color="warning">
-          Auth conflict: Using {authTokenInfo.source} instead of Claude account
-          subscription token. Either unset {authTokenInfo.source}, or run
-          `claude /logout`.
+          Auth conflict: Using {authTokenInfo.source} instead of the account
+          login token. Either unset {authTokenInfo.source}, or run `/logout`.
         </Text>
       </Box>;
   }
@@ -73,6 +76,9 @@ const apiKeyConflictNotice: StatusNoticeDefinition = {
   id: 'api-key-conflict',
   type: 'warning',
   isActive: () => {
+    if (isCurrentPhaseCustomCodexProvider()) {
+      return false;
+    }
     const {
       source: apiKeySource
     } = getAnthropicApiKeyWithSource({
@@ -89,8 +95,8 @@ const apiKeyConflictNotice: StatusNoticeDefinition = {
     return <Box flexDirection="row" marginTop={1}>
         <Text color="warning">{figures.warning}</Text>
         <Text color="warning">
-          Auth conflict: Using {apiKeySource} instead of Anthropic Console key.
-          Either unset {apiKeySource}, or run `claude /logout`.
+          Auth conflict: Using {apiKeySource} instead of the configured API
+          key. Either unset {apiKeySource}, or run `/logout`.
         </Text>
       </Box>;
   }
@@ -99,6 +105,9 @@ const bothAuthMethodsNotice: StatusNoticeDefinition = {
   id: 'both-auth-methods',
   type: 'warning',
   isActive: () => {
+    if (isCurrentPhaseCustomCodexProvider()) {
+      return false;
+    }
     const {
       source: apiKeySource
     } = getAnthropicApiKeyWithSource({
@@ -125,13 +134,13 @@ const bothAuthMethodsNotice: StatusNoticeDefinition = {
         <Box flexDirection="column" marginLeft={3}>
           <Text color="warning">
             · Trying to use{' '}
-            {authTokenInfo.source === 'claude.ai' ? 'claude.ai' : authTokenInfo.source}
+            {authTokenInfo.source === 'claude.ai' ? 'account login' : authTokenInfo.source}
             ?{' '}
-            {apiKeySource === 'ANTHROPIC_API_KEY' ? 'Unset the ANTHROPIC_API_KEY environment variable, or claude /logout then say "No" to the API key approval before login.' : apiKeySource === 'apiKeyHelper' ? 'Unset the apiKeyHelper setting.' : 'claude /logout'}
+            {apiKeySource === 'ANTHROPIC_API_KEY' ? 'Unset the API key environment variable, or run /logout and skip API key login.' : apiKeySource === 'apiKeyHelper' ? 'Unset the apiKeyHelper setting.' : 'Run /logout'}
           </Text>
           <Text color="warning">
             · Trying to use {apiKeySource}?{' '}
-            {authTokenInfo.source === 'claude.ai' ? 'claude /logout to sign out of claude.ai.' : `Unset the ${authTokenInfo.source} environment variable.`}
+            {authTokenInfo.source === 'claude.ai' ? 'Run /logout to sign out of the current account login.' : `Unset the ${authTokenInfo.source} environment variable.`}
           </Text>
         </Box>
       </Box>;
@@ -161,6 +170,9 @@ const jetbrainsPluginNotice: StatusNoticeDefinition = {
   id: 'jetbrains-plugin-install',
   type: 'info',
   isActive: context => {
+    if (isCurrentPhaseCustomCodexProvider()) {
+      return false;
+    }
     // Only show if running in JetBrains built-in terminal
     if (!isSupportedJetBrainsTerminal()) {
       return false;
@@ -181,8 +193,7 @@ const jetbrainsPluginNotice: StatusNoticeDefinition = {
         <Text color="ide">{figures.arrowUp}</Text>
         <Text>
           Install the <Text color="ide">{ideName}</Text> plugin from the
-          JetBrains Marketplace:{' '}
-          <Text bold>https://docs.claude.com/s/claude-code-jetbrains</Text>
+          JetBrains Marketplace.
         </Text>
       </Box>;
   }

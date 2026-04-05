@@ -1,7 +1,7 @@
 import type { NonNullableUsage } from '../../entrypoints/sdk/sdkUtilityTypes.js'
 import type { AssistantMessage } from '../../types/message.js'
-import { getCodexConfiguredModel } from '../../utils/codexConfig.js'
 import { getModelMaxOutputTokens as getContextMaxOutputTokens } from '../../utils/context.js'
+import { getSmallFastModel } from '../../utils/model/model.js'
 import { createAssistantMessage } from '../../utils/messages.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import {
@@ -231,7 +231,7 @@ export const callSmallModelTurn: SmallModelTurnCaller = async args =>
       userPrompt: args.userPrompt,
       options: {
         ...(args.options ?? {}),
-        model: args.options?.model ?? getCodexConfiguredModel(),
+        model: args.options?.model ?? getSmallFastModel(),
       },
       signal: args.signal,
     }),

@@ -1146,18 +1146,35 @@ export function useTypeahead({
   }, [suggestions, selectedSuggestion, input, suggestionType, commands, mode, onInputChange, setCursorOffset, onSubmit, clearSuggestions, cursorOffset, updateSuggestions, mcpResources, setSuggestionsState, agents, debouncedFetchFileSuggestions, debouncedFetchSlackChannels, effectiveGhostText]);
 
   // Handle enter key press - apply and execute suggestions
-  const handleEnter = useCallback(() => {
-    if (selectedSuggestion < 0 || suggestions.length === 0) return;
-    const suggestion = suggestions[selectedSuggestion];
-    if (suggestionType === 'command' && selectedSuggestion < suggestions.length) {
+  const handleEnter = useCallback((): boolean => {
+    if (suggestions.length === 0) return false;
+    if (selectedSuggestion < 0 && suggestionType !== 'custom-title') {
+      return false;
+    }
+    const suggestionIndex =
+      suggestionType === 'custom-title' && selectedSuggestion < 0
+        ? 0
+        : selectedSuggestion;
+    const suggestion = suggestions[suggestionIndex];
+    if (suggestionType === 'command' && suggestionIndex < suggestions.length) {
+      // If arguments are already present, Enter should submit the typed command
+      // instead of replacing it with a bare slash-command suggestion.
+      if (input.includes(' ')) {
+        clearSuggestions();
+        return false;
+      }
       if (suggestion) {
         applyCommandSuggestion(suggestion, true,
         // execute on return
         commands, onInputChange, setCursorOffset, onSubmit);
         debouncedFetchFileSuggestions.cancel();
         clearSuggestions();
+        return true;
       }
-    } else if (suggestionType === 'custom-title' && selectedSuggestion < suggestions.length) {
+    } else if (
+      suggestionType === 'custom-title' &&
+      suggestionIndex < suggestions.length
+    ) {
       // Apply custom title and execute /resume command with sessionId
       if (suggestion) {
         const newInput = buildResumeInputFromSuggestion(suggestion);
@@ -1166,9 +1183,10 @@ export function useTypeahead({
         onSubmit(newInput, /* isSubmittingSlashCommand */true);
         debouncedFetchFileSuggestions.cancel();
         clearSuggestions();
+        return true;
       }
-    } else if (suggestionType === 'shell' && selectedSuggestion < suggestions.length) {
-      const suggestion = suggestions[selectedSuggestion];
+    } else if (suggestionType === 'shell' && suggestionIndex < suggestions.length) {
+      const suggestion = suggestions[suggestionIndex];
       if (suggestion) {
         const metadata = suggestion.metadata as {
           completionType: ShellCompletionType;
@@ -1176,18 +1194,21 @@ export function useTypeahead({
         applyShellSuggestion(suggestion, input, cursorOffset, onInputChange, setCursorOffset, metadata?.completionType);
         debouncedFetchFileSuggestions.cancel();
         clearSuggestions();
+        return true;
       }
-    } else if (suggestionType === 'agent' && selectedSuggestion < suggestions.length && suggestion?.id?.startsWith('dm-')) {
+    } else if (suggestionType === 'agent' && suggestionIndex < suggestions.length && suggestion?.id?.startsWith('dm-')) {
       applyTriggerSuggestion(suggestion, input, cursorOffset, DM_MEMBER_RE, onInputChange, setCursorOffset);
       debouncedFetchFileSuggestions.cancel();
       clearSuggestions();
-    } else if (suggestionType === 'slack-channel' && selectedSuggestion < suggestions.length) {
+      return true;
+    } else if (suggestionType === 'slack-channel' && suggestionIndex < suggestions.length) {
       if (suggestion) {
         applyTriggerSuggestion(suggestion, input, cursorOffset, HASH_CHANNEL_RE, onInputChange, setCursorOffset);
         debouncedFetchSlackChannels.cancel();
         clearSuggestions();
+        return true;
       }
-    } else if (suggestionType === 'file' && selectedSuggestion < suggestions.length) {
+    } else if (suggestionType === 'file' && suggestionIndex < suggestions.length) {
       // Extract completion token directly when needed
       const completionInfo = extractCompletionToken(input, cursorOffset, true);
       if (completionInfo) {
@@ -1205,6 +1226,7 @@ export function useTypeahead({
           applyFileSuggestion(replacementValue, input, completionInfo.token, completionInfo.startPos, onInputChange, setCursorOffset);
           debouncedFetchFileSuggestions.cancel();
           clearSuggestions();
+          return true;
         }
       }
     } else if (suggestionType === 'directory' && selectedSuggestion < suggestions.length) {
@@ -1215,7 +1237,7 @@ export function useTypeahead({
         if (isCommandInput(input)) {
           debouncedFetchFileSuggestions.cancel();
           clearSuggestions();
-          return;
+          return false;
         }
 
         // General path completion: replace the path token
@@ -1232,8 +1254,10 @@ export function useTypeahead({
 
         debouncedFetchFileSuggestions.cancel();
         clearSuggestions();
+        return true;
       }
     }
+    return false;
   }, [suggestions, selectedSuggestion, suggestionType, commands, input, cursorOffset, mode, onInputChange, setCursorOffset, onSubmit, clearSuggestions, debouncedFetchFileSuggestions, debouncedFetchSlackChannels]);
 
   // Handler for autocomplete:accept - accepts current suggestion via Tab or Right Arrow
@@ -1347,6 +1371,23 @@ export function useTypeahead({
       return;
     }
 
+    // /resume <title-or-id> should submit directly on Enter even when
+    // autocomplete suggestions are still visible.
+    if (e.key === 'return' && !e.shift && !e.meta) {
+      const trimmedInput = input.trim();
+      if (
+        mode === 'prompt' &&
+        trimmedInput.startsWith('/resume ') &&
+        trimmedInput.length > '/resume '.length
+      ) {
+        e.preventDefault();
+        onSubmit(trimmedInput, /* isSubmittingSlashCommand */true);
+        debouncedFetchFileSuggestions.cancel();
+        clearSuggestions();
+        return;
+      }
+    }
+
     // Only continue with navigation if we have suggestions
     if (suggestions.length === 0) return;
 
@@ -1368,8 +1409,9 @@ export function useTypeahead({
     // Shift+Enter and Meta+Enter insert newlines (handled by useTextInput),
     // so don't accept the suggestion for those.
     if (e.key === 'return' && !e.shift && !e.meta) {
-      e.preventDefault();
-      handleEnter();
+      if (handleEnter()) {
+        e.preventDefault();
+      }
     }
   };
 

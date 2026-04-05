@@ -565,7 +565,7 @@ export function normalizeResponsesOutputToTurnItems(
       kind: 'final_answer',
       provider: 'custom',
       text,
-      source: 'message_output_filtered',
+      source: 'message_output',
     })
   }
 

@@ -211,12 +211,12 @@ async function runHeadlessContextSession({
   }
 }
 
-// These tests intentionally pin the current Codex-only gap on local context
-// entrypoints. They should be folded into the broader TUI command/interaction
-// matrix later, so the same scenarios are checked at the input, display,
-// cancel, and error-reporting layers as well.
+// These tests pin the current Codex-only behavior on local context entrypoints.
+// They should be folded into the broader TUI command/interaction matrix later,
+// so the same scenarios are checked at the input, display, cancel, and
+// error-reporting layers as well.
 
-test('缺口：当前 headless Codex 主链还不会把 CLAUDE.md 与裸 @path include 注入请求体', async () => {
+test('当前 headless Codex 主链会把 CLAUDE.md 注入请求体，但裸 @path 仍只保留字面文本', async () => {
   const result = await runHeadlessContextSession({
     projectFiles: {
       'CLAUDE.md':
@@ -233,7 +233,8 @@ test('缺口：当前 headless Codex 主链还不会把 CLAUDE.md 与裸 @path i
   assert.equal(result.code, 0, result.stderr)
   assert.equal(result.requestBodies.length > 0, true, result.stderr)
   const payload = JSON.stringify(result.requestBodies[0] ?? {})
-  assert.doesNotMatch(payload, /ALPHA_CONTEXT/)
+  assert.match(payload, /ALPHA_CONTEXT/)
+  assert.match(payload, /@\.\/imported\.md/)
   assert.doesNotMatch(payload, /INCLUDE_BETA_CONTEXT/)
   assert.match(payload, /请总结当前上下文/)
 })
@@ -254,7 +255,7 @@ test('缺口：当前 headless Codex 主链里 @文件引用仍只保留字面�
   assert.match(payload, /note\.txt/)
 })
 
-test('缺口：当前 Codex 主链里 @import 也不会生效，因为 CLAUDE.md 本身尚未注入请求体', async () => {
+test('当前 Codex 主链会把 CLAUDE.md 注入请求体，但 @import 仍保留字面文本', async () => {
   const result = await runHeadlessContextSession({
     projectFiles: {
       'CLAUDE.md':
@@ -271,7 +272,7 @@ test('缺口：当前 Codex 主链里 @import 也不会生效，因为 CLAUDE.md
   assert.equal(result.code, 0, result.stderr)
   assert.equal(result.requestBodies.length > 0, true, result.stderr)
   const payload = JSON.stringify(result.requestBodies[0] ?? {})
-  assert.doesNotMatch(payload, /KEEP_DELTA_CONTEXT/)
-  assert.doesNotMatch(payload, /@import \.\/imported\.md/)
+  assert.match(payload, /KEEP_DELTA_CONTEXT/)
+  assert.match(payload, /@import \.\/imported\.md/)
   assert.doesNotMatch(payload, /SHOULD_NOT_BE_IMPORTED_BY_LITERAL_AT_IMPORT/)
 })

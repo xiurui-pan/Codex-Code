@@ -264,7 +264,7 @@ test(
             { name: 'interrupt-round-two', waitFor: ['esc to interrupt'], waitForFresh: true, send: '\u001b', settleMs: 1200 },
             {
               name: 'exit',
-              waitFor: ['? for shortcuts'],
+              waitFor: ['◐medium·/effort'],
               waitForFresh: true,
               send: '/exit\r',
               settleMs: 900,
@@ -278,7 +278,7 @@ test(
           'round-two-start',
           'interrupt-round-two',
           'exit',
-        ])
+        ], JSON.stringify(result))
         assert.equal(requestBodies.length, 2)
         const allRequests = JSON.stringify(requestBodies)
         assert.match(allRequests, /first round/)

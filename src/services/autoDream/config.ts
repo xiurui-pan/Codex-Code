@@ -7,8 +7,9 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from '../analytics/growthbook.js'
 
 /**
  * Whether background memory consolidation should run. User setting
- * (autoDreamEnabled in settings.json) overrides the GrowthBook default
- * when explicitly set; otherwise falls through to tengu_onyx_plover.
+ * (autoDreamEnabled in settings.json) overrides the Codex Code default.
+ * When unset, Codex Code enables auto-dream by default; users can still
+ * explicitly disable it in settings.json.
  */
 export function isAutoDreamEnabled(): boolean {
   const setting = getInitialSettings().autoDreamEnabled
@@ -17,5 +18,5 @@ export function isAutoDreamEnabled(): boolean {
     'tengu_onyx_plover',
     null,
   )
-  return gb?.enabled === true
+  return gb?.enabled === false ? false : true
 }

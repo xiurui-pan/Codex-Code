@@ -6,6 +6,7 @@
  * while keeping the side question response separate from main conversation.
  */
 
+import type { APIError } from '@anthropic-ai/sdk'
 import { formatAPIError } from '../services/api/errorUtils.js'
 import type { NonNullableUsage } from '../services/api/logging.js'
 import type { Message, SystemAPIErrorMessage } from '../types/message.js'
@@ -41,8 +42,32 @@ export function findBtwTriggerPositions(text: string): Array<{
 }
 
 export type SideQuestionResult = {
-  response: string | null
+  response: string
+  status: 'answered' | 'no_text' | 'provider_error'
   usage: NonNullableUsage
+}
+
+function isAPIError(error: unknown): error is APIError {
+  return (
+    error instanceof Error &&
+    'status' in error &&
+    'headers' in error &&
+    'error' in error &&
+    'requestID' in error
+  )
+}
+
+function formatSideQuestionProviderError(error: unknown): string {
+  if (isAPIError(error)) {
+    return formatAPIError(error)
+  }
+  if (error instanceof Error && error.message.trim().length > 0) {
+    return error.message
+  }
+  if (typeof error === 'string' && error.trim().length > 0) {
+    return error
+  }
+  return 'Unknown provider error'
 }
 
 /**
@@ -95,8 +120,11 @@ ${question}`
     skipCacheWrite: true,
   })
 
+  const extracted = extractSideQuestionResponse(agentResult.messages)
+
   return {
-    response: extractSideQuestionResponse(agentResult.messages),
+    response: extracted.response,
+    status: extracted.status,
     usage: agentResult.totalUsage,
   }
 }
@@ -122,7 +150,10 @@ ${question}`
  *   - API error exhausts retries → query yields system api_error + user
  *     interruption, no assistant message at all.
  */
-function extractSideQuestionResponse(messages: Message[]): string | null {
+export function extractSideQuestionResponse(messages: Message[]): {
+  response: string
+  status: SideQuestionResult['status']
+} {
   // Flatten all assistant content blocks across the per-block messages.
   const assistantBlocks = messages.flatMap(m =>
     m.type === 'assistant' ? m.message.content : [],
@@ -131,13 +162,27 @@ function extractSideQuestionResponse(messages: Message[]): string | null {
   if (assistantBlocks.length > 0) {
     // Concatenate all text blocks (there's normally at most one, but be safe).
     const text = extractTextContent(assistantBlocks, '\n\n').trim()
-    if (text) return text
+    if (text) {
+      return {
+        response: text,
+        status: 'answered',
+      }
+    }
 
     // No text — check if the model tried to call a tool despite instructions.
     const toolUse = assistantBlocks.find(b => b.type === 'tool_use')
     if (toolUse) {
       const toolName = 'name' in toolUse ? toolUse.name : 'a tool'
-      return `(The model tried to call ${toolName} instead of answering directly. Try rephrasing or ask in the main conversation.)`
+      return {
+        response: `Side question returned no text: model tried to call ${toolName} instead of answering. Please rephrase or ask in the main conversation.`,
+        status: 'no_text',
+      }
+    }
+
+    return {
+      response:
+        'Side question completed but returned no text response. Please rephrase and try again.',
+      status: 'no_text',
     }
   }
 
@@ -148,8 +193,15 @@ function extractSideQuestionResponse(messages: Message[]): string | null {
       m.type === 'system' && 'subtype' in m && m.subtype === 'api_error',
   )
   if (apiErr) {
-    return `(API error: ${formatAPIError(apiErr.error)})`
+    return {
+      response: `Side question failed with provider error: ${formatSideQuestionProviderError(apiErr.error)}`,
+      status: 'provider_error',
+    }
   }
 
-  return null
+  return {
+    response:
+      'Side question finished but produced no assistant output. Please try again.',
+    status: 'no_text',
+  }
 }

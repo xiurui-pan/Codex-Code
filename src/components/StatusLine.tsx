@@ -47,7 +47,9 @@ function buildStatusLineCommandInput(permissionMode: PermissionMode, exceeds200k
     exceeds200kTokens
   });
   const outputStyleName = settings?.outputStyle || DEFAULT_OUTPUT_STYLE_NAME;
-  const currentUsage = getEstimatedCurrentUsage(messages);
+  const currentUsage = getEstimatedCurrentUsage(messages, {
+    includeRestoredTotals: false
+  });
   const contextWindowSize = getContextWindowForModel(runtimeModel, getSdkBetas());
   const contextPercentages = calculateContextPercentages(currentUsage, contextWindowSize);
   const sessionId = getSessionId();
@@ -140,7 +142,9 @@ type Props = {
 export function getLastAssistantStatusSignature(messages: Message[]): string | null {
   const lastAssistant = getLastAssistantMessage(messages);
   if (!lastAssistant) return null;
-  const usage = getEstimatedCurrentUsage(messages);
+  const usage = getEstimatedCurrentUsage(messages, {
+    includeRestoredTotals: false
+  });
   return JSON.stringify({
     uuid: lastAssistant.uuid,
     input: usage?.input_tokens ?? null,
@@ -167,8 +171,12 @@ function formatUsedTokensForStatusLine(tokenCount: number): string {
 }
 
 function buildContextWindowSummary(messages: Message[], runtimeModel: ModelName): string | null {
-  const usage = getEstimatedCurrentUsage(messages);
-  const totalTokens = getDisplayContextTokenCount(messages);
+  const usage = getEstimatedCurrentUsage(messages, {
+    includeRestoredTotals: false
+  });
+  const totalTokens = getDisplayContextTokenCount(messages, {
+    includeRestoredTotals: false
+  });
   const contextWindowSize = getContextWindowForModel(runtimeModel, getSdkBetas());
   if (totalTokens <= 0 || contextWindowSize <= 0) return null;
 

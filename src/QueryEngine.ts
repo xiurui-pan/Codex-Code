@@ -825,6 +825,7 @@ export class QueryEngine {
           break
         case 'user':
           this.mutableMessages.push(message)
+          yield* this.emitExecutionItemMessages(message.modelTurnItems)
           yield* normalizeMessage(message)
           break
         case 'stream_event':
@@ -995,7 +996,7 @@ export class QueryEngine {
               uuid: message.uuid,
             }
           }
-          if (message.modelTurnItem) {
+          if (message.modelTurnItem?.kind === 'ui_message') {
             yield* this.emitExecutionItemMessages([message.modelTurnItem])
           }
           // Don't yield other system messages in headless mode

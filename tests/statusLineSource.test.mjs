@@ -21,6 +21,7 @@ test('StatusLine context summary uses the shared display token count helper', ()
   const source = readSource('src/components/StatusLine.tsx')
 
   assert.match(source, /getDisplayContextTokenCount/)
+  assert.match(source, /includeRestoredTotals: false/)
   assert.match(
     source,
     /return `🧠 \$\{formatUsedTokensForStatusLine\(totalTokens\)\} \/ \$\{formatTokenCountForStatusLine\(contextWindowSize\)\} \(\$\{usedPercentage\}%\)`/,
