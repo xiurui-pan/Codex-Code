@@ -5,31 +5,31 @@
 ## 1) 仍阻塞 Codex-only 主链的关键模块（路径级）
 
 ### A. API 请求主干仍是多分支路由
-- `upstream/claude-code/src/services/api/model.ts`
-- `upstream/claude-code/src/services/api/claude.ts`
-- `upstream/claude-code/src/services/api/client.ts`
-- `upstream/claude-code/src/services/api/streamingRequestDispatch.ts`
-- `upstream/claude-code/src/services/api/withRetry.ts`
-- `upstream/claude-code/src/services/api/errors.ts`
+- `src/services/api/model.ts`
+- `src/services/api/claude.ts`
+- `src/services/api/client.ts`
+- `src/services/api/streamingRequestDispatch.ts`
+- `src/services/api/withRetry.ts`
+- `src/services/api/errors.ts`
 
 现状：`codexResponses.ts` 已接入，但主链仍保留大量 Claude/多 provider 分支，错误分类、重试策略、流分发也还在按 provider 分裂。
 
 ### B. 模型与 provider 选择层仍内置四套 provider
-- `upstream/claude-code/src/utils/model/providers.ts`
-- `upstream/claude-code/src/utils/model/model.ts`
-- `upstream/claude-code/src/utils/model/configs.ts`
-- `upstream/claude-code/src/utils/model/modelStrings.ts`
-- `upstream/claude-code/src/utils/model/validateModel.ts`
-- `upstream/claude-code/src/utils/model/bedrock.ts`
-- `upstream/claude-code/src/utils/model/deprecation.ts`
+- `src/utils/model/providers.ts`
+- `src/utils/model/model.ts`
+- `src/utils/model/configs.ts`
+- `src/utils/model/modelStrings.ts`
+- `src/utils/model/validateModel.ts`
+- `src/utils/model/bedrock.ts`
+- `src/utils/model/deprecation.ts`
 
 现状：默认模型、别名、能力、下线日期仍按 `firstParty/bedrock/vertex/foundry` 维护，Codex-only 还在背历史兼容包袱。
 
 ### C. Anthropic 产品态能力仍在主代码树
-- `upstream/claude-code/src/bridge/*`（整目录）
-- `upstream/claude-code/src/remote/*`
-- `upstream/claude-code/src/hooks/useReplBridge.tsx`
-- `upstream/claude-code/src/bridgeEnabled.ts`（通过 `bridge` 相关引用链生效）
+- `src/bridge/*`（整目录）
+- `src/remote/*`
+- `src/hooks/useReplBridge.tsx`
+- `src/bridgeEnabled.ts`（通过 `bridge` 相关引用链生效）
 
 现状：`claude.ai` 远程桥接、OAuth、Remote Control 逻辑仍是可编译主模块，增加维护与回归面。
 
@@ -85,17 +85,17 @@
 以下命令都可直接执行，且与“Codex-only 主链可用性”直接相关：
 
 ### 第1步（API 主链锁定）
-- `cd upstream/claude-code && node --test tests/codexResponsesTimeoutProvider.test.mjs`
-- `cd upstream/claude-code && node --test --test-name-pattern "/compact TUI: resume compacts locally" tests/coreSlashCommandsAcceptance.test.mjs`
+- `cd  && node --test tests/codexResponsesTimeoutProvider.test.mjs`
+- `cd  && node --test --test-name-pattern "/compact TUI: resume compacts locally" tests/coreSlashCommandsAcceptance.test.mjs`
 
 ### 第2步（模型/provider 收窄）
-- `cd upstream/claude-code && node --test tests/model.test.ts`
-- `cd upstream/claude-code && node --test tests/modelTurnItems.test.ts`
+- `cd  && node --test tests/model.test.ts`
+- `cd  && node --test tests/modelTurnItems.test.ts`
 
 ### 第3步（交互主链稳定）
-- `cd upstream/claude-code && node --test --test-name-pattern "/plan TUI|/memory|/files" tests/coreSlashCommandsAcceptance.test.mjs`
-- `cd upstream/claude-code && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`
+- `cd  && node --test --test-name-pattern "/plan TUI|/memory|/files" tests/coreSlashCommandsAcceptance.test.mjs`
+- `cd  && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`
 
 ### 第4步（memory 收口回归）
-- `cd upstream/claude-code && node --test tests/memoryCodexOnlyMode.test.mjs`
+- `cd  && node --test tests/memoryCodexOnlyMode.test.mjs`
 

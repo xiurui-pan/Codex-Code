@@ -7,7 +7,7 @@ It keeps the practical terminal experience (TUI, tool execution, permission flow
 
 ## What This Project Is
 
-- A focused migration from `upstream/claude-code` into a Codex-native runtime.
+- A focused migration from Claude Code into a Codex-native runtime.
 - Not a multi-provider framework.
 - Not a branding-only fork.
 - Not a prompt-only adaptation.
@@ -120,13 +120,12 @@ Install and build:
 
 ```bash
 pnpm install
-pnpm -C upstream/claude-code build
+node scripts/build.mjs
 ```
 
 Run:
 
 ```bash
-cd upstream/claude-code
 CODEX_CODE_USE_CODEX_PROVIDER=1 \
 CODEX_CODE_DISABLE_TERMINAL_TITLE=1 \
 DISABLE_AUTOUPDATER=1 \

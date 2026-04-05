@@ -6,21 +6,21 @@
 
 | 能力 | 当前结论 | 本地证据 |
 | --- | --- | --- |
-| 真实 TTY 下的最小 TUI 主链：启动、出现 prompt、完成一轮真实问答、正常退出 | 已验 | `upstream/claude-code/tests/tuiSmoke.smoke.mjs` |
-| Headless `-p` 主链 | 已验 | `upstream/claude-code/tests/headlessStreaming.smoke.mjs` |
-| Headless `--output-format stream-json` | 已验 | `upstream/claude-code/tests/headlessStreaming.smoke.mjs` |
-| Codex 请求里的 reasoning effort 下发 | 已验 | `upstream/claude-code/tests/headlessStreaming.smoke.mjs`、`upstream/claude-code/src/main.tsx` |
+| 真实 TTY 下的最小 TUI 主链：启动、出现 prompt、完成一轮真实问答、正常退出 | 已验 | `tests/tuiSmoke.smoke.mjs` |
+| Headless `-p` 主链 | 已验 | `tests/headlessStreaming.smoke.mjs` |
+| Headless `--output-format stream-json` | 已验 | `tests/headlessStreaming.smoke.mjs` |
+| Codex 请求里的 reasoning effort 下发 | 已验 | `tests/headlessStreaming.smoke.mjs`、`src/main.tsx` |
 
 ## 已有本地入口，适合下一步补验
 
 | 能力 | 当前状态 | 代码入口 |
 | --- | --- | --- |
-| `--output-format text` / `json` | CLI 已接入，缺独立 smoke | `upstream/claude-code/src/main.tsx` |
-| `--continue` / `--resume` | CLI 已接入，已有相关行为测试，缺单独验收清单项 | `upstream/claude-code/src/main.tsx`、`upstream/claude-code/tests/sessionMemoryContext.behavior.mjs` |
-| `--from-pr` | CLI 已接入，未单独做 Codex-only 本地验收 | `upstream/claude-code/src/main.tsx` |
-| Git worktrees | 主链与工具入口都在，未补独立 smoke | `upstream/claude-code/src/setup.ts`、`upstream/claude-code/README.md` |
-| 文件/图片输入 | 工具与 CLI 入口都在，未补独立 smoke | `upstream/claude-code/src/tools.ts`、`upstream/claude-code/src/main.tsx`、`upstream/claude-code/README.md` |
-| `CLAUDE.md` / `/memory` / `@import` | 本地代码入口存在，但这轮不把 session memory 当验收范围 | `upstream/claude-code/src/projectOnboardingState.ts`、`upstream/claude-code/src/commands/memory` |
+| `--output-format text` / `json` | CLI 已接入，缺独立 smoke | `src/main.tsx` |
+| `--continue` / `--resume` | CLI 已接入，已有相关行为测试，缺单独验收清单项 | `src/main.tsx`、`tests/sessionMemoryContext.behavior.mjs` |
+| `--from-pr` | CLI 已接入，未单独做 Codex-only 本地验收 | `src/main.tsx` |
+| Git worktrees | 主链与工具入口都在，未补独立 smoke | `src/setup.ts`、`README.md` |
+| 文件/图片输入 | 工具与 CLI 入口都在，未补独立 smoke | `src/tools.ts`、`src/main.tsx`、`README.md` |
+| `CLAUDE.md` / `/memory` / `@import` | 本地代码入口存在，但这轮不把 session memory 当验收范围 | `src/projectOnboardingState.ts`、`src/commands/memory` |
 
 ## 暂不纳入当前清单
 

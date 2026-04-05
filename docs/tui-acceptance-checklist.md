@@ -22,26 +22,26 @@
 
 对应证据：
 
-- `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs`（含 `/exit` 中断后退出回归用例，修复提交 `9afabd4`）
-- `upstream/claude-code/tests/tuiMultiTurnStabilityAcceptance.test.mjs`（当前证据只覆盖 round1 成功 + round2 中断 + `/exit` 退出，稳定化提交 `b21ff65`）
-- `upstream/claude-code/tests/autoUpdaterMessages.test.ts`
-- `upstream/claude-code/tests/helpDismissTuiAcceptance.test.mjs`
-- `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs`
-- `upstream/claude-code/tests/tuiDisplayInteractionAcceptance.test.mjs`（阶段五新增：窄终端中英混输+补全焦点、长输出+transcript 进出后焦点恢复）
-- `upstream/claude-code/tests/claudeMdAcceptance.test.mjs`（`CLAUDE.md`、`@import`、`@文件引用` 已确认进入真实请求体）
-- `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs`（已覆盖连续本地 slash，以及本地 slash 后继续普通提问）
-- `upstream/claude-code/tests/headlessAcceptanceMatrix.test.mjs`（headless capability matrix 当前已整体验收通过）
+- `tests/tuiKeyboardInputAcceptance.test.mjs`（含 `/exit` 中断后退出回归用例，修复提交 `9afabd4`）
+- `tests/tuiMultiTurnStabilityAcceptance.test.mjs`（当前证据只覆盖 round1 成功 + round2 中断 + `/exit` 退出，稳定化提交 `b21ff65`）
+- `tests/autoUpdaterMessages.test.ts`
+- `tests/helpDismissTuiAcceptance.test.mjs`
+- `tests/codexResponsesTimeoutProvider.test.mjs`
+- `tests/tuiDisplayInteractionAcceptance.test.mjs`（阶段五新增：窄终端中英混输+补全焦点、长输出+transcript 进出后焦点恢复）
+- `tests/claudeMdAcceptance.test.mjs`（`CLAUDE.md`、`@import`、`@文件引用` 已确认进入真实请求体）
+- `tests/coreSlashCommandsAcceptance.test.mjs`（已覆盖连续本地 slash，以及本地 slash 后继续普通提问）
+- `tests/headlessAcceptanceMatrix.test.mjs`（headless capability matrix 当前已整体验收通过）
 - `timeout 80s env OPENAI_API_KEY=\"$CRS_OAI_KEY\" node dist/cli.js -p --verbose --output-format stream-json --include-partial-messages '请读取当前目录的所有文件，然后直接告诉我这个项目的结构和关键入口。不要先提问，不要解释过程。' </dev/null`（真实自然语言读目录场景已确认直接走工具）
 - `timeout 140s env OPENAI_API_KEY=\"$CRS_OAI_KEY\" node dist/cli.js -p --verbose --output-format stream-json --include-partial-messages '请联网搜索 OpenAI Codex CLI 官方文档，并用中文给我三点总结。' </dev/null`（2026-04-03 复验通过：可见搜索开始/完成进度，并返回最终总结）
 
 本轮复验命令：
 
-- `cd upstream/claude-code && node --test tests/tuiKeyboardInputAcceptance.test.mjs`
-- `cd upstream/claude-code && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`
-- `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`
-- `cd upstream/claude-code && node --test tests/tuiDisplayInteractionAcceptance.test.mjs`
-- `cd upstream/claude-code && node --test tests/claudeMdAcceptance.test.mjs`
-- `cd upstream/claude-code && node --test --test-name-pattern "resume restores existing plan content" tests/coreSlashCommandsAcceptance.test.mjs`
+- `cd  && node --test tests/tuiKeyboardInputAcceptance.test.mjs`
+- `cd  && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`
+- `cd  && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`
+- `cd  && node --test tests/tuiDisplayInteractionAcceptance.test.mjs`
+- `cd  && node --test tests/claudeMdAcceptance.test.mjs`
+- `cd  && node --test --test-name-pattern "resume restores existing plan content" tests/coreSlashCommandsAcceptance.test.mjs`
 
 ## 自动化 smoke 与人工验收的边界
 
@@ -155,9 +155,9 @@
 
 下一步建议命令：
 
-- `cd upstream/claude-code && pnpm build`
-- `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs`
-- `cd upstream/claude-code && node --test tests/codexResponsesTimeoutProvider.test.mjs`
+- `cd  && pnpm build`
+- `cd  && node --test tests/helpDismissTuiAcceptance.test.mjs`
+- `cd  && node --test tests/codexResponsesTimeoutProvider.test.mjs`
 
 ### 明确不放进这份清单
 

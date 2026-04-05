@@ -3,7 +3,7 @@
     "task_id": "tui-basic-loop",
     "category": "tui",
     "prompt": "真实 TTY 启动、一轮问答、正常退出",
-    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code",
+    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/",
     "command": "node --test tests/tuiSmoke.smoke.mjs",
     "timeout_ms": 120000
   },
@@ -11,7 +11,7 @@
     "task_id": "tui-slash-followup",
     "category": "tui",
     "prompt": "本地 slash 之后继续普通提问，验证真实请求体",
-    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code",
+    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/",
     "command": "node --test --test-name-pattern \"local slash TUI: local slash commands can be followed by a normal provider turn\" tests/coreSlashCommandsAcceptance.test.mjs",
     "timeout_ms": 120000
   },
@@ -19,7 +19,7 @@
     "task_id": "tool-permission-allow",
     "category": "permissions",
     "prompt": "工具权限弹窗默认允许分支",
-    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code",
+    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/",
     "command": "node --test --test-name-pattern \"Enter allows the default option\" tests/tuiPermissionTranscriptAcceptance.test.mjs",
     "timeout_ms": 120000
   },
@@ -27,7 +27,7 @@
     "task_id": "model-effort-switch",
     "category": "model",
     "prompt": "模型与 reasoning effort 切换/取消链路",
-    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code",
+    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/",
     "command": "node --test tests/modelEffortTuiAcceptance.test.mjs",
     "timeout_ms": 180000
   },
@@ -35,7 +35,7 @@
     "task_id": "session-memory-resume",
     "category": "memory",
     "prompt": "resume/compact 使用已恢复会话摘要",
-    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code",
+    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/",
     "command": "node --test --test-name-pattern \"cross-project resume compact\" tests/sessionMemoryContext.behavior.mjs",
     "timeout_ms": 120000
   },
@@ -43,7 +43,7 @@
     "task_id": "auto-memory-default",
     "category": "memory",
     "prompt": "默认 auto-memory 注入进入真实请求体",
-    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code",
+    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/",
     "command": "node --test --test-name-pattern \"default auto-memory\" tests/autoMemoryAcceptance.test.mjs",
     "timeout_ms": 120000
   },
@@ -51,7 +51,7 @@
     "task_id": "headless-stream-json",
     "category": "headless",
     "prompt": "headless stream-json 输出链路",
-    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code",
+    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/",
     "command": "node --test --test-name-pattern \"stream-json emits assistant then result\" tests/headlessAcceptanceMatrix.test.mjs",
     "timeout_ms": 120000
   },
@@ -59,7 +59,7 @@
     "task_id": "codex-color-runtime",
     "category": "ui",
     "prompt": "Codex 色板运行时映射",
-    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/upstream/claude-code",
+    "cwd": "/home/pxr/workspace/CodingAgent/Codex-Code/",
     "command": "node --test tests/codexColorPalette.test.mjs",
     "timeout_ms": 60000
   }

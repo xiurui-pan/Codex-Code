@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict'
+import test from 'node:test'
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { projectRoot } from './helpers/projectRoot.mjs'
+
+function readSource(path) {
+  return readFileSync(join(projectRoot, path), 'utf8')
+}
+
+test('StatusLine replaces explicit context N/A placeholders with live context usage', () => {
+  const source = readSource('src/components/StatusLine.tsx')
+
+  assert.match(source, /function buildContextWindowSummary/)
+  assert.match(source, /if \(\/🧠\[\^\|]\*\/\.test\(text\)\)/)
+  assert.match(source, /return text\.replace\(\/🧠\[\^\|]\*\/g, contextSummary\)/)
+  assert.match(source, /return `\$\{text\} \| \$\{contextSummary\}`/)
+})
+
+test('StatusLine context summary uses the shared display token count helper', () => {
+  const source = readSource('src/components/StatusLine.tsx')
+
+  assert.match(source, /getDisplayContextTokenCount/)
+  assert.match(
+    source,
+    /return `🧠 \$\{formatUsedTokensForStatusLine\(totalTokens\)\} \/ \$\{formatTokenCountForStatusLine\(contextWindowSize\)\} \(\$\{usedPercentage\}%\)`/,
+  )
+})

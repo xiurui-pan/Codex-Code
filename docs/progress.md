@@ -55,17 +55,17 @@ Included work:
 
 Verification added in this batch:
 
-- `upstream/claude-code/tests/toolTranscriptTuiAcceptance.test.mjs`
-- `upstream/claude-code/tests/tokensRestore.test.ts`
-- `upstream/claude-code/tests/sessionRestoreRegression.test.ts`
-- `upstream/claude-code/tests/contextWindowAlignment.test.ts`
-- `upstream/claude-code/tests/statusLineSource.test.mjs`
+- `tests/toolTranscriptTuiAcceptance.test.mjs`
+- `tests/tokensRestore.test.ts`
+- `tests/sessionRestoreRegression.test.ts`
+- `tests/contextWindowAlignment.test.ts`
+- `tests/statusLineSource.test.mjs`
 
 ## Recent Convergence Commits (04995ec, b87593a, 5a3b315)
 
 - `04995ec`: upgraded stage six from a plan skeleton to a runnable baseline that can record per-task outcome state and aggregate benchmark metrics.
-- `b87593a`: landed provider narrowing first cut so Codex-only provider selection wins over legacy provider flags, with proof in `upstream/claude-code/tests/providersBehavior.test.mjs`.
-- `5a3b315`: landed provider narrowing second cut by replacing two API-layer first-party gates with the narrowed helper path, again covered by `upstream/claude-code/tests/providersBehavior.test.mjs`.
+- `b87593a`: landed provider narrowing first cut so Codex-only provider selection wins over legacy provider flags, with proof in `tests/providersBehavior.test.mjs`.
+- `5a3b315`: landed provider narrowing second cut by replacing two API-layer first-party gates with the narrowed helper path, again covered by `tests/providersBehavior.test.mjs`.
 
 ## Real TUI Issue Status
 
@@ -80,20 +80,20 @@ Found and addressed:
 
 Current behavior:
 
-- 最小真实 TTY 主链已复验通过：启动、出现 prompt、一轮问答、正常退出；证据在 `upstream/claude-code/tests/tuiSmoke.smoke.mjs`。
-- model / reasoning effort 的真实 TUI 切换链路已收口；切换确认、Esc 取消、`/effort` 状态一致都已留证，证据在 `upstream/claude-code/tests/modelEffortTuiAcceptance.test.mjs`。
-- session memory 与 auto memory 两条主链已复验通过；证据分别在 `upstream/claude-code/tests/sessionMemoryContext.behavior.mjs` 和 `upstream/claude-code/tests/autoMemoryAcceptance.test.mjs`。
-- Codex 色板对齐现在已有运行时证据，不再只是源码字符串判断；覆盖 `theme`、`color-diff`、`heatmap`、`tab-status`，证据在 `upstream/claude-code/tests/codexColorPalette.test.mjs`。
-- interrupt 之后再次执行 `/exit`，现在会正常退出；对应回归用例已加到 `upstream/claude-code/tests/tuiKeyboardInputAcceptance.test.mjs`。
-- 多轮真实 TUI 稳定性当前以 `upstream/claude-code/tests/tuiMultiTurnStabilityAcceptance.test.mjs` 留证；覆盖范围明确是“round1 成功 + round2 中断 + `/exit` 退出”，不是第三轮再提问已自动化覆盖。
+- 最小真实 TTY 主链已复验通过：启动、出现 prompt、一轮问答、正常退出；证据在 `tests/tuiSmoke.smoke.mjs`。
+- model / reasoning effort 的真实 TUI 切换链路已收口；切换确认、Esc 取消、`/effort` 状态一致都已留证，证据在 `tests/modelEffortTuiAcceptance.test.mjs`。
+- session memory 与 auto memory 两条主链已复验通过；证据分别在 `tests/sessionMemoryContext.behavior.mjs` 和 `tests/autoMemoryAcceptance.test.mjs`。
+- Codex 色板对齐现在已有运行时证据，不再只是源码字符串判断；覆盖 `theme`、`color-diff`、`heatmap`、`tab-status`，证据在 `tests/codexColorPalette.test.mjs`。
+- interrupt 之后再次执行 `/exit`，现在会正常退出；对应回归用例已加到 `tests/tuiKeyboardInputAcceptance.test.mjs`。
+- 多轮真实 TUI 稳定性当前以 `tests/tuiMultiTurnStabilityAcceptance.test.mjs` 留证；覆盖范围明确是“round1 成功 + round2 中断 + `/exit` 退出”，不是第三轮再提问已自动化覆盖。
 - provider unreachable / silent stream / request-stage timeout now returns explicit provider error text instead of silent waiting.
-- `@文件引用` 现在已经不只是 UI 提示，而是会真实进入 Codex 请求体；证据在 `upstream/claude-code/tests/claudeMdAcceptance.test.mjs`。
+- `@文件引用` 现在已经不只是 UI 提示，而是会真实进入 Codex 请求体；证据在 `tests/claudeMdAcceptance.test.mjs`。
 - plan mode 当前状态已从“最小链路已验”推进到“resume existing plan 子用例已收口”；`--resume <jsonl>` 后再次 `/plan` 可读取旧计划内容，已纳入自动化留证。
-- TUI 宽场景新增两项自动化证据：窄终端中英混输 + 补全焦点稳定，以及长输出 + transcript 进出后的焦点恢复；证据在 `upstream/claude-code/tests/tuiDisplayInteractionAcceptance.test.mjs`。
-- provider 收窄第二刀已经落地；Codex-only 路径下，API 预处理和请求参数构建不再靠 `getAPIProvider() === 'firstParty'` 的旧判断触发，证据在 `upstream/claude-code/tests/providersBehavior.test.mjs`。
+- TUI 宽场景新增两项自动化证据：窄终端中英混输 + 补全焦点稳定，以及长输出 + transcript 进出后的焦点恢复；证据在 `tests/tuiDisplayInteractionAcceptance.test.mjs`。
+- provider 收窄第二刀已经落地；Codex-only 路径下，API 预处理和请求参数构建不再靠 `getAPIProvider() === 'firstParty'` 的旧判断触发，证据在 `tests/providersBehavior.test.mjs`。
 - 阶段六已经从“只有骨架说明”升级为“可记录每任务状态与聚合指标”的可执行基线。
-- local slash 主链已补到“多状态 + 后续普通提问”闭环；证据仍在 `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs`。
-- headless capability matrix 已复验通过；并且最小真实 `-p` 闭环 `Reply with exactly: ok` 已在当前代码再次确认恢复，证据在 `upstream/claude-code/tests/headlessAcceptanceMatrix.test.mjs`。
+- local slash 主链已补到“多状态 + 后续普通提问”闭环；证据仍在 `tests/coreSlashCommandsAcceptance.test.mjs`。
+- headless capability matrix 已复验通过；并且最小真实 `-p` 闭环 `Reply with exactly: ok` 已在当前代码再次确认恢复，证据在 `tests/headlessAcceptanceMatrix.test.mjs`。
 - permission 这条已拆清边界：工具权限链路已验收，host 沙箱权限由于当前仓库未包含 `@anthropic-ai/sandbox-runtime`，不再假装是同一条本地能力。
 - 真实“请读取当前目录的所有文件然后告诉我”场景已经不再先来回解释，而是直接进入 `Bash` / `Agent` / `Read` 工具链；同时修掉了 subagent 默认 `sonnet/haiku` 在 Codex provider 下不可用的问题，以及缺失 ripgrep 二进制导致的 `Glob` / `Grep` 主链失败。
 - 联网搜索链路现在的真实状态已更新：正常对话不再先走本地 `WebSearch` 函数工具，而是直接暴露 Codex 原生 `web_search`；`stream-json` 复验能看到 `正在联网搜索...` / `联网搜索已完成...`，最后返回最终答案。
@@ -166,13 +166,13 @@ Next command set:
 
 - 真实 PTY：继续逐条扫剩余保留 slash 命令，下一批优先补 `/clear`、`/compact`、`/review`、`/init` 的真实界面行为
 - 真实 PTY：继续做 direct/ssh 远端链路，重点看“远端取消权限请求后本地弹窗是否消失”
-- `cd upstream/claude-code && node --test tests/tuiKeyboardInputAcceptance.test.mjs`
-- `cd upstream/claude-code && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`
-- `cd upstream/claude-code && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`
-- `cd upstream/claude-code && node --test tests/tuiDisplayInteractionAcceptance.test.mjs`
-- `cd upstream/claude-code && node --test tests/claudeMdAcceptance.test.mjs`
-- `cd upstream/claude-code && node --test tests/providersBehavior.test.mjs`
-- `cd upstream/claude-code && node --test --test-name-pattern "resume restores existing plan content" tests/coreSlashCommandsAcceptance.test.mjs`
+- `cd  && node --test tests/tuiKeyboardInputAcceptance.test.mjs`
+- `cd  && node --test tests/tuiMultiTurnStabilityAcceptance.test.mjs`
+- `cd  && node --test tests/helpDismissTuiAcceptance.test.mjs tests/autoUpdaterMessages.test.ts tests/codexResponsesTimeoutProvider.test.mjs`
+- `cd  && node --test tests/tuiDisplayInteractionAcceptance.test.mjs`
+- `cd  && node --test tests/claudeMdAcceptance.test.mjs`
+- `cd  && node --test tests/providersBehavior.test.mjs`
+- `cd  && node --test --test-name-pattern "resume restores existing plan content" tests/coreSlashCommandsAcceptance.test.mjs`
 
 ## Long-Term Track Added
 
