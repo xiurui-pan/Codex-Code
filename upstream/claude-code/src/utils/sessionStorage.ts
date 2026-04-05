@@ -3827,6 +3827,7 @@ async function loadSessionFile(sessionId: UUID): Promise<{
   contentReplacements: Map<UUID, ContentReplacementRecord[]>
   contextCollapseCommits: ContextCollapseCommitEntry[]
   contextCollapseSnapshot: ContextCollapseSnapshotEntry | undefined
+  leafUuids: Set<UUID>
 }> {
   const sessionFile = join(
     getSessionProjectDir() ?? getProjectDir(getOriginalCwd()),
@@ -3882,6 +3883,7 @@ export async function getLastSessionLog(
     contentReplacements,
     contextCollapseCommits,
     contextCollapseSnapshot,
+    leafUuids,
   } = await loadSessionFile(sessionId)
   if (messages.size === 0) return null
   // Prime getSessionMessages cache so recordTranscript (called after REPL
@@ -3896,11 +3898,16 @@ export async function getLastSessionLog(
     )
   }
 
-  // Find the most recent non-sidechain message
-  const lastMessage = findLatestMessage(messages.values(), m => !m.isSidechain)
+  const lastMessage = findLatestMessage(
+    messages.values(),
+    msg =>
+      !msg.isSidechain &&
+      leafUuids.has(msg.uuid) &&
+      (msg.type === 'user' || msg.type === 'assistant'),
+  )
   if (!lastMessage) return null
 
-  // Build the transcript chain from the last message
+  // Build the transcript chain from the latest visible main-thread leaf.
   const transcript = buildConversationChain(messages, lastMessage)
 
   const summary = summaries.get(lastMessage.uuid)

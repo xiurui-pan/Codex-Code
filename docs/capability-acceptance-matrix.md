@@ -20,7 +20,13 @@ Rule:
 | Capability Area | Item | Status | Evidence | Notes |
 |---|---|---|---|---|
 | Core interaction | TUI basic prompt/response loop | done | `upstream/claude-code/tests/tuiSmoke.smoke.mjs` | 2026-04-03 复验通过：真实 TTY 启动、出现 prompt、一轮问答、正常退出 |
-| Core interaction | 自然语言“读取当前目录并总结”会直接走工具链 | done | `timeout 80s env OPENAI_API_KEY=\"$CRS_OAI_KEY\" node dist/cli.js -p --verbose --output-format stream-json --include-partial-messages '请读取当前目录的所有文件，然后直接告诉我这个项目的结构和关键入口。不要先提问，不要解释过程。' </dev/null` | 2026-04-03 复验通过：先直接进入 `Bash` / `Agent` / `Read` 工具链，不再先车轱辘式反问；同时修掉了 subagent `sonnet/haiku` 映射和缺失 ripgrep 导致的主链失败 |
+| Core interaction | 自然语言”读取当前目录并总结”会直接走工具链 | done | `timeout 80s env OPENAI_API_KEY=\”$CRS_OAI_KEY\” node dist/cli.js -p --verbose --output-format stream-json --include-partial-messages '请读取当前目录的所有文件，然后直接告诉我这个项目的结构和关键入口。不要先提问，不要解释过程。' </dev/null` | 2026-04-03 复验通过：先直接进入 `Bash` / `Agent` / `Read` 工具链，不再先车轱辘式反问；同时修掉了 subagent `sonnet/haiku` 映射和缺失 ripgrep 导致的主链失败 |
+| Core interaction | Thinking duration display | done | `codexResponses.ts` synthetic thinking events | Synthetic `content_block_start(type:thinking)` at stream start, closed on first output → spinner shows “thought for Ns” |
+| Core interaction | Token counter during streaming | done | `SpinnerAnimationRow.tsx` | Token count estimate visible from stream start (removed `totalTokens > 0` guard) |
+| Core interaction | Context window usage percentage | done | `upstream/claude-code/tests/contextWindowAlignment.test.ts`, `src/utils/codexConfig.ts`, `src/utils/context.ts` | now aligned to Codex CLI semantics: reads `~/.codex/config.toml` `model_context_window`, default effective window `258400`, and uses the same effective-window logic for TUI/statusline decisions |
+| Core interaction | Cost tracking (`/cost`) | done | `codexResponsesUsage.ts` → `cost-tracker.ts` | OpenAI usage → Anthropic format conversion → `addToTotalSessionCost()` |
+| Core interaction | Agent/subagent output propagation | done | `codexTurnItems.ts` `function_call_output` handler | Main model sees agent results in subsequent turns instead of re-searching |
+| Core interaction | Foreground agent retention | done | `LocalAgentTask.tsx` | Viewed/retained foreground agents stay in AppState after completion |
 | Slash commands | Core local slash command set | done | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | 2026-04-03 复验通过：既覆盖本地 slash 多状态链路，也覆盖本地 slash 后继续普通提问的真实 TUI 闭环 |
 | Slash commands | `/agents` local TUI acceptance | done | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | covers local acceptance and no provider traffic |
 | Slash commands | `/plugin` local TUI acceptance | done | `upstream/claude-code/tests/coreSlashCommandsAcceptance.test.mjs` | covers local acceptance and no provider traffic |
@@ -42,6 +48,7 @@ Rule:
 | TUI stability | narrow terminal mixed-language input keeps completion focus stable | done | `upstream/claude-code/tests/tuiDisplayInteractionAcceptance.test.mjs` | added by `b4cebc3`, stabilized by `c7d136c` |
 | TUI stability | long output + transcript toggle returns focus for next submit | done | `upstream/claude-code/tests/tuiDisplayInteractionAcceptance.test.mjs` | added by `b4cebc3`, stabilized by `c7d136c` |
 | TUI stability | real Codex provider long task complete loop (submit → tools → locate → summarize) | done | `upstream/claude-code/tests/tuiLongTaskCompleteLoop.smoke.mjs` | 2026-04-04 真实 Codex provider PTY 测试 27s 完成：模型收到任务后进入工具调用链，识别出 ToolSelector.tsx 导入路径问题并给出总结 |
+| TUI stability | transcript cleanup for commentary / bash duplicate / Read-Search collapse | done | `upstream/claude-code/tests/toolTranscriptTuiAcceptance.test.mjs` | 2026-04-05 真实 PTY 复验通过：commentary 可见，bash 不重复，Read/Search 保持折叠摘要 |
 | Provider chain | silent stream timeout gives explicit error (no silent hang) | done | `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs` | fixed by `c7e97ed` |
 | Provider chain | request-stage timeout gives explicit error | done | `upstream/claude-code/tests/codexResponsesTimeoutProvider.test.mjs` | fixed by `bf0555e` |
 | Provider chain | Codex-only provider selection wins over legacy provider flags | done | `upstream/claude-code/tests/providersBehavior.test.mjs` | first cut landed in `b87593a` |
@@ -51,6 +58,7 @@ Rule:
 | Permissions | Host permission request/decision flow | out-of-scope | `upstream/claude-code/src/utils/sandbox/sandbox-adapter.ts` | 当前阶段未包含 `@anthropic-ai/sandbox-runtime`；Codex-only 本地链路不启用该 Anthropic 沙箱运行时 |
 | Permissions | direct/ssh remote permission cancel clears stale local prompts | in-progress | `upstream/claude-code/src/server/directConnectManager.ts`, `upstream/claude-code/src/hooks/useDirectConnect.ts`, `upstream/claude-code/src/hooks/useSSHSession.ts` | 2026-04-04 代码修复已落地；真实远端会话留证仍待补齐 |
 | Memory | Session memory inject + compact/resume | done | `upstream/claude-code/tests/sessionMemoryContext.behavior.mjs` | 2026-04-03 复验通过：主查询注入、resume-like compact、cross-project compact、防递归回灌 |
+| Memory | latest visible leaf restore for `-c` / `--resume` | done | `upstream/claude-code/tests/sessionRestoreRegression.test.ts`, `upstream/claude-code/tests/sessionNavigationAcceptance.test.mjs` | 2026-04-05 已加直接回归：恢复不会被较晚的支线消息截断成只剩最近后缀 |
 | Memory | Auto memory injection | done | `upstream/claude-code/tests/autoMemoryAcceptance.test.mjs` | 2026-04-03 复验通过：默认注入、override、显式关闭三条主链路 |
 | Context docs | CLAUDE.md / @import / @文件引用 enter the real request body | done | `upstream/claude-code/tests/claudeMdAcceptance.test.mjs` | `f35380d` fixed the Codex request-body path so file refs are no longer dropped |
 | Headless | Headless capability matrix | done | `upstream/claude-code/tests/headlessAcceptanceMatrix.test.mjs`, `timeout 45s env OPENAI_API_KEY=\"$CRS_OAI_KEY\" node dist/cli.js -p 'Reply with exactly: ok' </dev/null` | 2026-04-03 当前代码已再次复验：先修掉 `runHeadlessStreaming` 作用域错误，再确认基础问答恢复；矩阵用例与最小真实 `-p` 闭环都通过 |

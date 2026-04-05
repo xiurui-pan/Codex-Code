@@ -27,7 +27,16 @@ import {
   setCostStateForRestore,
   setHasUnknownModelCost,
 } from './bootstrap/state.js'
-import type { ModelUsage } from './entrypoints/agentSdkTypes.js'
+type ModelUsage = {
+  inputTokens: number
+  outputTokens: number
+  cacheReadInputTokens: number
+  cacheCreationInputTokens: number
+  webSearchRequests: number
+  costUSD: number
+  contextWindow: number
+  maxOutputTokens: number
+}
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
   logEvent,
@@ -75,6 +84,11 @@ type StoredCostState = {
   totalToolDuration: number
   totalLinesAdded: number
   totalLinesRemoved: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheCreationInputTokens: number
+  totalCacheReadInputTokens: number
+  totalWebSearchRequests: number
   lastDuration: number | undefined
   modelUsage: { [modelName: string]: ModelUsage } | undefined
 }
@@ -117,6 +131,12 @@ export function getStoredSessionCosts(
     totalToolDuration: projectConfig.lastToolDuration ?? 0,
     totalLinesAdded: projectConfig.lastLinesAdded ?? 0,
     totalLinesRemoved: projectConfig.lastLinesRemoved ?? 0,
+    totalInputTokens: projectConfig.lastTotalInputTokens ?? 0,
+    totalOutputTokens: projectConfig.lastTotalOutputTokens ?? 0,
+    totalCacheCreationInputTokens:
+      projectConfig.lastTotalCacheCreationInputTokens ?? 0,
+    totalCacheReadInputTokens: projectConfig.lastTotalCacheReadInputTokens ?? 0,
+    totalWebSearchRequests: projectConfig.lastTotalWebSearchRequests ?? 0,
     lastDuration: projectConfig.lastDuration,
     modelUsage,
   }

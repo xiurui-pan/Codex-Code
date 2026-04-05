@@ -84,7 +84,7 @@ import {
   renderModelName,
 } from './utils/model/model.js'
 import {
-  doesMostRecentAssistantMessageExceed200k,
+  doesEstimatedContextExceed200k,
   finalContextTokensFromLastResponse,
   tokenCountWithEstimation,
 } from './utils/tokens.js'
@@ -324,15 +324,16 @@ async function* queryLoop(
 
   // Fired once per user turn — the prompt is invariant across loop iterations,
   // so per-iteration firing would ask sideQuery the same question N times.
-  // Consume point polls settledAt (never blocks). `using` disposes on all
-  // generator exit paths — see MemoryPrefetch for dispose/telemetry semantics.
-  using pendingMemoryPrefetch = startRelevantMemoryPrefetch(
+  // Consume point polls settledAt (never blocks). Dispose on all generator
+  // exit paths — see MemoryPrefetch for dispose/telemetry semantics.
+  const pendingMemoryPrefetch = startRelevantMemoryPrefetch(
     state.messages,
     state.toolUseContext,
   )
 
-  // eslint-disable-next-line no-constant-condition
-  while (true) {
+  try {
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
     // Destructure state at the top of each iteration. toolUseContext alone
     // is reassigned within an iteration (queryTracking, messages updates);
     // the rest are read-only between continue sites.
@@ -607,7 +608,7 @@ async function* queryLoop(
       mainLoopModel: toolUseContext.options.mainLoopModel,
       exceeds200kTokens:
         permissionMode === 'plan' &&
-        doesMostRecentAssistantMessageExceed200k(messagesForQuery),
+        doesEstimatedContextExceed200k(messagesForQuery),
     })
 
     queryCheckpoint('query_setup_end')
@@ -1717,11 +1718,8 @@ async function* queryLoop(
       toolResults.push(attachment)
     }
 
-    for (const sessionMemoryMessage of await getCurrentSessionMemoryContextMessages(
-      querySource,
-    )) {
-      toolResults.push(sessionMemoryMessage)
-    }
+    // Session memory is already injected into messagesForQuery before the turn.
+    // Do not append it again here or it will be duplicated in the transcript.
 
     // Memory prefetch consume: only if settled and not already consumed on
     // an earlier iteration. If not settled yet, skip (zero-wait) and retry
@@ -1858,6 +1856,9 @@ async function* queryLoop(
       stopHookActive,
       transition: { reason: 'next_turn' },
     }
-    state = next
-  } // while (true)
+      state = next
+    } // while (true)
+  } finally {
+    pendingMemoryPrefetch[Symbol.dispose]()
+  }
 }

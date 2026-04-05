@@ -7,7 +7,7 @@ import type { BasicTracerProvider } from '@opentelemetry/sdk-trace-base'
 import { realpathSync } from 'fs'
 import sumBy from 'lodash-es/sumBy.js'
 import { cwd } from 'process'
-import type { HookEvent, ModelUsage } from 'src/entrypoints/agentSdkTypes.js'
+import { HOOK_EVENTS } from 'src/entrypoints/sdk/coreTypes.js'
 import type { AgentColorName } from 'src/tools/AgentTool/agentColorManager.js'
 import type { HookCallbackMatcher } from 'src/types/hooks.js'
 // Indirection for browser-sdk build (package.json "browser" field swaps
@@ -25,6 +25,18 @@ import { createSignal } from 'src/utils/signal.js'
 
 // Union type for registered hooks - can be SDK callbacks or native plugin hooks
 type RegisteredHookMatcher = HookCallbackMatcher | PluginHookMatcher
+
+type HookEvent = (typeof HOOK_EVENTS)[number]
+type ModelUsage = {
+  inputTokens: number
+  outputTokens: number
+  cacheReadInputTokens: number
+  cacheCreationInputTokens: number
+  webSearchRequests: number
+  costUSD: number
+  contextWindow: number
+  maxOutputTokens: number
+}
 
 import type { SessionId } from 'src/types/ids.js'
 
@@ -887,6 +899,11 @@ export function setCostStateForRestore({
   totalToolDuration,
   totalLinesAdded,
   totalLinesRemoved,
+  totalInputTokens,
+  totalOutputTokens,
+  totalCacheCreationInputTokens,
+  totalCacheReadInputTokens,
+  totalWebSearchRequests,
   lastDuration,
   modelUsage,
 }: {
@@ -896,6 +913,11 @@ export function setCostStateForRestore({
   totalToolDuration: number
   totalLinesAdded: number
   totalLinesRemoved: number
+  totalInputTokens: number
+  totalOutputTokens: number
+  totalCacheCreationInputTokens: number
+  totalCacheReadInputTokens: number
+  totalWebSearchRequests: number
   lastDuration: number | undefined
   modelUsage: { [modelName: string]: ModelUsage } | undefined
 }): void {
@@ -906,9 +928,20 @@ export function setCostStateForRestore({
   STATE.totalLinesAdded = totalLinesAdded
   STATE.totalLinesRemoved = totalLinesRemoved
 
-  // Restore per-model usage breakdown
-  if (modelUsage) {
-    STATE.modelUsage = modelUsage
+  // Restore per-model usage breakdown when available. Also seed a synthetic
+  // aggregate model when only legacy session totals are present so cumulative
+  // status-line counters still work after resume.
+  STATE.modelUsage = modelUsage ?? {
+    __restored_session__: {
+      inputTokens: totalInputTokens,
+      outputTokens: totalOutputTokens,
+      cacheReadInputTokens: totalCacheReadInputTokens,
+      cacheCreationInputTokens: totalCacheCreationInputTokens,
+      webSearchRequests: totalWebSearchRequests,
+      costUSD: totalCostUSD,
+      contextWindow: 0,
+      maxOutputTokens: 0,
+    },
   }
 
   // Adjust startTime to make wall duration accumulate

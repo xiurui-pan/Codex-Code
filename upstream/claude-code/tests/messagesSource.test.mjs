@@ -16,3 +16,10 @@ test('computeSliceStart guards missing uuids and null anchors', () => {
   assert.match(source, /const msgAtStartUuid = msgAtStart\?\.uuid/);
   assert.match(source, /anchor\?\.idx !== start/);
 });
+
+test('Message.tsx drops assistant and user wrapper boxes when every child renders null', () => {
+  const source = readSource('src/components/Message.tsx');
+
+  assert.match(source, /function hasRenderableNode\(children: React\.ReactNode\)/);
+  assert.match(source, /if \(!hasRenderableNode\(t3\)\) \{\s*return null;/);
+});

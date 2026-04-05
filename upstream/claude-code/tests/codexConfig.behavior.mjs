@@ -80,6 +80,8 @@ test('codex config centralizes base URL, model, reasoning, storage, and auth', a
         assert.equal(config.model, 'gpt-5.1-codex-mini')
         assert.equal(config.reasoningEffort, 'high')
         assert.equal(config.responseStorage, false)
+        assert.equal(config.modelContextWindow, undefined)
+        assert.equal(config.modelAutoCompactTokenLimit, undefined)
         assert.equal(config.apiKeyEnvName, 'TEST_CODEX_API_KEY')
         assert.equal(config.apiKey, 'test-key')
 
@@ -136,6 +138,57 @@ test('disable_response_storage stays compatible and only applies when response_s
 
     const explicitConfig = await loadCodexConfig(configPath)
     assert.equal(explicitConfig.responseStorage, true)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('codex config exposes context window and auto compact limits through env helpers', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'codex-config-window-'))
+  const codexDir = join(tempDir, '.codex')
+  const configPath = join(codexDir, 'config.toml')
+  await mkdir(codexDir, { recursive: true })
+  await writeFile(
+    configPath,
+    [
+      'model_provider = "test-provider"',
+      'model_context_window = 400000',
+      'model_auto_compact_token_limit = 310000',
+      '',
+      '[model_providers.test-provider]',
+      'base_url = "https://example.invalid/v1"',
+      '',
+    ].join('\n'),
+  )
+
+  try {
+    await withEnv(
+      {
+        CODEX_CODE_MODEL_CONTEXT_WINDOW: undefined,
+        CODEX_CODE_MODEL_AUTO_COMPACT_TOKEN_LIMIT: undefined,
+      },
+      async () => {
+        const {
+          applyCodexConfigToEnv,
+          getCodexAutoCompactTokenLimit,
+          getCodexConfiguredAutoCompactTokenLimit,
+          getCodexConfiguredModelContextWindow,
+          getCodexEffectiveContextWindow,
+          loadCodexConfig,
+        } = await import('../src/utils/codexConfig.ts')
+
+        const config = await loadCodexConfig(configPath)
+        assert.equal(config.modelContextWindow, 400000)
+        assert.equal(config.modelAutoCompactTokenLimit, 310000)
+
+        applyCodexConfigToEnv(config)
+
+        assert.equal(getCodexConfiguredModelContextWindow(), 400000)
+        assert.equal(getCodexConfiguredAutoCompactTokenLimit(), 310000)
+        assert.equal(getCodexEffectiveContextWindow(), 380000)
+        assert.equal(getCodexAutoCompactTokenLimit(), 310000)
+      },
+    )
   } finally {
     await rm(tempDir, { recursive: true, force: true })
   }

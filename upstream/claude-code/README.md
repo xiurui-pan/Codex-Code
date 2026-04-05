@@ -44,6 +44,19 @@ This snapshot is also being used as a working base for a `Codex Code` prototype.
 - permission flow is being completed on that same object chain so hosts can understand request → decision → result without scraping assistant text
 - memory is kept in a Codex-only split mode: `MEMORY.md` context injection and `session memory + /resume + /compact` are on the main path, while broad legacy auto-memory branches (extract/auto-dream/team/agent memory) stay out of the default Codex path
 
+Recent local hardening on top of this snapshot:
+
+- Node 22 startup is fixed on the active `dist/cli.js` path by removing runtime `using` / `await using` syntax from the built execution path.
+- TUI transcript cleanup now explicitly targets:
+  - blank rows from null-render message trees
+  - duplicate bash pre-execution text
+  - inconsistent Read/Search collapse rendering
+  - commentary text being hidden together with protocol-noise info messages
+- session/status alignment is now closer to Codex CLI expectations:
+  - `~/.codex/config.toml` `model_context_window` is read directly
+  - default effective context window is treated as `258400`
+  - auto compact threshold follows Codex-style clamping through `model_auto_compact_token_limit`
+
 ## Built with `oh-my-codex`
 
 The README/essay archival work on this branch was AI-assisted and orchestrated with Yeachan Heo's [oh-my-codex (OmX)](https://github.com/Yeachan-Heo/oh-my-codex), a workflow layer built around Codex.

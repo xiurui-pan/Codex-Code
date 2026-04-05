@@ -38,7 +38,7 @@ import {
   getRequestTooLargeErrorMessage,
 } from '../services/api/errors.js'
 import type { ModelTurnItem } from '../services/api/modelTurnItems.js'
-import type { AnyObject, Progress } from '../Tool.js'
+import { type AnyObject, type Progress } from '../Tool.js'
 import { isConnectorTextBlock } from '../types/connectorText.js'
 import type {
   AssistantMessage,

@@ -155,22 +155,15 @@ test('tool output bookkeeping messages stay hidden from normal TUI output', () =
   assert.equal(message, null)
 })
 
-test('web search ui messages are emitted into SDK execution item stream', () => {
+test('commentary info ui messages are emitted into SDK execution item stream', () => {
   const items = buildSDKExecutionItemMessages(
     [
       {
         kind: 'ui_message',
         provider: 'custom',
         level: 'info',
-        text: '正在联网搜索: OpenAI Codex CLI',
-        source: 'web_search_call',
-      },
-      {
-        kind: 'ui_message',
-        provider: 'custom',
-        level: 'info',
-        text: '联网搜索已完成: OpenAI Codex CLI',
-        source: 'web_search_call_completed',
+        text: 'I am checking the project structure before editing.',
+        source: 'commentary',
       },
     ],
     'session-1',
@@ -178,7 +171,7 @@ test('web search ui messages are emitted into SDK execution item stream', () => 
 
   assert.deepEqual(
     items.map(item => item.item_kind),
-    ['ui_message', 'ui_message'],
+    ['ui_message'],
   )
 })
 

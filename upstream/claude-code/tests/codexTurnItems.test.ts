@@ -212,7 +212,7 @@ test('exact quoted code payload only executes in isolated debug mode', () => {
   assert.equal(debugItems.some(item => item.kind === 'local_shell_call'), true)
 })
 
-test('commentary messages are not surfaced as final answers', () => {
+test('commentary messages stay visible without becoming final answers', () => {
   const items = normalizeResponsesOutputToTurnItems([
     {
       type: 'message',
@@ -228,6 +228,16 @@ test('commentary messages are not surfaced as final answers', () => {
   ])
 
   assert.equal(items.some(item => item.kind === 'final_answer'), false)
+  assert.equal(
+    items.some(
+      item =>
+        item.kind === 'ui_message' &&
+        item.level === 'info' &&
+        item.source === 'commentary' &&
+        item.text.includes('inspect the current directory'),
+    ),
+    true,
+  )
 })
 
 test('web search call emits a visible progress message', () => {

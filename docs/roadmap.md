@@ -85,13 +85,40 @@ So this roadmap tracks **runtime convergence**, not only prompt edits.
 - 2026-04-04 Claude / Anthropic 业务 slash 命令清扫继续收口：`/mobile`、`/chrome`、`/usage`、`/install-github-app`、`/web-setup`、`/remote-control` 已从 Codex 模式的真实 TUI 可用面移除，同时 `/plan`、`/model status`、`/theme`、`/copy` 的保留命令链路已做过新一轮真实 PTY 留证。
 - 2026-04-04 保留 slash 命令的第二轮真实 PTY 留证已补到 `/help`、`/model`、`/effort`、`/memory`、`/status`、`/doctor`、`/mcp`；同时 `/statusline` 已在确认真实报错后从 Codex 模式命令面移除，`/agents` 的空白回落也已确认根因为动态加载分支里的 `src/...` 导入失效，并已修到可进入创建向导第一步。
 
+### Phase E - Codex Provider TUI Convergence (done, 2026-04-04)
+
+Committed in `1d92184` and subsequent uncommitted fixes:
+
+- **Thinking duration display**: Synthetic `thinking` content_block_start/stop events in `codexResponses.ts` trigger spinner “thought for Ns” display. No real thinking from Codex, but TUI shows elapsed thinking time.
+- **Context window usage percentage**: `response.completed` usage data attached to assistant messages in `query.ts` so `getCurrentUsage()` returns real token counts. Context window % now displays in status line and `/cost`.
+- **Agent/subagent output propagation**: `function_call_output` items from Codex now properly converted to `tool_output` turn items in `codexTurnItems.ts`. Main model reads agent results instead of re-searching.
+- **Tool status message cleanup**: `modelTurnItems.ts` simplified — empty/success messages return `null` instead of empty system messages; only failures and denials produce visible output.
+- **Token counter always visible**: Removed `totalTokens > 0` guard in `SpinnerAnimationRow.tsx` so token count shows from stream start.
+- **Foreground agent retention**: `LocalAgentTask.tsx` keeps viewed/retained foreground agents in AppState after completion so transcript view still has backing messages array.
+- **Sync agent foreground completion**: `AgentTool.tsx` now calls `completeAsyncAgent` for foreground sync agents on completion.
+- **Session memory dedup**: Removed duplicate session memory injection in `query.ts` — already injected before the turn, appending again caused transcript duplication.
+
+### Phase F - TUI / Session Restore Hardening (done, 2026-04-05)
+
+- Removed Node 22 startup blockers from the active build path by replacing runtime `using` / `await using` syntax with explicit cleanup logic.
+- Closed the main transcript rendering regressions:
+  - blank rows from null-render trees
+  - duplicate bash pre-execution text
+  - commentary hidden together with protocol-noise info lines
+  - Read/Search collapsing drifting back into plain text
+- Reworked status/context alignment to match Codex CLI expectations:
+  - `~/.codex/config.toml` `model_context_window` now feeds the effective context window calculation
+  - default effective context window is `258400`
+  - auto compact threshold now follows the Codex CLI-style clamp against `model_auto_compact_token_limit`
+- Added direct restore regression coverage so `-c` / `--resume` does not collapse to only the latest visible suffix in the tested branch case.
+
 ## 4.2 Current Remaining Gap
 
-- 当前没有新的 P0 阻塞；联网搜索已从未完成项转为已完成项。
+- 当前没有新的 P0 阻塞。
 - `/sandbox` 还缺完整配置界面的真实 TUI 留证。
 - direct/ssh 远端权限取消这条还缺真实远端会话验收，当前只完成了代码修复。
-- 真实 Codex provider 长任务虽然已再次证明“可提交并进入工作态”，但 PTY 工具流转录还需要继续收紧。
-- slash 命令的真实 PTY 扫描还没做完全部保留命令；当前已补到 `/help`、`/model`、`/effort`、`/memory`、`/status`、`/doctor`、`/mcp`、`/permissions`、`/config`、`/files`、`/branch`，`/agents` 也已修到可进入创建向导第一步；下一批应继续扫 `/clear`、`/compact`、`/review`、`/init`。
+- Residual “Claude” brand references in ~25 user-facing strings (mostly OAuth URLs and functional endpoints that must remain unchanged).
+- slash 命令的真实 PTY 扫描还没做完全部保留命令。
 
 ## 5) Definition of Done for This Roadmap Track
 

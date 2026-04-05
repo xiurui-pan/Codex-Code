@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process'
 import { getCwd } from '../utils/cwd.js'
-import { slowLogging } from './slowOperations.js'
+import { slowLogging, withSlowLogging } from './slowOperations.js'
 
 const MS_IN_SECOND = 1000
 const SECONDS_IN_MINUTE = 60
@@ -67,23 +67,24 @@ export function execSyncWithDefaults_DEPRECATED(
   } = options
 
   abortSignal?.throwIfAborted()
-  using _ = slowLogging`exec: ${command.slice(0, 200)}`
-  try {
-    const result = spawnSync(command, {
-      env: process.env,
-      maxBuffer: 1_000_000,
-      timeout: finalTimeout,
-      cwd: getCwd(),
-      stdio,
-      shell: true,
-      input,
-      encoding: 'utf8',
-    })
-    if (typeof result.stdout !== 'string' || result.status !== 0) {
+  return withSlowLogging(slowLogging`exec: ${command.slice(0, 200)}`, () => {
+    try {
+      const result = spawnSync(command, {
+        env: process.env,
+        maxBuffer: 1_000_000,
+        timeout: finalTimeout,
+        cwd: getCwd(),
+        stdio,
+        shell: true,
+        input,
+        encoding: 'utf8',
+      })
+      if (typeof result.stdout !== 'string' || result.status !== 0) {
+        return null
+      }
+      return result.stdout.trim() || null
+    } catch {
       return null
     }
-    return result.stdout.trim() || null
-  } catch {
-    return null
-  }
+  })
 }

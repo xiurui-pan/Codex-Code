@@ -6,6 +6,7 @@ import type { QuerySource } from '../../constants/querySource.js'
 import type { ToolUseContext } from '../../Tool.js'
 import type { Message } from '../../types/message.js'
 import { getGlobalConfig } from '../../utils/config.js'
+import { getCodexAutoCompactTokenLimit } from '../../utils/codexConfig.js'
 import { getContextWindowForModel } from '../../utils/context.js'
 import { logForDebugging } from '../../utils/debug.js'
 import { isEnvTruthy } from '../../utils/envUtils.js'
@@ -75,6 +76,11 @@ export const MANUAL_COMPACT_BUFFER_TOKENS = 3_000
 const MAX_CONSECUTIVE_AUTOCOMPACT_FAILURES = 3
 
 export function getAutoCompactThreshold(model: string): number {
+  const codexAutoCompactLimit = getCodexAutoCompactTokenLimit()
+  if (codexAutoCompactLimit > 0) {
+    return codexAutoCompactLimit
+  }
+
   const effectiveContextWindow = getEffectiveContextWindowSize(model)
 
   const autocompactThreshold =

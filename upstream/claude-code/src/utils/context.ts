@@ -1,12 +1,15 @@
 // biome-ignore-all assist/source/organizeImports: ANT-ONLY import markers must not be reordered
 import { CONTEXT_1M_BETA_HEADER } from '../constants/betas.js'
 import { getGlobalConfig } from './config.js'
+import { getCodexEffectiveContextWindow, getCodexConfiguredModelContextWindow } from './codexConfig.js'
 import { isEnvTruthy } from './envUtils.js'
 import { getCanonicalName } from './model/model.js'
 import { getModelCapability } from './model/modelCapabilities.js'
+import { resolveAntModel } from './model/antModels.js'
 
-// Model context window size (200k tokens for all models right now)
-export const MODEL_CONTEXT_WINDOW_DEFAULT = 200_000
+// Codex CLI uses a 272k raw model window with 95% effective usable context
+// when no narrower runtime model metadata is available.
+export const MODEL_CONTEXT_WINDOW_DEFAULT = getCodexEffectiveContextWindow()
 
 // Maximum output tokens for compact operations
 export const COMPACT_MAX_OUTPUT_TOKENS = 20_000
@@ -52,6 +55,11 @@ export function getContextWindowForModel(
   model: string,
   betas?: string[],
 ): number {
+  const codexConfiguredContextWindow = getCodexConfiguredModelContextWindow()
+  if (codexConfiguredContextWindow) {
+    return getCodexEffectiveContextWindow()
+  }
+
   // Allow override via environment variable (ant-only)
   // This takes precedence over all other context window resolution, including 1M detection,
   // so users can cap the effective context window for local decisions (auto-compact, etc.)
@@ -118,6 +126,7 @@ export function getSonnet1mExpTreatmentEnabled(model: string): boolean {
 export function calculateContextPercentages(
   currentUsage: {
     input_tokens: number
+    output_tokens: number
     cache_creation_input_tokens: number
     cache_read_input_tokens: number
   } | null,
@@ -127,13 +136,14 @@ export function calculateContextPercentages(
     return { used: null, remaining: null }
   }
 
-  const totalInputTokens =
+  const totalContextTokens =
     currentUsage.input_tokens +
+    currentUsage.output_tokens +
     currentUsage.cache_creation_input_tokens +
     currentUsage.cache_read_input_tokens
 
   const usedPercentage = Math.round(
-    (totalInputTokens / contextWindowSize) * 100,
+    (totalContextTokens / contextWindowSize) * 100,
   )
   const clampedUsed = Math.min(100, Math.max(0, usedPercentage))
 

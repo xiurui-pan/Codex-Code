@@ -2,7 +2,7 @@
 
 import fs from 'node:fs/promises'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -801,13 +801,15 @@ await fs.writeFile(
   `#!/usr/bin/env node
 import { spawn } from 'node:child_process'
 import path from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const entry = path.join(__dirname, 'src', 'entrypoints', 'cli.tsx')
 const loader = path.join(__dirname, 'loader.mjs')
 const globals = path.join(__dirname, 'shims', 'runtime-globals.mjs')
+
+const registerLoader = \`data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register(\${JSON.stringify(pathToFileURL(loader).href)}, pathToFileURL("./"));\`
 
 const child = spawn(
   process.execPath,
@@ -816,8 +818,8 @@ const child = spawn(
     globals,
     '--import',
     'tsx',
-    '--loader',
-    loader,
+    '--import',
+    registerLoader,
     entry,
     ...process.argv.slice(2),
   ],

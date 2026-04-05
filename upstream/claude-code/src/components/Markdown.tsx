@@ -1,7 +1,7 @@
 import { c as _c } from "react/compiler-runtime";
 import { marked, type Token, type Tokens } from 'marked';
 import React, { Suspense, use, useMemo, useRef } from 'react';
-import { useSettings } from '../hooks/useSettings.js';
+import { useSettingsMaybeOutsideOfProvider } from '../hooks/useSettings.js';
 import { Ansi, Box, useTheme } from '../ink.js';
 import { type CliHighlight, getCliHighlightPromise } from '../utils/cliHighlight.js';
 import { hashContent } from '../utils/hash.js';
@@ -77,8 +77,8 @@ function cachedLexer(content: string): Token[] {
  */
 export function Markdown(props) {
   const $ = _c(4);
-  const settings = useSettings();
-  if (settings.syntaxHighlightingDisabled) {
+  const settings = useSettingsMaybeOutsideOfProvider();
+  if (settings?.syntaxHighlightingDisabled) {
     let t0;
     if ($[0] !== props) {
       t0 = <MarkdownBody {...props} highlight={null} />;

@@ -2,24 +2,64 @@
 
 ## Current Position
 
-The project has moved from "provider adapter" work into **Codex-only runtime convergence**.
+The project has completed **Codex provider TUI convergence** — the main runtime loop, streaming pipeline, token tracking, and agent output propagation are all working end-to-end with the Codex provider.
 
 What this means in practice:
 
-- TUI, headless flow, tool execution, and permission flow remain in active use.
-- Mainline migration goal is no longer "make Claude-shaped output look usable".
-- Mainline goal is "make Codex-shaped runtime objects first-class".
-- 2026-04-03 当前代码再次实测后，headless 最小 `-p` 闭环已经恢复；真实“读目录并总结”场景也会直接走工具链。
-- 2026-04-03 当前代码再次实测后，自然语言联网搜索也已收口：正常对话直接走 Codex 原生 `web_search`，并能看到搜索开始/完成进度。
-- 2026-04-04 真实 PTY TUI 再次实测后，`/sandbox` 已不再误报 “only supported on macOS, Linux, and WSL2”；放开 Linux 路径后暴露出的 fallback `checkDependencies()` 异步返回崩溃也已修掉。
-- 2026-04-04 真实 Codex TUI 发任务再次确认：普通开发型输入会被会话接收并进入工作态，不再在提交后立刻掉回假本地提示或直接崩溃。
-- 2026-04-04 `/init` 真实 PTY 双验证收口：mock provider 25s 完成，real provider 120s 内进入 AskUserQuestion 多阶段流程；新增自动化测试 `tuiInit.test.mjs` + `tuiInitRealProvider.smoke.mjs`。
-- 2026-04-04 长任务完整闭环收口：真实 Codex provider PTY 测试 27s 完成 `submit → tool calls → locate ToolSelector.tsx bug → summarize`；新增自动化测试 `tuiLongTaskCompleteLoop.smoke.mjs`。
-- 2026-04-04 代码清理确认：`isCurrentPhaseCustomCodexProvider()` 已全面覆盖 command、tool、auth、analytics、plugin、agent 各层；`USER_TYPE === 'ant'` 是上游 Anthropic 内部功能标志，不应删除。
-- 2026-04-04 headless `-p` 模式 prompt-type slash command 展开问题确认：这是 headless 路径的已知限制（input 作为 raw user message 不经过 slash command expander），非 `/init` 自身 bug。
-- 2026-04-04 真实 PTY 命令清扫继续推进：Codex 模式下 `/mobile`、`/chrome`、`/usage`、`/install-github-app`、`/web-setup`、`/remote-control` 已确认不再落入旧业务页面，而是统一表现为不可用命令。
-- 2026-04-04 真实 PTY 命令清扫第二轮已补到 `/help`、`/model`、`/effort`、`/memory`、`/status`、`/doctor`、`/mcp`；其中 `/statusline` 在确认真实报错后已从 Codex 模式命令面移除，`/agents` 的“进入加载后又空白回落”也已确认并修复。
-- 2026-04-04 新的真实长任务已再次证明 Codex TUI 会进入真工具链和真权限流：针对 `/agents` 问题的修复任务会先申请 `Bash` 权限、等待用户确认，再继续追加搜索命令，而不是停留在聊天式空转。
+- TUI, headless flow, tool execution, and permission flow all working on Codex provider.
+- Streaming pipeline shows thinking duration, token counter, and context window percentage.
+- Agent/subagent results propagate correctly (main model reads agent output).
+- Token usage and cost tracking working via `response.completed` usage events.
+- Session memory and compaction stable.
+- headless `-p` mode stable.
+
+### Key Commits
+
+| Commit | Description |
+|---|---|
+| `1d92184` | Thinking duration, context window %, agent output, tool status messages, session memory dedup |
+| `e40ad09` | `/cost` command and background shell crash fix |
+| `2bbca9e` | Complete Codex-only fork with all convergence fixes |
+
+### Uncommitted Fixes (post-1d92184)
+
+| File | Change |
+|---|---|
+| `SpinnerAnimationRow.tsx` | Removed `totalTokens > 0` guard so token count displays from stream start |
+| `query.ts` | Removed duplicate session memory injection (already added before turn) |
+| `modelTurnItems.ts` | Simplified tool status messages — null returns instead of empty system messages |
+| `LocalAgentTask.tsx` | Keep viewed/retained foreground agents in AppState after completion |
+| `AgentTool.tsx` | Call `completeAsyncAgent` for foreground sync agents on completion |
+
+## Current Uncommitted TUI / Session Fix Batch
+
+This batch closes the remaining TUI/session issues that were still open after the earlier Codex convergence pass.
+
+Included work:
+
+- `dist/cli.js` startup fixed on Node 22 by removing runtime `using` / `await using` syntax from the active TypeScript build path.
+- transcript cleanup:
+  - assistant/user wrapper boxes now drop fully null child trees instead of leaving blank rows
+  - duplicate bash pre-execution text is suppressed on the Codex turn-item path
+  - commentary text is visible again, but does not get mislabeled as a final answer
+  - Read/Search collapsed rendering is kept on one path instead of falling back to plain text
+- spinner / status line cleanup:
+  - fake `1 token` fallback removed
+  - restored aggregate usage can backfill current usage after session restore
+  - `context window` now follows `~/.codex/config.toml` and Codex CLI semantics:
+    - `model_context_window` is read directly
+    - default effective window is `258400`
+    - auto compact threshold follows Codex CLI style clamping and reads `model_auto_compact_token_limit`
+- session restore:
+  - `getLastSessionLog(...)` now restores from the latest visible main-thread leaf instead of being truncated by a later side branch message
+
+Verification added in this batch:
+
+- `upstream/claude-code/tests/toolTranscriptTuiAcceptance.test.mjs`
+- `upstream/claude-code/tests/tokensRestore.test.ts`
+- `upstream/claude-code/tests/sessionRestoreRegression.test.ts`
+- `upstream/claude-code/tests/contextWindowAlignment.test.ts`
+- `upstream/claude-code/tests/statusLineSource.test.mjs`
 
 ## Recent Convergence Commits (04995ec, b87593a, 5a3b315)
 

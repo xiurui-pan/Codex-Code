@@ -73,6 +73,24 @@ export type UserMessage = BaseContentMessage<
     content: ContentBlockParam[]
   }
 > & {
+  toolUseResult?: unknown
+  mcpMeta?: {
+    _meta?: Record<string, unknown>
+    structuredContent?: Record<string, unknown>
+  }
+  sourceToolAssistantUUID?: UUID | string
+  permissionMode?: string
+  isVisibleInTranscriptOnly?: true
+  isVirtual?: true
+  isCompactSummary?: true
+  summarizeMetadata?: {
+    messagesSummarized: number
+    userContext?: string
+    direction?: PartialCompactDirection
+  }
+  imagePasteIds?: number[]
+  planContent?: string
+  isApiErrorMessage?: boolean
   modelTurnItems?: ModelTurnItem[]
 }
 
@@ -136,6 +154,7 @@ export type SystemMessage = BaseEnvelope & {
   subtype?: string
   level?: SystemMessageLevel
   text?: string
+  content?: string
   message?: string
   modelTurnItem?: ModelTurnItem
 }
@@ -177,11 +196,40 @@ export type ToolUseSummaryMessage = BaseEnvelope & {
 export type GroupedToolUseMessage = BaseEnvelope & {
   type: 'grouped_tool_use'
   children?: Message[]
+  messages?: AssistantMessage[]
+  displayMessage?: AssistantMessage
+  toolName?: string
 }
 
 export type CollapsedReadSearchGroup = BaseEnvelope & {
-  type: 'collapsed_read_search_group'
+  type: 'collapsed_read_search' | 'collapsed_read_search_group'
   children?: Message[]
+  messages?: Message[]
+  searchCount?: number
+  readCount?: number
+  listCount?: number
+  replCount?: number
+  memorySearchCount?: number
+  memoryReadCount?: number
+  memoryWriteCount?: number
+  readFilePaths?: string[]
+  searchArgs?: string[]
+  latestDisplayHint?: string
+  teamMemoryWriteCount?: number
+  teamMemoryReadCount?: number
+  teamMemorySearchCount?: number
+  mcpCallCount?: number
+  mcpServerNames?: string[]
+  bashCount?: number
+  gitOpBashCount?: number
+  commits?: string[]
+  pushes?: string[]
+  branches?: string[]
+  prs?: string[]
+  hookTotalMs?: number
+  hookCount?: number
+  hookInfos?: unknown[]
+  relevantMemories?: unknown[]
 }
 
 export type NormalizedUserMessage = UserMessage

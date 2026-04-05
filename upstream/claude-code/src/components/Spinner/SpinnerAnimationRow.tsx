@@ -159,7 +159,8 @@ export function SpinnerAnimationRow({
     }
   }
   const displayedResponseLength = tokenCounterRef.current;
-  const leaderTokens = Math.round(displayedResponseLength / 4);
+  const estimatedLeaderTokens = Math.ceil(displayedResponseLength / 4);
+  const leaderTokens = estimatedLeaderTokens;
   const effectiveElapsedMs = hasRunningTeammates ? Math.max(elapsedTimeMs, now - turnStartRef.current) : elapsedTimeMs;
   const timerText = formatDuration(effectiveElapsedMs);
   const timerWidth = stringWidth(timerText);

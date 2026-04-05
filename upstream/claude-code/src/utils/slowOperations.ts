@@ -156,6 +156,17 @@ export const slowLogging: {
   (strings: TemplateStringsArray, ...values: unknown[]): Disposable
 } = feature('SLOW_OPERATION_LOGGING') ? slowLoggingAnt : slowLoggingExternal
 
+export function withSlowLogging<T>(
+  disposable: Disposable,
+  fn: () => T,
+): T {
+  try {
+    return fn()
+  } finally {
+    disposable[Symbol.dispose]()
+  }
+}
+
 // --- Wrapped operations ---
 
 /**
@@ -185,11 +196,12 @@ export function jsonStringify(
     | null,
   space?: string | number,
 ): string {
-  using _ = slowLogging`JSON.stringify(${value})`
-  return JSON.stringify(
-    value,
-    replacer as Parameters<typeof JSON.stringify>[1],
-    space,
+  return withSlowLogging(slowLogging`JSON.stringify(${value})`, () =>
+    JSON.stringify(
+      value,
+      replacer as Parameters<typeof JSON.stringify>[1],
+      space,
+    ),
   )
 }
 
@@ -202,12 +214,13 @@ export function jsonStringify(
  * const data = jsonParse(jsonString)
  */
 export const jsonParse: typeof JSON.parse = (text, reviver) => {
-  using _ = slowLogging`JSON.parse(${text})`
-  // V8 de-opts JSON.parse when a second argument is passed, even if undefined.
-  // Branch explicitly so the common (no-reviver) path stays on the fast path.
-  return typeof reviver === 'undefined'
-    ? JSON.parse(text)
-    : JSON.parse(text, reviver)
+  return withSlowLogging(slowLogging`JSON.parse(${text})`, () =>
+    // V8 de-opts JSON.parse when a second argument is passed, even if undefined.
+    // Branch explicitly so the common (no-reviver) path stays on the fast path.
+    typeof reviver === 'undefined'
+      ? JSON.parse(text)
+      : JSON.parse(text, reviver),
+  )
 }
 
 /**
@@ -219,8 +232,9 @@ export const jsonParse: typeof JSON.parse = (text, reviver) => {
  * const copy = clone(originalObject)
  */
 export function clone<T>(value: T, options?: StructuredSerializeOptions): T {
-  using _ = slowLogging`structuredClone(${value})`
-  return structuredClone(value, options)
+  return withSlowLogging(slowLogging`structuredClone(${value})`, () =>
+    structuredClone(value, options),
+  )
 }
 
 /**
@@ -232,8 +246,9 @@ export function clone<T>(value: T, options?: StructuredSerializeOptions): T {
  * const copy = cloneDeep(originalObject)
  */
 export function cloneDeep<T>(value: T): T {
-  using _ = slowLogging`cloneDeep(${value})`
-  return lodashCloneDeep(value)
+  return withSlowLogging(slowLogging`cloneDeep(${value})`, () =>
+    lodashCloneDeep(value),
+  )
 }
 
 /**
@@ -250,37 +265,37 @@ export function writeFileSync_DEPRECATED(
   data: string | NodeJS.ArrayBufferView,
   options?: WriteFileOptionsWithFlush,
 ): void {
-  using _ = slowLogging`fs.writeFileSync(${filePath}, ${data})`
+  withSlowLogging(slowLogging`fs.writeFileSync(${filePath}, ${data})`, () => {
+    // Check if flush is requested (for object-style options)
+    const needsFlush =
+      options !== null &&
+      typeof options === 'object' &&
+      'flush' in options &&
+      options.flush === true
 
-  // Check if flush is requested (for object-style options)
-  const needsFlush =
-    options !== null &&
-    typeof options === 'object' &&
-    'flush' in options &&
-    options.flush === true
-
-  if (needsFlush) {
-    // Manual flush: open file, write, fsync, close
-    const encoding =
-      typeof options === 'object' && 'encoding' in options
-        ? options.encoding
-        : undefined
-    const mode =
-      typeof options === 'object' && 'mode' in options
-        ? options.mode
-        : undefined
-    let fd: number | undefined
-    try {
-      fd = openSync(filePath, 'w', mode)
-      fsWriteFileSync(fd, data, { encoding: encoding ?? undefined })
-      fsyncSync(fd)
-    } finally {
-      if (fd !== undefined) {
-        closeSync(fd)
+    if (needsFlush) {
+      // Manual flush: open file, write, fsync, close
+      const encoding =
+        typeof options === 'object' && 'encoding' in options
+          ? options.encoding
+          : undefined
+      const mode =
+        typeof options === 'object' && 'mode' in options
+          ? options.mode
+          : undefined
+      let fd: number | undefined
+      try {
+        fd = openSync(filePath, 'w', mode)
+        fsWriteFileSync(fd, data, { encoding: encoding ?? undefined })
+        fsyncSync(fd)
+      } finally {
+        if (fd !== undefined) {
+          closeSync(fd)
+        }
       }
+    } else {
+      // No flush needed, use standard writeFileSync
+      fsWriteFileSync(filePath, data, options as WriteFileOptions)
     }
-  } else {
-    // No flush needed, use standard writeFileSync
-    fsWriteFileSync(filePath, data, options as WriteFileOptions)
-  }
+  })
 }

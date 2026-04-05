@@ -42,6 +42,7 @@ function shouldShowInfoMessageByDefault(message: SystemMessage): boolean {
 
   if (item.kind === 'ui_message') {
     return (
+      item.source === 'commentary' ||
       item.source === 'web_search_call' ||
       item.source === 'web_search_call_completed'
     )

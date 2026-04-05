@@ -14,59 +14,67 @@ export function getRenderableModelTurnItems(
   )
 }
 
+function shouldRenderInfoUiMessage(item: ModelUiMessageItem): boolean {
+  if (item.source === 'commentary') {
+    return item.text.trim().length > 0
+  }
+  return false
+}
+
 export function createSystemMessageFromModelTurnItem(
   item: ModelTurnItem,
 ): SystemMessage | null {
+  let level: SystemMessage['level'] = 'info'
+  let content: string | null = null
+
   switch (item.kind) {
     case 'local_shell_call':
-      return {
-        type: 'system',
-        subtype: 'informational',
-        level: 'info',
-        content:
-          item.phase === 'requested'
-            ? `${item.toolName}: ${item.command}`
-            : ``,
-        modelTurnItem: item,
-      }
+      // Bash tool_use blocks already render the requested command.
+      return null
     case 'permission_request':
       return null
     case 'permission_decision':
-      return {
-        type: 'system',
-        subtype: 'informational',
-        level: item.decision === 'deny' ? 'warn' : 'info',
-        content: item.decision === 'deny' ? `Permission denied: ${item.toolName}` : ``,
-        modelTurnItem: item,
-      }
+      level = item.decision === 'deny' ? 'warn' : 'info'
+      content = item.decision === 'deny' ? `Permission denied: ${item.toolName}` : null
+      break
     case 'execution_result':
-      return {
-        type: 'system',
-        subtype: 'informational',
-        level: item.status === 'success' ? 'success' : 'warn',
-        content: item.status === 'success' ? `` : `${item.toolName} ${item.status === 'denied' ? 'denied' : 'failed'}`,
-        modelTurnItem: item,
-      }
+      level = item.status === 'success' ? 'success' : 'warn'
+      content =
+        item.status === 'success'
+          ? null
+          : `${item.toolName} ${item.status === 'denied' ? 'denied' : 'failed'}`
+      break
     case 'tool_output':
       return null
     case 'ui_message':
-      if (
-        item.level !== 'info' ||
-        item.source === 'web_search_call' ||
-        item.source === 'web_search_call_completed'
-      ) {
-        return {
-          type: 'system',
-          subtype: 'informational',
-          level: item.level,
-          content: item.text,
-          modelTurnItem: item,
+      if (item.level === 'info') {
+        if (!shouldRenderInfoUiMessage(item)) {
+          return null
         }
+        content = item.text
+        break
+      }
+      if (item.level !== 'info') {
+        level = item.level
+        content = item.text
+        break
       }
       return null
     default:
       return null
   }
+
+  if (!content) {
+    return null
+  }
+
+  return {
+    type: 'system',
+    subtype: 'informational',
+    level,
+    content,
+    modelTurnItem: item,
+  } as SystemMessage
 }
 
 export function buildSDKExecutionItemMessages(
@@ -104,8 +112,7 @@ export function buildSDKExecutionItemMessages(
     if (
       item.kind === 'ui_message' &&
       item.level === 'info' &&
-      item.source !== 'web_search_call' &&
-      item.source !== 'web_search_call_completed'
+      !shouldRenderInfoUiMessage(item)
     ) {
       continue
     }
@@ -287,7 +294,7 @@ export function resolvePreferredAssistantTurnContent(
       contentBlocks.push({
         type: 'text',
         text: item.text,
-      })
+      } as ContentBlock)
       continue
     }
 
@@ -370,7 +377,7 @@ function normalizePreferredContentBlocks(
       {
         type: 'text',
         text: preferred.text === '' ? NO_CONTENT_MESSAGE : (preferred.text ?? NO_CONTENT_MESSAGE),
-      },
+      } as ContentBlock,
     ]
   }
 

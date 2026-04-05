@@ -2,6 +2,15 @@ import { readFile } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
 
+export const CODEX_DEFAULT_CONTEXT_WINDOW = 272_000
+export const CODEX_EFFECTIVE_CONTEXT_WINDOW_PERCENT = 95
+export const CODEX_DEFAULT_EFFECTIVE_CONTEXT_WINDOW = Math.floor(
+  (CODEX_DEFAULT_CONTEXT_WINDOW * CODEX_EFFECTIVE_CONTEXT_WINDOW_PERCENT) / 100,
+)
+export const CODEX_DEFAULT_AUTO_COMPACT_TOKEN_LIMIT = Math.floor(
+  (CODEX_DEFAULT_CONTEXT_WINDOW * 90) / 100,
+)
+
 type MinimalCodexProvider = {
   base_url?: string
   env_key?: string
@@ -26,6 +35,8 @@ export type LoadedCodexConfig = {
   provider: MinimalCodexProvider
   baseUrl?: string
   model?: string
+  modelContextWindow?: number
+  modelAutoCompactTokenLimit?: number
   reasoningEffort?: string
   responseStorage?: boolean
   webSearchMode?: string
@@ -175,9 +186,24 @@ function parseBooleanEnvValue(
   return undefined
 }
 
+function parsePositiveIntegerEnvValue(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined
+  }
+
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return undefined
+  }
+
+  return parsed
+}
+
 function parseMinimalToml(source: string): {
   model_provider?: string
   model?: string
+  model_context_window?: number
+  model_auto_compact_token_limit?: number
   model_reasoning_effort?: string
   response_storage?: boolean
   disable_response_storage?: boolean
@@ -190,6 +216,8 @@ function parseMinimalToml(source: string): {
   const root: {
     model_provider?: string
     model?: string
+    model_context_window?: number
+    model_auto_compact_token_limit?: number
     model_reasoning_effort?: string
     response_storage?: boolean
     disable_response_storage?: boolean
@@ -265,6 +293,13 @@ function parseMinimalToml(source: string): {
         root.model_provider = String(value)
       } else if (key === 'model') {
         root.model = String(value)
+      } else if (key === 'model_context_window' && typeof value === 'number') {
+        root.model_context_window = value
+      } else if (
+        key === 'model_auto_compact_token_limit' &&
+        typeof value === 'number'
+      ) {
+        root.model_auto_compact_token_limit = value
       } else if (key === 'model_reasoning_effort') {
         root.model_reasoning_effort = String(value)
       } else if (key === 'web_search' && typeof value === 'string') {
@@ -318,6 +353,8 @@ export async function loadCodexConfig(
     provider,
     baseUrl: provider.base_url,
     model: parsed.model,
+    modelContextWindow: parsed.model_context_window,
+    modelAutoCompactTokenLimit: parsed.model_auto_compact_token_limit,
     reasoningEffort: parsed.model_reasoning_effort,
     responseStorage,
     webSearchMode: parsed.web_search,
@@ -350,6 +387,15 @@ export function applyCodexConfigToEnv(config: LoadedCodexConfig): void {
 
   if (config.model) {
     process.env.CODEX_CODE_MODEL = config.model
+  }
+
+  if (config.modelContextWindow) {
+    process.env.CODEX_CODE_MODEL_CONTEXT_WINDOW = `${config.modelContextWindow}`
+  }
+
+  if (config.modelAutoCompactTokenLimit) {
+    process.env.CODEX_CODE_MODEL_AUTO_COMPACT_TOKEN_LIMIT =
+      `${config.modelAutoCompactTokenLimit}`
   }
 
   if (config.reasoningEffort) {
@@ -398,6 +444,39 @@ export function getCodexConfiguredBaseUrl(): string | undefined {
 
 export function getCodexConfiguredModel(): string | undefined {
   return process.env.CODEX_CODE_MODEL ?? process.env.ANTHROPIC_MODEL
+}
+
+export function getCodexConfiguredModelContextWindow(): number | undefined {
+  return parsePositiveIntegerEnvValue(process.env.CODEX_CODE_MODEL_CONTEXT_WINDOW)
+}
+
+export function getCodexConfiguredAutoCompactTokenLimit(): number | undefined {
+  return parsePositiveIntegerEnvValue(
+    process.env.CODEX_CODE_MODEL_AUTO_COMPACT_TOKEN_LIMIT,
+  )
+}
+
+export function getCodexEffectiveContextWindow(): number {
+  const rawContextWindow = getCodexConfiguredModelContextWindow()
+  if (rawContextWindow) {
+    return Math.floor(
+      (rawContextWindow * CODEX_EFFECTIVE_CONTEXT_WINDOW_PERCENT) / 100,
+    )
+  }
+
+  return CODEX_DEFAULT_EFFECTIVE_CONTEXT_WINDOW
+}
+
+export function getCodexAutoCompactTokenLimit(): number {
+  const rawContextWindow =
+    getCodexConfiguredModelContextWindow() ?? CODEX_DEFAULT_CONTEXT_WINDOW
+  const contextClampedLimit = Math.floor((rawContextWindow * 90) / 100)
+  const configuredLimit = getCodexConfiguredAutoCompactTokenLimit()
+  if (!configuredLimit) {
+    return contextClampedLimit
+  }
+
+  return Math.min(configuredLimit, contextClampedLimit)
 }
 
 export function getCodexConfiguredReasoningEffort(): string | undefined {

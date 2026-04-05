@@ -1237,6 +1237,9 @@ export const AgentTool = buildTool({
           logForDebugging(`Sync agent recovering from error with ${agentMessages.length} messages`);
         }
         const agentResult = finalizeAgentTool(agentMessages, syncAgentId, metadata);
+        if (foregroundTaskId) {
+          completeAsyncAgent(agentResult, rootSetAppState);
+        }
         if (feature('TRANSCRIPT_CLASSIFIER')) {
           const currentAppState = toolUseContext.getAppState();
           const handoffWarning = await classifyHandoffIfNeeded({

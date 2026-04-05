@@ -30,36 +30,46 @@ export type { Settings } from './sdk/settingsTypes.generated.js'
 // Re-export tool types (all marked @internal until SDK API stabilizes)
 export * from './sdk/toolTypes.js'
 
+// Minimal compatibility types needed by the main app while generated SDK
+// runtime/core types are stubbed in this branch.
+export type HookEvent = (typeof import('./sdk/coreTypes.js').HOOK_EVENTS)[number]
+export type SDKMessage = unknown
+export type SDKResultMessage = unknown
+export type SDKSessionInfo = unknown
+export type SDKUserMessage = unknown
+export type AnyZodRawShape = Record<string, unknown>
+export type ForkSessionOptions = unknown
+export type ForkSessionResult = unknown
+export type GetSessionInfoOptions = unknown
+export type GetSessionMessagesOptions = unknown
+export type InferShape<T> = T
+export type InternalOptions = unknown
+export type InternalQuery = unknown
+export type ListSessionsOptions = unknown
+export type McpSdkServerConfigWithInstance = unknown
+export type Options = unknown
+export type Query = unknown
+export type SDKSession = unknown
+export type SDKSessionOptions = unknown
+export type SdkMcpToolDefinition<T = unknown> = unknown
+export type SessionMessage = unknown
+export type SessionMutationOptions = unknown
+export type ModelUsage = {
+  inputTokens: number
+  outputTokens: number
+  cacheReadInputTokens: number
+  cacheCreationInputTokens: number
+  webSearchRequests: number
+  costUSD: number
+  contextWindow: number
+  maxOutputTokens: number
+}
+
 // ============================================================================
 // Functions
 // ============================================================================
 
-import type {
-  SDKMessage,
-  SDKResultMessage,
-  SDKSessionInfo,
-  SDKUserMessage,
-} from './sdk/coreTypes.js'
 // Import types needed for function signatures
-import type {
-  AnyZodRawShape,
-  ForkSessionOptions,
-  ForkSessionResult,
-  GetSessionInfoOptions,
-  GetSessionMessagesOptions,
-  InferShape,
-  InternalOptions,
-  InternalQuery,
-  ListSessionsOptions,
-  McpSdkServerConfigWithInstance,
-  Options,
-  Query,
-  SDKSession,
-  SDKSessionOptions,
-  SdkMcpToolDefinition,
-  SessionMessage,
-  SessionMutationOptions,
-} from './sdk/runtimeTypes.js'
 
 export type {
   ListSessionsOptions,

@@ -257,7 +257,9 @@ export function FallbackPermissionRequest(t0) {
   }
   let t13;
   if ($[33] !== t11 || $[34] !== t12 || $[35] !== userFacingName) {
-    t13 = <Text>{userFacingName}({t11}){t12}</Text>;
+    // Fallback for empty tool names to avoid showing just "()"
+    const displayName = userFacingName && userFacingName.trim() !== '' ? userFacingName : 'Unknown Tool';
+    t13 = <Text>{displayName}({t11}){t12}</Text>;
     $[33] = t11;
     $[34] = t12;
     $[35] = userFacingName;

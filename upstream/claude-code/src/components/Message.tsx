@@ -57,6 +57,13 @@ export type Props = {
   /** UUID of the latest user bash output message (for auto-expanding) */
   latestBashOutputUUID?: string | null;
 };
+
+function hasRenderableNode(children: React.ReactNode): boolean {
+  return React.Children.toArray(children).some(
+    child => child !== null && child !== undefined && child !== false,
+  );
+}
+
 function MessageImpl(t0) {
   const $ = _c(94);
   const {
@@ -145,6 +152,9 @@ function MessageImpl(t0) {
         } else {
           t3 = $[21];
         }
+        if (!hasRenderableNode(t3)) {
+          return null;
+        }
         let t4;
         if ($[38] !== t2 || $[39] !== t3) {
           t4 = <Box flexDirection="column" width={t2}>{t3}</Box>;
@@ -208,6 +218,9 @@ function MessageImpl(t0) {
           $[57] = t3;
         } else {
           t3 = $[57];
+        }
+        if (!hasRenderableNode(t3)) {
+          return null;
         }
         let t4;
         if ($[58] !== t2 || $[59] !== t3) {

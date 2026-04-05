@@ -522,14 +522,44 @@ const MessagesImpl = ({
     // SendUserFile delivers a file without replacement text, so dropping
     // assistant text for file-only turns would leave the user with no context.
     const dropTextToolNames = [BRIEF_TOOL_NAME].filter((n_0): n_0 is string => n_0 !== null);
-    const briefFiltered = briefToolNames.length > 0 && !isTranscriptMode ? isBriefOnly ? filterForBriefTool(messagesToShowNotTruncated, briefToolNames) : dropTextToolNames.length > 0 ? dropTextInBriefTurns(messagesToShowNotTruncated, dropTextToolNames) : messagesToShowNotTruncated : messagesToShowNotTruncated;
-    const messagesToShow = shouldTruncate ? briefFiltered.slice(-MAX_MESSAGES_TO_SHOW_IN_TRANSCRIPT_MODE) : briefFiltered;
+    const briefSourceMessages = messagesToShowNotTruncated as any;
+    const briefFiltered = (briefToolNames.length > 0 && !isTranscriptMode ? isBriefOnly ? filterForBriefTool(briefSourceMessages, briefToolNames) : dropTextToolNames.length > 0 ? dropTextInBriefTurns(briefSourceMessages, dropTextToolNames) : messagesToShowNotTruncated : messagesToShowNotTruncated) as Exclude<NormalizedMessage, ProgressMessageType>[];
+    const messagesToShow = (shouldTruncate ? briefFiltered.slice(-MAX_MESSAGES_TO_SHOW_IN_TRANSCRIPT_MODE) : briefFiltered) as Exclude<NormalizedMessage, ProgressMessageType>[];
     const hasTruncatedMessages = shouldTruncate && briefFiltered.length > MAX_MESSAGES_TO_SHOW_IN_TRANSCRIPT_MODE;
+    const initialLookups = buildMessageLookups(normalizedMessages, messagesToShow);
+    // Filter out messages that will render as null to prevent blank rows,
+    // cursor错位, and wasted render budget (CC-TUI-001)
+    const renderableMessages = messagesToShow.filter(msg => {
+      // Quick type-based checks first
+      if (msg.type !== 'user') {
+        // For non-user messages, check if they'll render as null
+        // (e.g., thinking blocks in non-transcript mode)
+        if (msg.type === 'assistant') {
+          const content = msg.message.content;
+          if (!Array.isArray(content) || content.length === 0) return false;
+          const allThinking = content.every(
+            block => block.type === 'thinking' || block.type === 'redacted_thinking',
+          );
+          if (allThinking && !isTranscriptMode && !verbose) return false;
+        }
+        return true;
+      }
+      // For user messages with tool results, validate they can be rendered
+      const toolResultBlock = msg.message.content[0];
+      if (toolResultBlock?.type !== 'tool_result') return true;
+      const toolUse = initialLookups.toolUseByToolUseID.get(toolResultBlock.tool_use_id);
+      if (!toolUse) return false;
+      const tool = findToolByName(tools, toolUse.name);
+      if (!tool) return false;
+      if (msg.toolUseResult === undefined) return false;
+      const parsedOutput = tool.outputSchema?.safeParse(msg.toolUseResult);
+      return !parsedOutput || parsedOutput.success;
+    }) as Exclude<NormalizedMessage, ProgressMessageType>[];
     const {
       messages: groupedMessages
-    } = applyGrouping(messagesToShow, tools, verbose);
+    } = applyGrouping(renderableMessages, tools, verbose);
     const collapsed = collapseBackgroundBashNotifications(collapseHookSummaries(collapseTeammateShutdowns(collapseReadSearchGroups(groupedMessages, tools))), verbose);
-    const lookups = buildMessageLookups(normalizedMessages, messagesToShow);
+    const lookups = buildMessageLookups(normalizedMessages, renderableMessages);
     const hiddenMessageCount = messagesToShowNotTruncated.length - MAX_MESSAGES_TO_SHOW_IN_TRANSCRIPT_MODE;
     return {
       collapsed,

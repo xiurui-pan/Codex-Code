@@ -1,6 +1,13 @@
 import type { BetaUsage as Usage } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
+import {
+  getTotalCacheCreationInputTokens,
+  getTotalCacheReadInputTokens,
+  getTotalInputTokens,
+  getTotalOutputTokens,
+} from '../bootstrap/state.js'
 import { roughTokenCountEstimationForMessages } from '../services/tokenEstimation.js'
 import type { AssistantMessage, Message } from '../types/message.js'
+import { getCodexEffectiveContextWindow } from './codexConfig.js'
 import { SYNTHETIC_MESSAGES, SYNTHETIC_MODEL } from './messages.js'
 import { jsonStringify } from './slowOperations.js'
 
@@ -156,15 +163,53 @@ export function getCurrentUsage(messages: Message[]): {
   return null
 }
 
-export function doesMostRecentAssistantMessageExceed200k(
+export function getEstimatedCurrentUsage(messages: Message[]): {
+  input_tokens: number
+  output_tokens: number
+  cache_creation_input_tokens: number
+  cache_read_input_tokens: number
+} | null {
+  const usage = getCurrentUsage(messages)
+  if (usage) {
+    return usage
+  }
+
+  const estimatedTokens = tokenCountWithEstimation(messages)
+  if (estimatedTokens <= 0) {
+    const restoredInputTokens = getTotalInputTokens()
+    const restoredOutputTokens = getTotalOutputTokens()
+    const restoredCacheCreationTokens = getTotalCacheCreationInputTokens()
+    const restoredCacheReadTokens = getTotalCacheReadInputTokens()
+    const restoredTotalTokens =
+      restoredInputTokens +
+      restoredOutputTokens +
+      restoredCacheCreationTokens +
+      restoredCacheReadTokens
+
+    if (restoredTotalTokens <= 0) {
+      return null
+    }
+
+    return {
+      input_tokens: restoredInputTokens,
+      output_tokens: restoredOutputTokens,
+      cache_creation_input_tokens: restoredCacheCreationTokens,
+      cache_read_input_tokens: restoredCacheReadTokens,
+    }
+  }
+
+  return {
+    input_tokens: estimatedTokens,
+    output_tokens: 0,
+    cache_creation_input_tokens: 0,
+    cache_read_input_tokens: 0,
+  }
+}
+
+export function doesEstimatedContextExceed200k(
   messages: Message[],
 ): boolean {
-  const THRESHOLD = 200_000
-
-  const lastAsst = messages.findLast(m => m.type === 'assistant')
-  if (!lastAsst) return false
-  const usage = getTokenUsage(lastAsst)
-  return usage ? getTokenCountFromUsage(usage) > THRESHOLD : false
+  return tokenCountWithEstimation(messages) > getCodexEffectiveContextWindow()
 }
 
 /**

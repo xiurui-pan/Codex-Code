@@ -667,6 +667,22 @@ export function unregisterAgentForeground(taskId: string, setAppState: SetAppSta
 
     // Capture cleanup function to call outside of updater
     cleanupFn = task.unregisterCleanup;
+
+    // Keep viewed/retained foreground agents in AppState after completion so
+    // the transcript view still has a backing messages array.
+    if (task.status !== 'running' && (task.retain || prev.viewingAgentTaskId === taskId)) {
+      return {
+        ...prev,
+        tasks: {
+          ...prev.tasks,
+          [taskId]: {
+            ...task,
+            unregisterCleanup: undefined
+          }
+        }
+      };
+    }
+
     const {
       [taskId]: removed,
       ...rest

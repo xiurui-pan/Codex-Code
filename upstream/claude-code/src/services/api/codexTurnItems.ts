@@ -25,6 +25,12 @@ type ResponsesFunctionCallItem = {
   arguments?: string | Record<string, unknown>
 }
 
+type ResponsesFunctionCallOutputItem = {
+  type: 'function_call_output'
+  call_id?: string
+  output?: string
+}
+
 type ResponsesWebSearchAction =
   | {
       type?: 'search'
@@ -51,6 +57,7 @@ type ResponsesWebSearchCallItem = {
 export type ResponsesOutputItem =
   | ResponsesMessageItem
   | ResponsesFunctionCallItem
+  | ResponsesFunctionCallOutputItem
   | ResponsesWebSearchCallItem
 
 type NormalizeResponsesOutputOptions = {
@@ -439,7 +446,19 @@ export function normalizeResponsesOutputToTurnItems(
       payload: item,
     })
 
-    if (item.type === 'function_call' && item.call_id && item.name) {
+    if (item.type === 'function_call') {
+      // Validate function_call has required fields
+      if (!item.call_id || !item.name || item.name.trim() === '') {
+        // Log warning for invalid function_call and skip processing
+        turnItems.push({
+          kind: 'ui_message',
+          provider: 'custom',
+          level: 'warn',
+          text: `Invalid function_call received: missing ${!item.call_id ? 'call_id' : 'name'}`,
+          source: 'invalid_function_call_filtered',
+        })
+        continue
+      }
       turnItems.push(
         ...buildToolCallItemsForLocalExecution(
           item.call_id,
@@ -459,7 +478,7 @@ export function normalizeResponsesOutputToTurnItems(
         provider: 'custom',
         toolUseId: item.call_id,
         outputText: typeof item.output === 'string' ? item.output : '',
-        source: 'provider',
+        source: 'tool_execution',
       })
       continue
     }
@@ -532,6 +551,13 @@ export function normalizeResponsesOutputToTurnItems(
     }
 
     if (item.phase === 'commentary') {
+      turnItems.push({
+        kind: 'ui_message',
+        provider: 'custom',
+        level: 'info',
+        text,
+        source: 'commentary',
+      })
       continue
     }
 
