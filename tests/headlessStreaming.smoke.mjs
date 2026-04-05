@@ -100,7 +100,7 @@ async function runHeadlessSession(options) {
       '--debug-to-stderr',
     ],
     {
-      cwd: projectRootprojectRoot,
+      cwd: projectRoot,
       env: {
         ...process.env,
         HOME: tempHome,
@@ -298,9 +298,9 @@ async function runStreamingAssertions() {
   )
   assert.equal(result.requestHeaders[0]?.authorization, 'Bearer test-key')
   assert.equal(result.requestHeaders[0]?.['x-app'], 'cli')
-  assert.match(result.requestHeaders[0]?.['user-agent'] ?? '', /^claude-code\//)
+  assert.match(result.requestHeaders[0]?.['user-agent'] ?? '', /^codex-code\//)
   assert.equal(
-    'x-claude-code-session-id' in (result.requestHeaders[0] ?? {}),
+    'x-codex-code-session-id' in (result.requestHeaders[0] ?? {}),
     false,
   )
 
@@ -542,29 +542,29 @@ async function runIdentityEnabledAssertions() {
   assert.equal(result.code, 0, result.stderr)
   assert.equal(result.requestBodies.length >= 2, true)
   assert.equal(
-    result.requestHeaders[0]?.['x-claude-code-session-id'],
+    result.requestHeaders[0]?.['x-codex-code-session-id'],
     result.requestBodies[0]?.metadata?.session_id,
   )
   assert.equal(
-    result.requestHeaders[0]?.['x-claude-code-session-id'],
-    result.requestHeaders[1]?.['x-claude-code-session-id'],
+    result.requestHeaders[0]?.['x-codex-code-session-id'],
+    result.requestHeaders[1]?.['x-codex-code-session-id'],
   )
   assert.equal(
     result.requestBodies[0]?.metadata?.session_id,
     result.requestBodies[1]?.metadata?.session_id,
   )
-  assert.equal(result.requestBodies[0]?.metadata?.originator, 'claude-code')
+  assert.equal(result.requestBodies[0]?.metadata?.originator, 'codex-code')
   assert.equal(
     result.requestBodies[0]?.metadata?.workspace,
     projectRoot,
   )
   assert.match(
     result.requestBodies[0]?.metadata?.user_agent ?? '',
-    /^claude-code\//,
+    /^codex-code\//,
   )
   assert.match(
     result.requestHeaders[0]?.['user-agent'] ?? '',
-    /^claude-code\//,
+    /^codex-code\//,
   )
 }
 

@@ -249,7 +249,7 @@ function renderErrorSpecificGuidance(errorType: LoadErrorType): React.ReactNode 
         </Box>;
     case 'auth':
       return <Box marginY={1} flexDirection="column">
-          <Text dimColor>Teleport requires a Claude account</Text>
+          <Text dimColor>Teleport requires a claude.ai account</Text>
           <Text dimColor>
             Run <Text bold>/login</Text> and select &quot;Claude account with
             subscription&quot;

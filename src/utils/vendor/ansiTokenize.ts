@@ -2,7 +2,7 @@ export type {
   AnsiCode,
   StyledChar,
   Token,
-} from '@alcalzone/ansi-tokenize/build/index.js'
+} from '@alcalzone/ansi-tokenize'
 
 export {
   ansiCodesToString,
@@ -11,4 +11,4 @@ export {
   styledCharsFromTokens,
   tokenize,
   undoAnsiCodes,
-} from '@alcalzone/ansi-tokenize/build/index.js'
+} from '@alcalzone/ansi-tokenize'

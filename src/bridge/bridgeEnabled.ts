@@ -70,10 +70,10 @@ export async function isBridgeEnabledBlocking(): Promise<boolean> {
 export async function getBridgeDisabledReason(): Promise<string | null> {
   if (feature('BRIDGE_MODE')) {
     if (!isClaudeAISubscriber()) {
-      return 'Remote Control requires a claude.ai subscription. Run `codex auth login` to sign in with your account.'
+      return 'Remote Control requires a claude.ai subscription. Run `/login` to sign in with your account.'
     }
     if (!hasProfileScope()) {
-      return 'Remote Control requires a full-scope login token. Long-lived tokens (from `claude setup-token` or CODEX_CODE_OAUTH_TOKEN) are limited to inference-only for security reasons. Run `codex auth login` to use Remote Control.'
+      return 'Remote Control requires a full-scope login token. Long-lived tokens (from CODEX_CODE_OAUTH_TOKEN) are limited to inference-only for security reasons. Run `/login` to use Remote Control.'
     }
     if (!getOauthAccountInfo()?.organizationUuid) {
       return 'Unable to determine your organization for Remote Control eligibility. Run `codex auth login` to refresh your account information.'

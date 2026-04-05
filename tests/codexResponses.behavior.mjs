@@ -78,16 +78,16 @@ test('queryCodexResponses aggregates streamed items instead of only returning th
 test('request identity metadata and custom session header stay opt-in', async () => {
   const defaultResult = await runBehavior('identity-default')
 
-  assert.equal('x-claude-code-session-id' in defaultResult.headers, false)
+  assert.equal('x-codex-code-session-id' in defaultResult.headers, false)
   assert.equal(defaultResult.metadata, null)
   assert.equal(defaultResult.bodyMetadata, null)
-  assert.match(defaultResult.headers['user-agent'] ?? '', /^claude-code\//)
+  assert.match(defaultResult.headers['user-agent'] ?? '', /^codex-code\//)
 
   const enabledResult = await runBehavior('identity-enabled')
 
-  assert.match(enabledResult.headers['x-claude-code-session-id'] ?? '', /.+/)
-  assert.equal(enabledResult.metadata?.originator, 'claude-code')
-  assert.equal(enabledResult.bodyMetadata?.originator, 'claude-code')
+  assert.match(enabledResult.headers['x-codex-code-session-id'] ?? '', /.+/)
+  assert.equal(enabledResult.metadata?.originator, 'codex-code')
+  assert.equal(enabledResult.bodyMetadata?.originator, 'codex-code')
 })
 
 test('missing base URL error points to configured Codex base URL sources', async () => {
