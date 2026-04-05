@@ -104,8 +104,12 @@ function rollFrom(rng: () => number): Roll {
 // Called from three hot paths (500ms sprite tick, per-keystroke PromptInput,
 // per-turn observer) with the same userId → cache the deterministic result.
 let rollCache: { key: string; value: Roll } | undefined
-export function roll(userId: string): Roll {
-  const key = userId + SALT
+export function getCompanionRollKey(userId: string, rerollCount = 0): string {
+  return `${userId}${SALT}:reroll:${rerollCount}`
+}
+
+export function roll(userId: string, rerollCount = 0): Roll {
+  const key = getCompanionRollKey(userId, rerollCount)
   if (rollCache?.key === key) return rollCache.value
   const value = rollFrom(mulberry32(hashString(key)))
   rollCache = { key, value }
@@ -127,7 +131,8 @@ export function companionUserId(): string {
 export function getCompanion(): Companion | undefined {
   const stored = getGlobalConfig().companion
   if (!stored) return undefined
-  const { bones } = roll(companionUserId())
+  const rerollCount = stored.rerollCount ?? 0
+  const { bones } = roll(companionUserId(), rerollCount)
   // bones last so stale bones fields in old-format configs get overridden
-  return { ...stored, ...bones }
+  return { ...stored, rerollCount, ...bones }
 }

@@ -252,6 +252,7 @@ const UltraplanLaunchDialog = (): null => null;
 import { IssueFlagBanner } from '../components/PromptInput/IssueFlagBanner.js';
 import { useIssueFlagBanner } from '../hooks/useIssueFlagBanner.js';
 import { CompanionSprite, CompanionFloatingBubble, MIN_COLS_FOR_FULL_SPRITE } from '../buddy/CompanionSprite.js';
+import { fireCompanionObserver } from '../buddy/observer.js';
 import { DevBar } from '../components/DevBar.js';
 // Current-stage local Codex mode does not ship the Tungsten live monitor path.
 const TungstenLiveMonitor = (): null => null;
