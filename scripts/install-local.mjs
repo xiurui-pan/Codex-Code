@@ -11,7 +11,10 @@ const __dirname = path.dirname(__filename)
 const root = path.resolve(__dirname, '..')
 const distCli = path.join(root, 'dist', 'cli.js')
 const defaultBinDir = path.join(os.homedir(), '.local', 'bin')
-const commandName = process.platform === 'win32' ? 'codex-code.cmd' : 'codex-code'
+const launcherNames =
+  process.platform === 'win32'
+    ? ['codex-code.cmd', 'ccx.cmd']
+    : ['codex-code', 'ccx']
 const nodeExecutable = process.execPath
 
 function parseArgs(argv) {
@@ -91,35 +94,51 @@ async function main() {
 
   await fs.mkdir(options.binDir, { recursive: true })
 
-  const launcherPath = path.join(options.binDir, commandName)
-  if ((await exists(launcherPath)) && !options.force) {
-    const current = await fs.readFile(launcherPath, 'utf8').catch(() => '')
-    const next = process.platform === 'win32' ? renderWindowsLauncher() : renderUnixLauncher()
-    if (current === next) {
-      console.log(`Launcher already installed at ${launcherPath}`)
-      if (!isDirOnPath(options.binDir)) {
-        console.log(`Add ${options.binDir} to PATH before running codex-code`)
-      }
-      return
-    }
-    throw new Error(
-      `Launcher already exists at ${launcherPath}. Re-run with --force to replace it.`,
-    )
-  }
-
   const launcher =
     process.platform === 'win32' ? renderWindowsLauncher() : renderUnixLauncher()
-  await fs.writeFile(launcherPath, launcher, 'utf8')
 
-  if (process.platform !== 'win32') {
-    await fs.chmod(launcherPath, 0o755)
+  const matchingLaunchers = []
+  const launchersToWrite = []
+  for (const launcherName of launcherNames) {
+    const launcherPath = path.join(options.binDir, launcherName)
+    if ((await exists(launcherPath)) && !options.force) {
+      const current = await fs.readFile(launcherPath, 'utf8').catch(() => '')
+      if (current === launcher) {
+        matchingLaunchers.push(launcherPath)
+        continue
+      }
+      throw new Error(
+        `Launcher already exists at ${launcherPath}. Re-run with --force to replace it.`,
+      )
+    }
+    launchersToWrite.push(launcherPath)
   }
 
-  console.log(`Installed codex-code launcher at ${launcherPath}`)
-  console.log('The launcher enables the Codex provider and disables auto-update by default.')
+  if (launchersToWrite.length === 0) {
+    console.log(
+      `Launchers already installed at ${matchingLaunchers.join(', ')}`,
+    )
+    if (!isDirOnPath(options.binDir)) {
+      console.log(`Add ${options.binDir} to PATH before running codex-code or ccx`)
+    }
+    return
+  }
+
+  for (const launcherPath of launchersToWrite) {
+    await fs.writeFile(launcherPath, launcher, 'utf8')
+
+    if (process.platform !== 'win32') {
+      await fs.chmod(launcherPath, 0o755)
+    }
+  }
+
+  console.log(`Installed launchers at ${launcherNames.map(name => path.join(options.binDir, name)).join(', ')}`)
+  console.log(
+    'The launchers enable the Codex provider and disable auto-update by default.',
+  )
 
   if (!isDirOnPath(options.binDir)) {
-    console.log(`Add ${options.binDir} to PATH before running codex-code`)
+    console.log(`Add ${options.binDir} to PATH before running codex-code or ccx`)
   }
 }
 

@@ -72,7 +72,7 @@ async function runAllowFailure(command, args, envOverrides = {}) {
   }
 }
 
-test('install-local script creates a codex-code launcher that starts the CLI', async () => {
+test('install-local script creates codex-code and ccx launchers that start the CLI', async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'codex-code-install-home-'))
   const tempBin = join(tempHome, '.local', 'bin')
 
@@ -83,16 +83,19 @@ test('install-local script creates a codex-code launcher that starts the CLI', a
       tempBin,
     ])
 
-    assert.match(install.stdout, /Installed codex-code launcher/)
+    assert.match(install.stdout, /Installed launchers at /)
     assert.match(
       install.stdout,
-      /The launcher enables the Codex provider and disables auto-update by default\./,
+      /The launchers enable the Codex provider and disable auto-update by default\./,
     )
 
     const launcherPath = join(tempBin, 'codex-code')
     const launcher = await readFile(launcherPath, 'utf8')
     assert.match(launcher, /CODEX_CODE_USE_CODEX_PROVIDER/)
     assert.match(launcher, /DISABLE_AUTOUPDATER/)
+    const aliasPath = join(tempBin, 'ccx')
+    const aliasLauncher = await readFile(aliasPath, 'utf8')
+    assert.equal(aliasLauncher, launcher)
 
     const version = await run(launcherPath, ['--version'], {
       HOME: tempHome,
@@ -103,6 +106,11 @@ test('install-local script creates a codex-code launcher that starts the CLI', a
       HOME: tempHome,
     })
     assert.match(help.stdout, /Usage: codex-code/)
+
+    const aliasVersion = await run(aliasPath, ['--version'], {
+      HOME: tempHome,
+    })
+    assert.match(aliasVersion.stdout, /Codex Code/)
   } finally {
     await rm(tempHome, { recursive: true, force: true })
   }

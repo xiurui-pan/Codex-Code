@@ -6,7 +6,8 @@
   "type": "module",
   "packageManager": "pnpm@10.28.2",
   "bin": {
-    "codex-code": "./dist/cli.js"
+    "codex-code": "./dist/cli.js",
+    "ccx": "./dist/cli.js"
   },
   "scripts": {
     "build": "node scripts/build.mjs",
