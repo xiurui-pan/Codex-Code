@@ -19,8 +19,8 @@ The recommended path is:
 - clone the repository
 - install dependencies
 - build once
-- install the local `codex-code` launcher
-- start the TUI with `codex-code`
+- install the local `codex-code` / `ccx` launchers
+- start the TUI with `codex-code` or `ccx`
 
 Codex Code is not published as an npm package yet.
 For this beta, the supported path is the local launcher script included in this repository.
@@ -59,8 +59,8 @@ What changes is the model execution path and the surrounding Codex-specific runt
 
 - Codex / OpenAI Responses becomes the main model path
 - Codex-facing configuration lives in `~/.codex/config.toml`
-- the local launcher enables the Codex provider by default
-- the local launcher disables auto-update by default for a steadier beta workflow
+- the local launchers enable the Codex provider by default
+- the local launchers disable auto-update by default for a steadier beta workflow
 
 ## Requirements
 
@@ -83,7 +83,7 @@ For repeated local setup, you can also use:
 pnpm setup:local
 ```
 
-By default, `pnpm install:local` writes a launcher to `~/.local/bin/codex-code`.
+By default, `pnpm install:local` writes launchers to `~/.local/bin/codex-code` and `~/.local/bin/ccx`.
 If `~/.local/bin` is not already on your `PATH`, add it once:
 
 ```bash
@@ -95,6 +95,7 @@ After installation, verify that the command is available:
 
 ```bash
 codex-code --help
+ccx --help
 ```
 
 If you want to install into a custom bin directory, use:
@@ -136,6 +137,8 @@ Start the TUI directly from the installed command:
 
 ```bash
 codex-code
+# or
+ccx
 ```
 
 Useful commands:
@@ -144,18 +147,21 @@ Useful commands:
 codex-code --help
 codex-code --version
 codex-code -p "Summarize this repository"
+ccx --help
+ccx --version
+ccx -p "Summarize this repository"
 ```
 
 ## Troubleshooting
 
-- `codex-code: command not found`
-  - `pnpm install:local` installs the launcher to `~/.local/bin/codex-code` by default.
+- `codex-code: command not found` or `ccx: command not found`
+  - `pnpm install:local` installs launchers to `~/.local/bin/codex-code` and `~/.local/bin/ccx` by default.
   - Make sure `~/.local/bin` is on your `PATH`, then restart your shell or run `source ~/.zshrc`.
-- `node dist/cli.js` or `codex-code` fails after a local rebuild
+- `node dist/cli.js`, `codex-code`, or `ccx` fails after a local rebuild
   - Re-run `pnpm build` first, then retry.
   - If you replaced an existing launcher, also re-run `pnpm install:local --force`.
 - You want to verify the local launcher is wired correctly
-  - Run `codex-code --version` and `codex-code --help`.
+  - Run `codex-code --version` / `codex-code --help`, or `ccx --version` / `ccx --help`.
 
 ## Build And Test
 
@@ -167,8 +173,8 @@ pnpm test
 ## Beta Notes
 
 - this beta is source-installed, not npm-published
-- the supported beta entrypoint is the local `codex-code` launcher
-- the launcher keeps `CODEX_CODE_USE_CODEX_PROVIDER=1` and `DISABLE_AUTOUPDATER=1` by default
+- the supported beta entrypoints are the local `codex-code` and `ccx` launchers
+- the launchers keep `CODEX_CODE_USE_CODEX_PROVIDER=1` and `DISABLE_AUTOUPDATER=1` by default
 
 ## License
 

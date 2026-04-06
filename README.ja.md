@@ -16,8 +16,8 @@ Codex Code は、ターミナルで動くローカルのコーディングエー
 - リポジトリを取得する
 - 依存関係を入れる
 - 一度ビルドする
-- ローカル `codex-code` ランチャーを入れる
-- `codex-code` で TUI を起動する
+- ローカル `codex-code` / `ccx` ランチャーを入れる
+- `codex-code` または `ccx` で TUI を起動する
 
 まだ npm 公開版ではありません。
 この beta では、同梱しているローカルランチャーを使う導入方法を正式な手順としています。
@@ -62,7 +62,7 @@ pnpm install:local
 pnpm setup:local
 ```
 
-標準では `~/.local/bin/codex-code` にランチャーを作成します。
+標準では `~/.local/bin/codex-code` と `~/.local/bin/ccx` にランチャーを作成します。
 `~/.local/bin` が `PATH` に入っていない場合は、一度だけ追加してください。
 
 ```bash
@@ -74,6 +74,7 @@ source ~/.zshrc
 
 ```bash
 codex-code --help
+ccx --help
 ```
 
 別の bin ディレクトリに入れる場合は次を使います。
@@ -115,6 +116,8 @@ export OPENAI_API_KEY="your-api-key"
 
 ```bash
 codex-code
+# または
+ccx
 ```
 
 よく使うコマンド:
@@ -123,19 +126,23 @@ codex-code
 codex-code --help
 codex-code --version
 codex-code -p "Summarize this repository"
+ccx --help
+ccx --version
+ccx -p "Summarize this repository"
 ```
 
 ## トラブルシュート
 
-- `codex-code: command not found` と出る
-  - `pnpm install:local` は標準で `~/.local/bin/codex-code` にランチャーを入れます
+- `codex-code: command not found` または `ccx: command not found` と出る
+  - `pnpm install:local` は標準で `~/.local/bin/codex-code` と `~/.local/bin/ccx` にランチャーを入れます
   - `~/.local/bin` を `PATH` に追加し、shell を開き直すか `source ~/.zshrc` を実行してください
-- ローカル再ビルド後に `node dist/cli.js` や `codex-code` が起動しない
+- ローカル再ビルド後に `node dist/cli.js`、`codex-code`、`ccx` が起動しない
   - まず `pnpm build` をやり直してください
   - 古いローカルランチャーを上書きした場合は `pnpm install:local --force` も再実行してください
 - ローカルランチャーが正しくつながっているか確認したい
   - `codex-code --version`
   - `codex-code --help`
+  - または `ccx --version` と `ccx --help`
 
 ## ビルドとテスト
 
@@ -147,7 +154,7 @@ pnpm test
 ## Beta メモ
 
 - この beta は npm 公開ではなく、ソース導入前提です
-- 正式な入口はローカル `codex-code` ランチャーです
+- 正式な入口はローカル `codex-code` と `ccx` ランチャーです
 - ランチャーは `CODEX_CODE_USE_CODEX_PROVIDER=1` と `DISABLE_AUTOUPDATER=1` を既定で設定します
 
 ## License
