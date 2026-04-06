@@ -45,10 +45,7 @@ import { getTools } from './tools.js';
 import { count, uniq } from './utils/array.js';
 import { installAsciicastRecorder } from './utils/asciicast.js';
 import { checkHasTrustDialogAccepted, getGlobalConfig, getRemoteControlAtStartup, isAutoUpdaterDisabled, saveGlobalConfig } from './utils/config.js';
-import {
-  getCodexConfiguredModel,
-  getCodexConfiguredReasoningEffort,
-} from './utils/codexConfig.js';
+import { getCodexConfiguredModel } from './utils/codexConfig.js';
 import {
   getCurrentPhaseProviderError,
   isCurrentPhaseCustomCodexProvider,
@@ -1375,7 +1372,6 @@ async function run(): Promise<CommanderCommand> {
       process.env.CODEX_CODE_DISABLE_1M_CONTEXT ??= '1';
     }
     const codexConfiguredModel = getCodexConfiguredModel();
-    const codexConfiguredReasoningEffort = getCodexConfiguredReasoningEffort();
     logForDebugging('[STARTUP] provider/model section done');
 
     // Validate that fallback model is different from main model
@@ -2861,7 +2857,7 @@ async function run(): Promise<CommanderCommand> {
           tools: mcpTools
         },
         toolPermissionContext,
-        effortValue: parseEffortValue(options.effort ?? codexConfiguredReasoningEffort) ?? getInitialEffortSetting(),
+        effortValue: parseEffortValue(options.effort) ?? getInitialEffortSetting(),
         ...(!currentPhaseBareLocalMode && isFastModeEnabled() && {
           fastMode: getInitialFastModeSetting(effectiveModel ?? null)
         }),
@@ -3161,7 +3157,7 @@ async function run(): Promise<CommanderCommand> {
     writeStartupProbe('action:after-initial-settings-snapshot');
     const initialAttributionState = createEmptyAttributionState();
     writeStartupProbe('action:after-initial-attribution-state');
-    const initialEffortValue = parseEffortValue(options.effort ?? codexConfiguredReasoningEffort) ?? getInitialEffortSetting();
+    const initialEffortValue = parseEffortValue(options.effort) ?? getInitialEffortSetting();
     writeStartupProbe('action:after-initial-effort');
     const initialTeamContext = feature('KAIROS') ? assistantTeamContext ?? computeInitialTeamContext?.() : computeInitialTeamContext?.();
     writeStartupProbe('action:after-initial-team-context');

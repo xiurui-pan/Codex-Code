@@ -81,13 +81,14 @@ async function withResponsesServer(fn) {
   }
 }
 
-async function writeCodexConfig(homeDir, port) {
+async function writeCodexConfig(homeDir, port, extraLines = []) {
   const codexDir = join(homeDir, '.codex')
   await mkdir(codexDir, { recursive: true })
   await writeFile(
     join(codexDir, 'config.toml'),
     [
       ...DEFAULT_CONFIG_LINES,
+      ...extraLines,
       '',
       '[model_providers.test-provider]',
       `base_url = "http://127.0.0.1:${port}"`,
@@ -313,7 +314,7 @@ test('model and effort TUI: Esc cancels /model changes and keeps the original ef
           {
             name: 'move-and-cancel',
             waitFor: ['Select model', 'gpt-5.1-codex-max'],
-            sendParts: ['\u001b[B', '\u001b[B', '\u001b[C', '\u001b'],
+            sendParts: ['\u001b[B', '\u001b[B', '\u001b'],
             preDelayMs: 250,
             delayMs: 120,
           },
@@ -359,6 +360,79 @@ test('model and effort TUI: Esc cancels /model changes and keeps the original ef
       assert.match(result.normalizedTranscript, /Currentmodel:gpt-5\.1-codex-mini/)
       assert.match(result.normalizedTranscript, /Currenteffortlevel:high/)
       assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('model and effort TUI: config default yields to the session-selected reasoning effort', SERIAL_TEST, async () => {
+  await withResponsesServer(async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-model-effort-override-'))
+    try {
+      await writeCodexConfig(tempHome, port, ['model_reasoning_effort = "medium"'])
+      const result = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'open-model', waitFor: ['❯'], send: '/model\r' },
+          {
+            name: 'choose-model-and-effort',
+            waitFor: ['gpt-5.1-codex-mini', 'Enter to confirm'],
+            sendParts: ['\u001b[B', '\u001b[C', '\r'],
+            preDelayMs: 250,
+            delayMs: 120,
+            settleMs: 500,
+          },
+          {
+            name: 'check-model-status',
+            waitFor: ['Set model to gpt-5.1-codex with high reasoning'],
+            waitForFresh: true,
+            send: '/model status\r',
+          },
+          {
+            name: 'check-effort-status',
+            waitFor: ['Current model: gpt-5.1-codex', 'reasoning: high'],
+            waitForFresh: true,
+            send: '/effort status\r',
+          },
+          {
+            name: 'ask-provider',
+            waitFor: ['Current effort level: high'],
+            waitForFresh: true,
+            send: '用当前配置回答一次\r',
+          },
+          {
+            name: 'exit',
+            waitFor: ['UNEXPECTED_PROVIDER_REPLY'],
+            waitForFresh: true,
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(
+        result.sent,
+        [
+          'open-model',
+          'choose-model-and-effort',
+          'check-model-status',
+          'check-effort-status',
+          'ask-provider',
+          'exit',
+        ],
+        JSON.stringify(result),
+      )
+      assert.match(result.normalizedTranscript, /Setmodeltogpt-5\.1-codexwithhighreasoning/)
+      assert.match(result.normalizedTranscript, /Currentmodel:gpt-5\.1-codex·reasoning:high/)
+      assert.match(result.normalizedTranscript, /Currenteffortlevel:high/)
+      assert.doesNotMatch(
+        result.normalizedTranscript,
+        /CODEX_CODE_EFFORT_LEVEL=.*stillcontrolsthissession/,
+      )
+      assert.equal(requestBodies.length, 1)
+      assert.equal(requestBodies[0]?.reasoning?.effort, 'high')
     } finally {
       await rm(tempHome, { recursive: true, force: true })
     }

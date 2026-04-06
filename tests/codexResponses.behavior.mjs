@@ -107,6 +107,19 @@ test('responses body keeps harness tools exposed and maps native web search for 
   assert.deepEqual(result.webSearchTool?.filters?.allowed_domains, [
     'example.com',
   ])
+  assert.deepEqual(result.xhighReasoning, {
+    effort: 'xhigh',
+    summary: 'auto',
+  })
+  assert.equal(result.unsupportedReasoning, null)
+  assert.deepEqual(result.configDefaultReasoning, {
+    effort: 'medium',
+    summary: 'auto',
+  })
+  assert.deepEqual(result.sessionOverrideReasoning, {
+    effort: 'high',
+    summary: 'auto',
+  })
 })
 
 test('queryCodexResponses forwards top-level tools into the Responses request body', async () => {

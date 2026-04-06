@@ -859,12 +859,12 @@ test('matrix: initialize model list and runtime model switch stay on Codex-only 
   assert.equal(result.requestBodies[0]?.reasoning?.effort, 'medium')
 })
 
-test('matrix: configured reasoning effort reaches the provider request body', async () => {
+test('matrix: configured xhigh reasoning effort reaches the provider request body', async () => {
   const result = await runStructuredHeadlessSession({
     configLines: [
       'model_provider = "test-provider"',
       'model = "gpt-5.1-codex-max"',
-      'model_reasoning_effort = "max"',
+      'model_reasoning_effort = "xhigh"',
       'response_storage = false',
     ],
     responseBatches: [[
@@ -872,10 +872,10 @@ test('matrix: configured reasoning effort reaches the provider request body', as
         block: responseDoneItem({
           type: 'message',
           role: 'assistant',
-          content: [{ type: 'output_text', text: 'max effort' }],
+          content: [{ type: 'output_text', text: 'xhigh effort' }],
         }),
       },
-      { block: responseCompleted('resp-effort-max') },
+      { block: responseCompleted('resp-effort-xhigh') },
       { block: responseDone() },
     ]],
     initialMessages: [
@@ -883,7 +883,7 @@ test('matrix: configured reasoning effort reaches the provider request body', as
         type: 'user',
         session_id: '',
         parent_tool_use_id: null,
-        message: { role: 'user', content: '用最大 effort 回答' },
+        message: { role: 'user', content: '用 xhigh effort 回答' },
         uuid: 'user-effort',
       },
     ],
@@ -891,7 +891,7 @@ test('matrix: configured reasoning effort reaches the provider request body', as
 
   assert.equal(result.code, 0, result.stderr)
   assert.equal(result.requestBodies[0]?.model, 'gpt-5.1-codex-max')
-  assert.equal(result.requestBodies[0]?.reasoning?.effort, 'max')
+  assert.equal(result.requestBodies[0]?.reasoning?.effort, 'xhigh')
 })
 
 test('matrix: output format text returns plain final text', async () => {

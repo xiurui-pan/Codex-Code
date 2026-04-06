@@ -17,8 +17,12 @@ import {
   getCodexConfiguredResponseStorage,
 } from '../../utils/codexConfig.js'
 import { errorMessage } from '../../utils/errors.js'
+import { resolveAppliedEffort } from '../../utils/effort.js'
 import { normalizeMessagesForAPI } from '../../utils/messages.js'
-import { DEFAULT_CODEX_MODEL } from '../../utils/model/codexModels.js'
+import {
+  DEFAULT_CODEX_MODEL,
+  getCodexSupportedEffortLevels,
+} from '../../utils/model/codexModels.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
 import { zodToJsonSchema } from '../../utils/zodToJsonSchema.js'
 import {
@@ -37,9 +41,12 @@ import { buildCodexRequestIdentity } from './codexRequestIdentity.js'
 import { getSessionId } from '../../bootstrap/state.js'
 import { getCodexProviderProfile } from './providerProfiles.js'
 
+type CodexResponsesEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+
 type CodexRequestOptions = {
   model?: string
   effortValue?: string | number | null
+  resolvedEffortValue?: string | number | null
   getToolPermissionContext?: () => Promise<unknown>
   tools?: Tools
   fastMode?: boolean
@@ -502,20 +509,22 @@ function buildNativeWebSearchTool(
   }
 }
 
-function parseEffortValue(
+function toResponsesReasoningEffort(
+  model: string,
   effortValue: CodexRequestOptions['effortValue'],
-): 'low' | 'medium' | 'high' | 'max' | undefined {
+): CodexResponsesEffort | undefined {
   if (
-    effortValue === 'low' ||
-    effortValue === 'medium' ||
-    effortValue === 'high' ||
-    effortValue === 'xhigh' ||
-    effortValue === 'max'
+    effortValue !== 'low' &&
+    effortValue !== 'medium' &&
+    effortValue !== 'high' &&
+    effortValue !== 'xhigh' &&
+    effortValue !== 'max'
   ) {
-    return effortValue
+    return undefined
   }
 
-  return undefined
+  const supportedLevels = getCodexSupportedEffortLevels(model)
+  return supportedLevels.includes(effortValue) ? effortValue : undefined
 }
 
 export async function buildResponsesBody({
@@ -527,8 +536,9 @@ export async function buildResponsesBody({
   const profile = getCodexProviderProfile()
   const requestIdentity = buildCodexRequestIdentity()
   const resolvedTools = options.tools ?? tools ?? []
+  const resolvedModel = options.model ?? getCodexConfiguredModel() ?? DEFAULT_CODEX_MODEL
   const body: Record<string, unknown> = {
-    model: options.model ?? getCodexConfiguredModel() ?? DEFAULT_CODEX_MODEL,
+    model: resolvedModel,
     stream: true,
     input: buildResponsesInput(messages, resolvedTools),
   }
@@ -540,7 +550,14 @@ export async function buildResponsesBody({
     body.store = responseStorage
   }
 
-  const effort = parseEffortValue(options.effortValue)
+  const resolvedEffortValue = resolveAppliedEffort(
+    resolvedModel,
+    options.resolvedEffortValue ?? options.effortValue ?? undefined,
+  )
+  const effort = toResponsesReasoningEffort(
+    resolvedModel,
+    resolvedEffortValue,
+  )
   if (profile.reasoningEffort && effort) {
     body.reasoning = {
       effort,

@@ -431,9 +431,84 @@ async function runToolBody() {
         },
       })
 
+      const xhighBody = await buildResponsesBody({
+        messages: [
+          {
+            type: 'user',
+            uuid: 'user-2',
+            message: { content: 'reason harder' },
+          },
+        ],
+        systemPrompt: [],
+        options: {
+          model: 'gpt-5.4',
+          effortValue: 'xhigh',
+        },
+      })
+
+      const unsupportedBody = await buildResponsesBody({
+        messages: [
+          {
+            type: 'user',
+            uuid: 'user-3',
+            message: { content: 'legacy reasoning' },
+          },
+        ],
+        systemPrompt: [],
+        options: {
+          model: 'gpt-5.1-codex-mini',
+          effortValue: 'xhigh',
+        },
+      })
+
+      const configDefaultBody = await withEnv(
+        {
+          CODEX_CODE_DEFAULT_REASONING_EFFORT: 'medium',
+          CODEX_CODE_EFFORT_LEVEL: undefined,
+        },
+        async () => buildResponsesBody({
+          messages: [
+            {
+              type: 'user',
+              uuid: 'user-4',
+              message: { content: 'config default reasoning' },
+            },
+          ],
+          systemPrompt: [],
+          options: {
+            model: 'gpt-5.4',
+          },
+        }),
+      )
+
+      const sessionOverrideBody = await withEnv(
+        {
+          CODEX_CODE_DEFAULT_REASONING_EFFORT: 'medium',
+          CODEX_CODE_EFFORT_LEVEL: undefined,
+        },
+        async () => buildResponsesBody({
+          messages: [
+            {
+              type: 'user',
+              uuid: 'user-5',
+              message: { content: 'session override wins' },
+            },
+          ],
+          systemPrompt: [],
+          options: {
+            model: 'gpt-5.4',
+            effortValue: 'high',
+          },
+        }),
+      )
+
       return {
         toolNames: (body.tools ?? []).map(tool => tool.name ?? tool.type),
         webSearchTool: (body.tools ?? []).find(tool => tool.type === 'web_search') ?? null,
+        xhighReasoning: xhighBody.reasoning ?? null,
+        unsupportedReasoning: unsupportedBody.reasoning ?? null,
+        configDefaultReasoning: configDefaultBody.reasoning ?? null,
+        sessionOverrideReasoning: sessionOverrideBody.reasoning ?? null,
       }
     },
   )

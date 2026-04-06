@@ -61,6 +61,7 @@ test('codex config centralizes base URL, model, reasoning, storage, and auth', a
         ANTHROPIC_MODEL: undefined,
         ANTHROPIC_API_KEY: undefined,
         CODEX_CODE_EFFORT_LEVEL: undefined,
+        CODEX_CODE_DEFAULT_REASONING_EFFORT: undefined,
         CODEX_CODE_CODEX_RESPONSE_STORAGE: undefined,
         CODEX_CODE_CODEX_ENV_KEY: undefined,
       },
@@ -145,6 +146,21 @@ test('disable_response_storage stays compatible and only applies when response_s
   } finally {
     await rm(tempDir, { recursive: true, force: true })
   }
+})
+
+test('codex config exposes reasoning effort as a default instead of a hard override', async () => {
+  await withEnv(
+    {
+      CODEX_CODE_EFFORT_LEVEL: undefined,
+      CODEX_CODE_DEFAULT_REASONING_EFFORT: 'medium',
+    },
+    async () => {
+      const { getCodexConfiguredReasoningEffort } = await import(
+        '../src/utils/codexConfig.ts'
+      )
+      assert.equal(getCodexConfiguredReasoningEffort(), 'medium')
+    },
+  )
 })
 
 test('codex config exposes context window and auto compact limits through env helpers', async () => {

@@ -6,8 +6,14 @@ import type {
   CommandResultDisplay,
   LocalJSXCommandCall,
 } from '../../types/command.js'
-import type { EffortLevel } from '../../utils/effort.js'
-import { modelDisplayString } from '../../utils/model/model.js'
+import {
+  getEffortApplicationState,
+  type EffortLevel,
+} from '../../utils/effort.js'
+import {
+  getDefaultMainLoopModel,
+  modelDisplayString,
+} from '../../utils/model/model.js'
 import {
   findSelectableModelOption,
   getModelCommandChoices,
@@ -39,12 +45,32 @@ function ModelPickerWrapper({
       ...(effort !== undefined && { effortValue: effort }),
     }))
 
+    const appliedModel = model ?? mainLoopModel ?? mainLoopModelForSession
+    const effortState =
+      effort !== undefined && appliedModel
+        ? getEffortApplicationState(appliedModel, effort)
+        : null
     const effortSuffix = effort !== undefined ? ` with ${effort} reasoning` : ''
-    onDone(`Set model to ${modelDisplayString(model)}${effortSuffix}`)
+    const baseMessage = `Set model to ${modelDisplayString(model)}${effortSuffix}`
+
+    if (effortState?.source === 'env' && effortState.isEnvOverridden && effortState.applied !== effort) {
+      const envRaw = process.env.CODEX_CODE_EFFORT_LEVEL
+      onDone(
+        `${baseMessage}. CODEX_CODE_EFFORT_LEVEL=${envRaw} still controls this session — current effort stays ${effortState.applied}`,
+      )
+      return
+    }
+
+    onDone(baseMessage)
   }
 
   function handleCancel(): void {
-    const effortSuffix = effortValue !== undefined ? ` (reasoning: ${effortValue})` : ''
+    const appliedEffort = getEffortApplicationState(
+      mainLoopModel ?? getDefaultMainLoopModel(),
+      effortValue,
+    ).applied
+    const effortSuffix =
+      appliedEffort !== undefined ? ` (reasoning: ${appliedEffort})` : ''
     onDone(`Kept model as ${modelDisplayString(mainLoopModel)}${effortSuffix}`, {
       display: 'system',
     })
@@ -119,7 +145,12 @@ function ShowModelAndClose({
   const modelText = mainLoopModelForSession
     ? `${modelDisplayString(mainLoopModelForSession)} (session override)`
     : modelDisplayString(mainLoopModel)
-  const effortText = effortValue !== undefined ? ` · reasoning: ${effortValue}` : ''
+  const appliedEffort = getEffortApplicationState(
+    mainLoopModelForSession ?? mainLoopModel ?? getDefaultMainLoopModel(),
+    effortValue,
+  ).applied
+  const effortText =
+    appliedEffort !== undefined ? ` · reasoning: ${appliedEffort}` : ''
 
   onDone(`Current model: ${modelText}${effortText}`)
   return null

@@ -178,10 +178,69 @@ export function getEffortEnvOverride(): EffortValue | null | undefined {
     : parseEffortValue(envOverride)
 }
 
+export type EffortApplicationState = {
+  requested: EffortValue | undefined
+  applied: EffortValue | undefined
+  envOverride: EffortValue | null | undefined
+  configDefault: EffortValue | undefined
+  modelDefault: EffortValue | undefined
+  source: 'env' | 'session' | 'config' | 'model'
+  isEnvOverridden: boolean
+}
+
+export function getConfiguredDefaultEffort(): EffortValue | undefined {
+  return parseEffortValue(process.env.CODEX_CODE_DEFAULT_REASONING_EFFORT)
+}
+
+export function getEffortApplicationState(
+  model: string,
+  requestedEffortValue: EffortValue | undefined,
+): EffortApplicationState {
+  const envOverride = getEffortEnvOverride()
+  const configDefault = getConfiguredDefaultEffort()
+  const modelDefault = getDefaultEffortForModel(model)
+  const applied = resolveAppliedEffort(model, requestedEffortValue)
+  const source =
+    envOverride !== undefined
+      ? 'env'
+      : requestedEffortValue !== undefined
+        ? 'session'
+        : configDefault !== undefined
+          ? 'config'
+          : 'model'
+  return {
+    requested: requestedEffortValue,
+    applied,
+    envOverride,
+    configDefault,
+    modelDefault,
+    source,
+    isEnvOverridden:
+      envOverride !== undefined && envOverride !== requestedEffortValue,
+  }
+}
+
+export function formatEffortOverrideMessage(
+  effortValue: Exclude<EffortValue, 'max'>,
+  options?: { persistable?: boolean },
+): string | null {
+  const envOverride = getEffortEnvOverride()
+  if (envOverride === undefined || envOverride === effortValue) {
+    return null
+  }
+
+  const envRaw = process.env.CODEX_CODE_EFFORT_LEVEL
+  if (options?.persistable === false) {
+    return `Not applied: CODEX_CODE_EFFORT_LEVEL=${envRaw} overrides effort this session, and ${effortValue} is session-only (nothing saved)`
+  }
+
+  return `CODEX_CODE_EFFORT_LEVEL=${envRaw} overrides this session — clear it and ${effortValue} takes over`
+}
+
 /**
  * Resolve the effort value that will actually be sent to the API for a given
  * model, following the full precedence chain:
- *   env CODEX_CODE_EFFORT_LEVEL → appState.effortValue → model default
+ *   env CODEX_CODE_EFFORT_LEVEL → appState.effortValue → config default → model default
  *
  * Returns undefined when no effort parameter should be sent (env set to
  * 'unset', or no default exists for the model).
@@ -194,8 +253,9 @@ export function resolveAppliedEffort(
   if (envOverride === null) {
     return undefined
   }
+  const configDefault = getConfiguredDefaultEffort()
   const resolved =
-    envOverride ?? appStateEffortValue ?? getDefaultEffortForModel(model)
+    envOverride ?? appStateEffortValue ?? configDefault ?? getDefaultEffortForModel(model)
   // API rejects 'max' on non-Opus-4.6 models — downgrade to 'high'.
   if (resolved === 'max' && !modelSupportsMaxEffort(model)) {
     return 'high'
