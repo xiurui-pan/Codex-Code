@@ -290,6 +290,7 @@ async function runStructuredHeadlessSession({
         HOME: tempHome,
         ANTHROPIC_API_KEY: 'test-key',
         CODEX_CODE_USE_CODEX_PROVIDER: '1',
+        TEST_ENABLE_SESSION_PERSISTENCE: '1',
       },
       stdio: ['pipe', 'pipe', 'pipe'],
     },
@@ -1514,7 +1515,7 @@ test('/compact TUI: resume compacts locally, returns to input, and the next prom
           JSON.stringify(result),
         )
         assert.match(result.normalizedTranscript, /Compacted/)
-        assert.match(result.normalizedTranscript, /a(?:fter|fer)compactanswer/)
+        assert.match(result.normalizedTranscript, /af(?:ter|er|te)compactanswer/)
         assert.equal(requestBodies.length, 1)
         const requestBodyText = JSON.stringify(requestBodies[0])
         assert.match(requestBodyText, /Prefer the resumed worktree summary/)

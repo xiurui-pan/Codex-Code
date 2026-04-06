@@ -174,6 +174,9 @@ while time.time() < timeout_at:
         time_ready = ((time.time() * 1000) - started_at_ms) >= wait_at_least_ms
         text_ready = all(re.sub(r"\s+", "", token) in normalized for token in wait_for)
         if time_ready and text_ready:
+            pre_delay_ms = action.get("preDelayMs", 0)
+            if pre_delay_ms > 0:
+                time.sleep(pre_delay_ms / 1000.0)
             if "sendParts" in action:
                 delay_ms = action.get("delayMs", 120)
                 for part in action["sendParts"]:
@@ -266,6 +269,7 @@ test('session slash commands TUI: /rename updates /status and Esc closes the sta
             {
               name: 'rename-session',
               waitFor: ['RENAME_STATUS_SOURCE_REPLY'],
+              preDelayMs: 300,
               send: `/rename ${sessionName}\r`,
             },
             {

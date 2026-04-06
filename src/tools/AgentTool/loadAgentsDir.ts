@@ -1,6 +1,5 @@
 import { feature } from 'bun:bundle'
 import memoize from 'lodash-es/memoize.js'
-import { createRequire } from 'node:module'
 import { basename } from 'path'
 import type { SettingSource } from 'src/utils/settings/constants.js'
 import { z } from 'zod/v4'
@@ -33,6 +32,10 @@ import {
   PERMISSION_MODES,
   type PermissionMode,
 } from '../../utils/permissions/PermissionMode.js'
+import {
+  clearPluginAgentCache,
+  loadPluginAgents,
+} from '../../utils/plugins/loadPluginAgents.js'
 import { isCurrentPhaseCustomCodexProvider } from '../../utils/currentPhase.js'
 import { HooksSchema, type HooksSettings } from '../../utils/settings/types.js'
 import { jsonStringify } from '../../utils/slowOperations.js'
@@ -45,9 +48,11 @@ import {
   setAgentColor,
 } from './agentColorManager.js'
 import { type AgentMemoryScope, loadAgentMemoryPrompt } from './agentMemory.js'
+import {
+  checkAgentMemorySnapshot,
+  initializeFromSnapshot,
+} from './agentMemorySnapshot.js'
 import { getBuiltInAgents } from './builtInAgents.js'
-
-const require = createRequire(import.meta.url)
 
 // Type for MCP server specification in agent definitions
 // Can be either a reference to an existing server by name, or an inline definition as { [name]: config }
@@ -258,10 +263,6 @@ export function filterAgentsByMcpRequirements(
 async function initializeAgentMemorySnapshots(
   agents: CustomAgentDefinition[],
 ): Promise<void> {
-  const {
-    checkAgentMemorySnapshot,
-    initializeFromSnapshot,
-  } = require('./agentMemorySnapshot.js') as typeof import('./agentMemorySnapshot.js')
   await Promise.all(
     agents.map(async agent => {
       if (agent.memory !== 'user') return
@@ -365,8 +366,6 @@ export const getAgentDefinitionsWithOverrides = memoize(
       // Anthropic memory side paths during first-screen startup.
       let pluginAgents: PluginAgentDefinition[] = []
       if (!currentPhaseCustomCodexProvider) {
-        const { loadPluginAgents } =
-          require('../../utils/plugins/loadPluginAgents.js') as typeof import('../../utils/plugins/loadPluginAgents.js')
         // Kick off plugin agent loading concurrently with memory snapshot init —
         // loadPluginAgents is memoized and takes no args, so it's independent.
         // Join both so neither becomes a floating promise if the other throws.
@@ -427,8 +426,6 @@ export const getAgentDefinitionsWithOverrides = memoize(
 
 export function clearAgentDefinitionsCache(): void {
   getAgentDefinitionsWithOverrides.cache.clear?.()
-  const { clearPluginAgentCache } =
-    require('../../utils/plugins/loadPluginAgents.js') as typeof import('../../utils/plugins/loadPluginAgents.js')
   clearPluginAgentCache()
 }
 
