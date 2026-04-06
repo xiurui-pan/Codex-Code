@@ -26,10 +26,10 @@ test('task notification shows final agent response in transcript mode', async ()
   assert.match(output, /AGENT_NOTIFICATION_FINAL_OK/)
 })
 
-test('task notification shows final agent response outside transcript mode too', async () => {
+test('task notification keeps the final agent response transcript-only', async () => {
   const output = await renderNotification(false)
 
   assert.match(output, /Agent "probe" completed/)
-  assert.match(output, /Response:/)
-  assert.match(output, /AGENT_NOTIFICATION_FINAL_OK/)
+  assert.doesNotMatch(output, /Response:/)
+  assert.doesNotMatch(output, /AGENT_NOTIFICATION_FINAL_OK/)
 })

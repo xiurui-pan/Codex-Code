@@ -1434,10 +1434,7 @@ async function run(): Promise<CommanderCommand> {
     const {
       mode: permissionMode,
       notification: permissionModeNotification
-    } = currentPhaseCustomCodexProvider ? {
-      mode: 'default' as const,
-      notification: undefined
-    } : initialPermissionModeFromCLI({
+    } = initialPermissionModeFromCLI({
       permissionModeCli,
       dangerouslySkipPermissions
     });
@@ -1797,12 +1794,7 @@ async function run(): Promise<CommanderCommand> {
     // the startup path. Wall-clock time is unchanged; we just yield to the event
     // loop during the fs I/O instead of blocking it. See #19661.
     logForDebugging('[STARTUP] initializeToolPermissionContext start');
-    const initResult = currentPhaseCustomCodexProvider && isBareMode() ? {
-      toolPermissionContext: getEmptyToolPermissionContext(),
-      warnings: [],
-      dangerousPermissions: [],
-      overlyBroadBashPermissions: []
-    } : await initializeToolPermissionContext({
+    const initResult = await initializeToolPermissionContext({
       allowedToolsCli: allowedTools,
       disallowedToolsCli: disallowedTools,
       baseToolsCli: baseTools,

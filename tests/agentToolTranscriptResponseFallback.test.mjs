@@ -159,7 +159,7 @@ test(
   },
 )
 
-test('agent card keeps the final response visible before entering transcript mode', async () => {
+test('agent card keeps only the done summary visible before entering transcript mode', async () => {
   const output = await renderAgentResult(
     {
       status: 'completed',
@@ -181,8 +181,9 @@ test('agent card keeps the final response visible before entering transcript mod
     },
   )
 
-  assert.match(output, /Response:/)
-  assert.match(output, /AGENT_CARD_FINAL_OK/)
+  assert.match(output, /Done/)
+  assert.doesNotMatch(output, /Response:/)
+  assert.doesNotMatch(output, /AGENT_CARD_FINAL_OK/)
 })
 
 test('agent transcript keeps intermediate assistant commentary visible', async () => {

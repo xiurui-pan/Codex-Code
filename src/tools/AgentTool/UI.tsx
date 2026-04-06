@@ -450,9 +450,6 @@ export function renderToolResultMessage(data: Output, progressMessagesForMessage
       {isTranscriptMode && responseContent.length > 0 && <MessageResponse>
           <AgentResponseDisplay content={responseContent} theme={theme} />
         </MessageResponse>}
-      {!isTranscriptMode && responseContent.length > 0 && <MessageResponse>
-          <AgentResponseDisplay content={responseContent} theme={theme} />
-        </MessageResponse>}
       <MessageResponse height={1}>
         <MessageComponent message={finalAssistantMessage} lookups={EMPTY_LOOKUPS} addMargin={false} tools={tools} commands={[]} verbose={verbose} inProgressToolUseIDs={new Set()} progressMessagesForMessage={[]} shouldAnimate={false} shouldShowDot={false} isTranscriptMode={false} isStatic={true} />
       </MessageResponse>
