@@ -19,6 +19,7 @@ import {
   switchSession,
 } from './bootstrap/state.js'
 import { getCommands } from './commands.js'
+import { shouldShowProjectOnboarding } from './projectOnboardingState.js'
 import { initSessionMemory } from './services/SessionMemory/sessionMemory.js'
 import { asSessionId } from './types/ids.js'
 import { isAgentSwarmsEnabled } from './utils/agentSwarmsEnabled.js'
@@ -41,7 +42,10 @@ import {
 import { hasWorktreeCreateHook } from './utils/hooks.js'
 import { checkAndRestoreITerm2Backup } from './utils/iTermBackup.js'
 import { logError } from './utils/log.js'
-import { getRecentActivity } from './utils/logoV2Utils.js'
+import {
+  getRecentActivity,
+  shouldPrefetchRecentActivityForWelcome,
+} from './utils/logoV2Utils.js'
 import { lockCurrentVersion } from './utils/nativeInstaller/index.js'
 import type { PermissionMode } from './utils/permissions/PermissionMode.js'
 import { getPlanSlug } from './utils/plans.js'
@@ -395,11 +399,25 @@ export async function setup(
   // Pre-fetch data for Logo v2 - await to ensure it's ready before logo renders.
   // --bare / SIMPLE: skip — release notes are interactive-UI display data,
   // and getRecentActivity() reads up to 10 session JSONL files.
-  if (!isBareMode() && !currentPhaseCustomCodexProvider) {
-    const { hasReleaseNotes } = await checkForReleaseNotes(
-      getGlobalConfig().lastReleaseNotesSeen,
-    )
-    if (hasReleaseNotes) {
+  if (!isBareMode()) {
+    const showOnboarding = shouldShowProjectOnboarding()
+    const forceFullLogo = isEnvTruthy(process.env.CODEX_CODE_FORCE_FULL_LOGO)
+
+    let hasReleaseNotes = false
+    if (!currentPhaseCustomCodexProvider) {
+      ;({ hasReleaseNotes } = await checkForReleaseNotes(
+        getGlobalConfig().lastReleaseNotesSeen,
+      ))
+    }
+
+    if (
+      shouldPrefetchRecentActivityForWelcome({
+        hasReleaseNotes,
+        showOnboarding,
+        forceFullLogo,
+        currentPhaseCustomCodexProvider,
+      })
+    ) {
       await getRecentActivity()
     }
   }

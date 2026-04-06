@@ -60,6 +60,7 @@ test('plan-mode clear-context usage comes from the current message context', () 
   )
 
   assert.match(source, /const messages = useAppState\(s => s\.messages\)/)
+  assert.match(source, /if \(!messages\?\.length\) \{/)
   assert.match(source, /return \[\.\.\.messages, toolUseConfirm\.assistantMessage\]/)
   assert.match(
     source,

@@ -146,6 +146,9 @@ export function ExitPlanModePermissionRequest({
   const showUltraplan = feature('ULTRAPLAN') && !currentStageDisableUltraplan ? !ultraplanSessionUrl && !ultraplanLaunching : false;
   const messages = useAppState(s => s.messages);
   const messagesForContext = useMemo(() => {
+    if (!messages?.length) {
+      return [toolUseConfirm.assistantMessage];
+    }
     if (messages.at(-1)?.uuid === toolUseConfirm.assistantMessage.uuid) {
       return messages;
     }

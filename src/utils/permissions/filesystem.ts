@@ -1476,10 +1476,10 @@ export function generateSuggestions(
     return updates
   }
 
-  // For read operations inside working directories, just change mode
-  return shouldSuggestAcceptEdits
-    ? [{ type: 'setMode', mode: 'acceptEdits', destination: 'session' }]
-    : []
+  // Read prompts should never escalate the session into acceptEdits mode.
+  // In plan mode this would silently kick the user out of plan mode, and even
+  // in default mode it grants write powers that a read approval did not ask for.
+  return []
 }
 
 /**

@@ -559,9 +559,10 @@ const MessagesImpl = ({
     const dropTextToolNames = [BRIEF_TOOL_NAME].filter((n_0): n_0 is string => n_0 !== null);
     const briefSourceMessages = messagesToShowNotTruncated as any;
     const briefFiltered = (briefToolNames.length > 0 && !isTranscriptMode ? isBriefOnly ? filterForBriefTool(briefSourceMessages, briefToolNames) : dropTextToolNames.length > 0 ? dropTextInBriefTurns(briefSourceMessages, dropTextToolNames) : messagesToShowNotTruncated : messagesToShowNotTruncated) as Exclude<NormalizedMessage, ProgressMessageType>[];
+    const lookupSourceMessages = briefFiltered as Exclude<NormalizedMessage, ProgressMessageType>[];
     const messagesToShow = (shouldTruncate ? briefFiltered.slice(-MAX_MESSAGES_TO_SHOW_IN_TRANSCRIPT_MODE) : briefFiltered) as Exclude<NormalizedMessage, ProgressMessageType>[];
     const hasTruncatedMessages = shouldTruncate && briefFiltered.length > MAX_MESSAGES_TO_SHOW_IN_TRANSCRIPT_MODE;
-    const initialLookups = buildMessageLookups(normalizedMessages, messagesToShow);
+    const initialLookups = buildMessageLookups(normalizedMessages, lookupSourceMessages);
     // Filter out messages that will render as null to prevent blank rows,
     // cursor错位, and wasted render budget (CC-TUI-001)
     const renderableMessages = messagesToShow.filter(msg => {
@@ -586,7 +587,7 @@ const MessagesImpl = ({
       messages: groupedMessages
     } = applyGrouping(renderableMessages, tools, verbose);
     const collapsed = collapseBackgroundBashNotifications(collapseHookSummaries(collapseTeammateShutdowns(collapseReadSearchGroups(groupedMessages, tools))), verbose);
-    const lookups = buildMessageLookups(normalizedMessages, renderableMessages);
+    const lookups = buildMessageLookups(normalizedMessages, lookupSourceMessages);
     const hiddenMessageCount = messagesToShowNotTruncated.length - MAX_MESSAGES_TO_SHOW_IN_TRANSCRIPT_MODE;
     return {
       collapsed,

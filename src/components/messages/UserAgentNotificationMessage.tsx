@@ -102,7 +102,7 @@ export function UserAgentNotificationMessage({
           ) : null}
         </Box>
       ) : null}
-      {isTranscriptMode && result ? (
+      {result ? (
         <Box paddingLeft={2} marginTop={1} flexDirection="column">
           <Text color="success" bold>
             Response:

@@ -2,15 +2,19 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md) | [日本語](./README.ja.md)
 
-Codex Code is a local coding agent for the terminal, built to preserve as much of the original Claude Code harness and interaction experience as possible while switching the model path to Codex / OpenAI Responses.
+Codex Code is a Codex-first local coding agent for the terminal.
+It keeps the native Claude Code feel where it matters most, then swaps the model runtime to Codex / OpenAI Responses.
 
-The goal is simple: keep the proven local experience, replace the model runtime.
-That means the terminal harness, TUI structure, transcript view, tool invocation flow, permission loop, session resume, compaction, plan mode, and agent workflow stay familiar instead of being reinvented.
+Keep the terminal soul. Lose the account maze.
+
+This project is for people who loved the local product experience, not the surrounding service stack.
+The fast TUI, transcript-led workflow, slash commands, tool calling, permission checkpoints, session resume, compaction, plan mode, and agent collaboration stay.
+Claude.ai login paths, Anthropic subscription plumbing, upgrade nudges, and other service-specific layers do not.
 
 ## Beta Status
 
 This repository is ready for a source-installed beta.
-The recommended beta path is:
+The recommended path is:
 
 - clone the repository
 - install dependencies
@@ -19,26 +23,44 @@ The recommended beta path is:
 - start the TUI with `codex-code`
 
 Codex Code is not published as an npm package yet.
-For this beta, the supported install path is the local launcher script included in this repository.
+For this beta, the supported path is the local launcher script included in this repository.
 
-## What We Preserve
+## Why It Feels Native
 
-Compared with the original Claude Code local product experience, this project intentionally keeps:
+Compared with the original Claude Code local experience, this project intentionally keeps the parts people actually use every day:
 
-- the terminal harness and local shell-oriented workflow
-- the TUI layout, transcript mode, status areas, and interaction rhythm
-- tool calling, permission confirmation, and command execution flow
+- the terminal harness and shell-first workflow
+- the TUI layout, transcript view, status areas, and interaction rhythm
+- slash commands, tool calling, permission prompts, and command execution flow
 - session resume, compaction, local memory files, and plan mode behavior
 - background task and agent interaction patterns
 
-## What Changes
+Under the hood, that also means we keep a lot of the original local execution logic instead of only copying the surface:
 
-What changes is the model execution path and the surrounding Codex-specific runtime pieces:
+- the full-screen terminal loop: prompt input, transcript toggle, status lines, progress rows, and completion states
+- the tool loop: tool call, permission check, execution, tool result capture, and transcript rendering
+- the shell workflow: cwd-aware command flow, prompt-to-command rhythm, and local-first execution feel
+- the session layer: saved conversations, resume, compaction, local memory files, and transcript navigation
+- the planning and agent layer: plan mode, approval handoff, background tasks, subagents, task notifications, and follow-up messaging
+
+## What We Remove On Purpose
+
+Codex Code is deliberately lighter than the original service stack.
+For the current Codex-first beta, the supported path removes or avoids:
+
+- Claude.ai login and OAuth-dependent startup paths
+- Anthropic subscription tiers, upgrade prompts, and account-heavy business surfaces
+- Anthropic-only flows such as Bridge, assistant mode, and proactive cloud paths in the supported beta setup
+- the need to wire local coding through first-party Anthropic account infrastructure
+
+## What Powers It Now
+
+What changes is the model execution path and the surrounding Codex-specific runtime:
 
 - Codex / OpenAI Responses becomes the main model path
 - Codex-facing configuration lives in `~/.codex/config.toml`
 - the local launcher enables the Codex provider by default
-- the local launcher disables auto-update by default for a more stable beta workflow
+- the local launcher disables auto-update by default for a steadier beta workflow
 
 ## Requirements
 

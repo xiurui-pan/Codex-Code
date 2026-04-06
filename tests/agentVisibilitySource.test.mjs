@@ -24,3 +24,16 @@ test('async agent detail dialog renders the completed response block', () => {
   assert.match(source, /agent\.result\?\.content/)
   assert.match(source, /Response/)
 })
+
+test('transcript mode uses fresh messages after the turn ends', () => {
+  const source = readSource('src/screens/REPL.tsx')
+
+  assert.match(
+    source,
+    /const transcriptMessageSource = usesSyncMessages \? messages : deferredMessages;/,
+  )
+  assert.match(
+    source,
+    /const transcriptBaseMessages = frozenTranscriptState \? transcriptMessageSource\.slice\(0, frozenTranscriptState\.messagesLength\) : transcriptMessageSource;/,
+  )
+})

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
 import React from 'react'
+import { UserToolResultMessage } from '../src/components/messages/UserToolResultMessage/UserToolResultMessage.js'
 import { AgentTool } from '../src/tools/AgentTool/AgentTool.js'
 import { renderToolResultMessage } from '../src/tools/AgentTool/UI.js'
 import { shouldRenderToolResultMessage } from '../src/components/Messages.js'
@@ -9,6 +10,7 @@ import {
   buildMessageLookups,
   createAssistantMessage,
   createUserMessage,
+  getProgressMessagesFromLookup,
   isNotEmptyMessage,
   normalizeMessages,
 } from '../src/utils/messages.js'
@@ -20,6 +22,73 @@ function renderAgentResult(result, progressMessages, options) {
       null,
       renderToolResultMessage(result, progressMessages, options),
     ),
+    120,
+  )
+}
+
+function renderPersistedAgentToolResult(toolUseResult) {
+  const toolUseId = 'persisted-agent-tool-use'
+  const normalizedMessages = normalizeMessages([
+    createAssistantMessage({
+      content: [
+        {
+          type: 'tool_use',
+          id: toolUseId,
+          name: 'Agent',
+          input: {
+            description: '测试子代理运行',
+            prompt:
+              '这是一次子代理调用测试。请只返回一句确认你已正常启动的简短中文。',
+            subagent_type: 'general-purpose',
+            model: 'haiku',
+          },
+        },
+      ],
+    }),
+    createUserMessage({
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: toolUseId,
+          content: [
+            {
+              type: 'text',
+              text: '已启动，运行正常。当前任务：仅做状态确认，不改文件不执行副作用命令。',
+            },
+            {
+              type: 'text',
+              text: "agentId: persisted-agent (use SendMessage with to: 'persisted-agent' to continue this agent)",
+            },
+          ],
+        },
+      ],
+      toolUseResult,
+    }),
+  ]).filter(isNotEmptyMessage)
+
+  const userToolResultMessage = normalizedMessages.find(
+    message =>
+      message.type === 'user' && message.message.content[0]?.type === 'tool_result',
+  )
+
+  assert.ok(userToolResultMessage && userToolResultMessage.type === 'user')
+
+  const lookups = buildMessageLookups(normalizedMessages, normalizedMessages)
+
+  return renderToString(
+    React.createElement(UserToolResultMessage, {
+      param: userToolResultMessage.message.content[0],
+      message: userToolResultMessage,
+      lookups,
+      progressMessagesForMessage: getProgressMessagesFromLookup(
+        userToolResultMessage,
+        lookups,
+      ),
+      tools: [AgentTool],
+      verbose: true,
+      width: 120,
+      isTranscriptMode: true,
+    }),
     120,
   )
 }
@@ -170,6 +239,40 @@ test('agent transcript keeps intermediate assistant commentary visible', async (
   assert.match(output, /Response:/)
   assert.match(output, /AGENT_TRANSCRIPT_FINAL_OK/)
 })
+
+test(
+  'agent transcript still shows persisted replies when optional usage fields are omitted',
+  async () => {
+    const output = await renderPersistedAgentToolResult({
+      status: 'completed',
+      agentId: 'persisted-agent',
+      agentType: 'general-purpose',
+      prompt:
+        '这是一次子代理调用测试。请只返回一句确认你已正常启动的简短中文。',
+      content: [
+        {
+          type: 'text',
+          text: '已启动，运行正常。当前任务：仅做状态确认，不改文件不执行副作用命令。',
+        },
+      ],
+      totalDurationMs: 6252,
+      totalTokens: 14987,
+      totalToolUseCount: 0,
+      usage: {
+        input_tokens: 14932,
+        output_tokens: 55,
+        cache_creation_input_tokens: 0,
+        cache_read_input_tokens: 14720,
+      },
+    })
+
+    assert.match(output, /Response:/)
+    assert.match(
+      output,
+      /已启动，运行正常。当前任务：仅做状态确认，不改文件不执行副作用命令。/,
+    )
+  },
+)
 
 test('agent tool_result errors are not filtered out of the message list', () => {
   const toolUseId = 'agent-tool-use-1'

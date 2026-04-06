@@ -4520,9 +4520,18 @@ export function REPL({
     searchBarOpen: searchOpen
   };
 
+  // Bypass useDeferredValue when streaming text is showing so Messages renders
+  // the final message in the same frame streaming text clears. Also bypass when
+  // not loading — deferredMessages only matters during streaming (keeps input
+  // responsive); after the turn ends, showing messages immediately prevents a
+  // jitter gap where the spinner is gone but the answer hasn't appeared yet.
+  // Only reducedMotion users keep the deferred path during loading.
+  const usesSyncMessages = showStreamingText || !isLoading;
+
   // Use frozen lengths to slice arrays, avoiding memory overhead of cloning
   const transcriptQueuedTaskNotifications = frozenTranscriptState ? frozenTranscriptState.queuedTaskNotifications : queuedTranscriptNotifications;
-  const transcriptBaseMessages = frozenTranscriptState ? deferredMessages.slice(0, frozenTranscriptState.messagesLength) : deferredMessages;
+  const transcriptMessageSource = usesSyncMessages ? messages : deferredMessages;
+  const transcriptBaseMessages = frozenTranscriptState ? transcriptMessageSource.slice(0, frozenTranscriptState.messagesLength) : transcriptMessageSource;
   const transcriptMessages = transcriptQueuedTaskNotifications.length > 0 ? [...transcriptBaseMessages, ...transcriptQueuedTaskNotifications] : transcriptBaseMessages;
   const transcriptStreamingToolUses = frozenTranscriptState ? streamingToolUses.slice(0, frozenTranscriptState.streamingToolUsesLength) : streamingToolUses;
 
@@ -4642,13 +4651,6 @@ export function REPL({
   const viewedTeammateTask = viewedTask && isInProcessTeammateTask(viewedTask) ? viewedTask : undefined;
   const viewedAgentTask = viewedTeammateTask ?? (viewedTask && isLocalAgentTask(viewedTask) ? viewedTask : undefined);
 
-  // Bypass useDeferredValue when streaming text is showing so Messages renders
-  // the final message in the same frame streaming text clears. Also bypass when
-  // not loading — deferredMessages only matters during streaming (keeps input
-  // responsive); after the turn ends, showing messages immediately prevents a
-  // jitter gap where the spinner is gone but the answer hasn't appeared yet.
-  // Only reducedMotion users keep the deferred path during loading.
-  const usesSyncMessages = showStreamingText || !isLoading;
   // When viewing an agent, never fall through to leader — empty until
   // bootstrap/stream fills. Closes the see-leader-type-agent footgun.
   const displayedMessages = viewedAgentTask ? viewedAgentTask.messages ?? [] : usesSyncMessages ? messages : deferredMessages;

@@ -224,6 +224,43 @@ export function resolveAgentTools(
   }
 }
 
+const agentToolUsageSchema = z
+  .object({
+    input_tokens: z.number(),
+    output_tokens: z.number(),
+    // Older persisted sessions may omit nullable usage fields entirely when
+    // JSONL serialization drops undefined/null values.
+    cache_creation_input_tokens: z.number().nullable().optional(),
+    cache_read_input_tokens: z.number().nullable().optional(),
+    server_tool_use: z
+      .object({
+        web_search_requests: z.number(),
+        web_fetch_requests: z.number(),
+      })
+      .nullable()
+      .optional(),
+    service_tier: z
+      .enum(['standard', 'priority', 'batch'])
+      .nullable()
+      .optional(),
+    cache_creation: z
+      .object({
+        ephemeral_1h_input_tokens: z.number(),
+        ephemeral_5m_input_tokens: z.number(),
+      })
+      .nullable()
+      .optional(),
+  })
+  .transform(usage => ({
+    input_tokens: usage.input_tokens,
+    output_tokens: usage.output_tokens,
+    cache_creation_input_tokens: usage.cache_creation_input_tokens ?? null,
+    cache_read_input_tokens: usage.cache_read_input_tokens ?? null,
+    server_tool_use: usage.server_tool_use ?? null,
+    service_tier: usage.service_tier ?? null,
+    cache_creation: usage.cache_creation ?? null,
+  }))
+
 export const agentToolResultSchema = lazySchema(() =>
   z.object({
     agentId: z.string(),
@@ -235,25 +272,7 @@ export const agentToolResultSchema = lazySchema(() =>
     totalToolUseCount: z.number(),
     totalDurationMs: z.number(),
     totalTokens: z.number(),
-    usage: z.object({
-      input_tokens: z.number(),
-      output_tokens: z.number(),
-      cache_creation_input_tokens: z.number().nullable(),
-      cache_read_input_tokens: z.number().nullable(),
-      server_tool_use: z
-        .object({
-          web_search_requests: z.number(),
-          web_fetch_requests: z.number(),
-        })
-        .nullable(),
-      service_tier: z.enum(['standard', 'priority', 'batch']).nullable(),
-      cache_creation: z
-        .object({
-          ephemeral_1h_input_tokens: z.number(),
-          ephemeral_5m_input_tokens: z.number(),
-        })
-        .nullable(),
-    }),
+    usage: agentToolUsageSchema,
   }),
 )
 

@@ -32,6 +32,13 @@ export type LayoutDimensions = {
   totalWidth: number
 }
 
+export type RecentActivityPrefetchOptions = {
+  hasReleaseNotes: boolean
+  showOnboarding: boolean
+  forceFullLogo: boolean
+  currentPhaseCustomCodexProvider: boolean
+}
+
 /**
  * Determines the layout mode based on terminal width
  */
@@ -226,6 +233,20 @@ export async function getRecentActivity(): Promise<LogOption[]> {
  */
 export function getRecentActivitySync(): LogOption[] {
   return cachedActivity
+}
+
+export function shouldPrefetchRecentActivityForWelcome({
+  hasReleaseNotes,
+  showOnboarding,
+  forceFullLogo,
+  currentPhaseCustomCodexProvider,
+}: RecentActivityPrefetchOptions): boolean {
+  return (
+    hasReleaseNotes ||
+    showOnboarding ||
+    forceFullLogo ||
+    currentPhaseCustomCodexProvider
+  )
 }
 
 /**
