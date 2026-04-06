@@ -48,6 +48,7 @@ export function renderToolResultMessage(output: Output, _progressMessagesForMess
           <Box flexDirection="column">
             {filePath && <Text dimColor>Plan file: {displayPath}</Text>}
             <Text dimColor>Waiting for team lead to review and approve...</Text>
+            <Markdown>{plan}</Markdown>
           </Box>
         </MessageResponse>
       </Box>;
@@ -55,7 +56,7 @@ export function renderToolResultMessage(output: Output, _progressMessagesForMess
   return <Box flexDirection="column" marginTop={1}>
       <Box flexDirection="row">
         <Text color={getModeColor('plan')}>{BLACK_CIRCLE}</Text>
-        <Text> User approved Claude&apos;s plan</Text>
+        <Text> Plan approved and ready for implementation</Text>
       </Box>
       <MessageResponse>
         <Box flexDirection="column">

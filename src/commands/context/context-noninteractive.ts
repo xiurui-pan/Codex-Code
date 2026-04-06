@@ -109,18 +109,41 @@ export function formatContextAsMarkdownTable(data: ContextData): string {
 
   const visibleMemoryFiles = memoryFiles.filter(file => file.tokens > 0)
   const visibleMcpTools = mcpTools.filter(tool => tool.tokens > 0)
+  const visibleCategories = categories.filter(
+    cat =>
+      cat.tokens > 0 &&
+      cat.name !== 'Free space' &&
+      cat.name !== 'Autocompact buffer',
+  )
+  const topCategories = [...visibleCategories]
+    .filter(cat => !cat.isDeferred && cat.name !== 'Compact buffer')
+    .sort((a, b) => b.tokens - a.tokens)
+    .slice(0, 3)
+  const usageDelta = usageSnapshot
+    ? usageSnapshot.displayTokens - totalTokens
+    : 0
 
   let output = `## Context Usage\n\n`
   output += `**Model:** ${model}  \n`
-  output += `**Tokens:** ${formatTokens(totalTokens)} / ${formatTokens(rawMaxTokens)} (${percentage}%)\n`
+  output += `**Packed prompt estimate:** ${formatTokens(totalTokens)} / ${formatTokens(rawMaxTokens)} (${percentage}%)  \n`
+  output += `**Estimate basis:** categories below sum to this estimate; deferred tools, free space, and reserved compact buffers are shown separately.\n`
   if (usageSnapshot) {
-    output += `**Current input:** ${formatTokens(usageSnapshot.totalInputTokens)}  \n`
-    output += `**Cached input:** ${formatTokens(usageSnapshot.cachedInputTokens)}  \n`
-    output += `**Fresh input:** ${formatTokens(usageSnapshot.uncachedInputTokens)}  \n`
-    output += `**Current output:** ${formatTokens(usageSnapshot.outputTokens)}\n`
+    output += `**Last API snapshot:** ${formatTokens(usageSnapshot.displayTokens)} total  \n`
+    output += `**Snapshot input:** ${formatTokens(usageSnapshot.totalInputTokens)}  \n`
+    output += `**Snapshot cached input:** ${formatTokens(usageSnapshot.cachedInputTokens)}  \n`
+    output += `**Snapshot fresh input:** ${formatTokens(usageSnapshot.uncachedInputTokens)}  \n`
+    output += `**Snapshot output:** ${formatTokens(usageSnapshot.outputTokens)}\n`
     if (usageSnapshot.cachedInputIncludedInTotalInput) {
-      output += `**Note:** Cached input is already included in current input for this provider, so it is not added a second time.\n`
+      output += `**Cache note:** Cached input is already included in snapshot input for this provider, so it is not added a second time.\n`
     }
+    if (usageDelta !== 0) {
+      const direction = usageDelta > 0 ? 'higher' : 'lower'
+      output += `**Estimate vs snapshot:** ${formatTokens(Math.abs(usageDelta))} ${direction}. This usually comes from provider-side usage accounting, cache handling, and tokenizer drift between the local estimate and the last server-reported request.\n`
+    }
+  }
+  if (topCategories.length > 0) {
+    output += `**Largest contributors:** ${topCategories.map(cat => `${cat.name} ${formatTokens(cat.tokens)}`).join(', ')}.\n`
+    output += `**Why usage can feel high:** message history includes prior assistant text, tool-call JSON, tool results, and attachments; system prompt, tools, memory files, agents, and skills are added on top.\n`
   }
 
   // Context-collapse status. Always show when the runtime gate is on —
@@ -164,13 +187,6 @@ export function formatContextAsMarkdownTable(data: ContextData): string {
   output += '\n'
 
   // Main categories table
-  const visibleCategories = categories.filter(
-    cat =>
-      cat.tokens > 0 &&
-      cat.name !== 'Free space' &&
-      cat.name !== 'Autocompact buffer',
-  )
-
   if (visibleCategories.length > 0) {
     output += `### Estimated usage by category\n\n`
     output += `| Category | Tokens | Percentage |\n`
@@ -304,9 +320,9 @@ export function formatContextAsMarkdownTable(data: ContextData): string {
     output += `\n`
   }
 
-  // Message breakdown (ant-only)
-  if (messageBreakdown && process.env.USER_TYPE === 'ant') {
-    output += `### [ANT-ONLY] Message Breakdown\n\n`
+  // Message breakdown
+  if (messageBreakdown) {
+    output += `### Message Breakdown\n\n`
     output += `| Category | Tokens |\n`
     output += `|----------|--------|\n`
     output += `| Tool calls | ${formatTokens(messageBreakdown.toolCallTokens)} |\n`
@@ -314,6 +330,7 @@ export function formatContextAsMarkdownTable(data: ContextData): string {
     output += `| Attachments | ${formatTokens(messageBreakdown.attachmentTokens)} |\n`
     output += `| Assistant messages (non-tool) | ${formatTokens(messageBreakdown.assistantMessageTokens)} |\n`
     output += `| User messages (non-tool-result) | ${formatTokens(messageBreakdown.userMessageTokens)} |\n`
+    output += `| Total message payload | ${formatTokens(messageBreakdown.toolCallTokens + messageBreakdown.toolResultTokens + messageBreakdown.attachmentTokens + messageBreakdown.assistantMessageTokens + messageBreakdown.userMessageTokens)} |\n`
     output += `\n`
 
     if (messageBreakdown.toolCallsByType.length > 0) {

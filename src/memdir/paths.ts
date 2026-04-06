@@ -1,5 +1,4 @@
 import memoize from 'lodash-es/memoize.js'
-import { createRequire } from 'node:module'
 import { homedir } from 'os'
 import { isAbsolute, join, normalize, sep } from 'path'
 import {
@@ -7,6 +6,7 @@ import {
   getProjectRoot,
 } from '../bootstrap/state.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../services/analytics/growthbook.js'
+import { findCanonicalGitRoot } from '../utils/git.js'
 import {
   getClaudeConfigHomeDir,
   isEnvDefinedFalsy,
@@ -17,8 +17,6 @@ import {
   getInitialSettings,
   getSettingsForSource,
 } from '../utils/settings/settings.js'
-
-const require = createRequire(import.meta.url)
 
 function isCodexOnlyMemoryMode(): boolean {
   return process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
@@ -222,7 +220,6 @@ export function hasAutoMemPathOverride(): boolean {
  * same repo share one auto-memory directory (anthropics/claude-code#24382).
  */
 function getAutoMemBase(): string {
-  const { findCanonicalGitRoot } = require('../utils/git.js') as typeof import('../utils/git.js')
   return findCanonicalGitRoot(getProjectRoot()) ?? getProjectRoot()
 }
 

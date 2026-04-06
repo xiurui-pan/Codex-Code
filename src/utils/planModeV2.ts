@@ -1,6 +1,5 @@
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../services/analytics/growthbook.js'
 import { getRateLimitTier, getSubscriptionType } from './auth.js'
-import { isCurrentPhaseCustomCodexProvider } from './currentPhase.js'
 import { isEnvDefinedFalsy, isEnvTruthy } from './envUtils.js'
 
 export function getPlanModeV2AgentCount(): number {
@@ -51,12 +50,6 @@ export function getPlanModeV2ExploreAgentCount(): number {
 export function isPlanModeInterviewPhaseEnabled(): boolean {
   // Always on for ants
   if (process.env.USER_TYPE === 'ant') return true
-
-  // Custom Codex provider sessions already use the conservative plan-entry
-  // prompt branch. Keep the follow-up workflow aligned so plan mode stays
-  // iterative in the main session instead of forcing Explore/Plan agents
-  // that will re-read the same files.
-  if (isCurrentPhaseCustomCodexProvider()) return true
 
   const env = process.env.CODEX_CODE_PLAN_MODE_INTERVIEW_PHASE
   if (isEnvTruthy(env)) return true

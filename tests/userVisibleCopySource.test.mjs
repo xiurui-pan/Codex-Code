@@ -62,6 +62,11 @@ test('plugin and installer copy no longer points users at Claude-only commands',
     `${ROOT}/commands/createMovedToPluginCommand.ts`,
     'utf8',
   )
+  const mcpHandlerSource = await readFile(`${ROOT}/cli/handlers/mcp.tsx`, 'utf8')
+  const mcpAddSource = await readFile(
+    `${ROOT}/commands/mcp/addCommand.ts`,
+    'utf8',
+  )
 
   assert.match(pluginSource, /Use `\/plugin install` to install a plugin/)
   assert.doesNotMatch(pluginSource, /claude plugin install/)
@@ -84,6 +89,14 @@ test('plugin and installer copy no longer points users at Claude-only commands',
   assert.doesNotMatch(initReplBridgeSource, /run `claude update` to upgrade/)
   assert.match(movedCommandSource, /\/plugin install .*@claude-plugins-official/)
   assert.doesNotMatch(movedCommandSource, /claude plugin install/)
+
+  assert.match(mcpHandlerSource, /codex-code mcp add/)
+  assert.match(mcpHandlerSource, /codex-code mcp remove/)
+  assert.doesNotMatch(mcpHandlerSource, /claude mcp/)
+
+  assert.match(mcpAddSource, /codex-code mcp add/)
+  assert.match(mcpAddSource, /codex-code mcp xaa setup/)
+  assert.doesNotMatch(mcpAddSource, /claude mcp/)
 })
 
 test('tui helper copy uses Codex Code wording in MCP, IDE, and attribution output', async () => {
@@ -126,6 +139,8 @@ test('main help and session copy use Codex-facing wording', async () => {
   assert.match(oauthSource, /restart Codex Code/)
   assert.match(oauthSource, /Creating API key for Codex Code/)
   assert.doesNotMatch(oauthSource, /Claude Code login successful/)
+  assert.doesNotMatch(oauthSource, /Claude account/)
+  assert.doesNotMatch(oauthSource, /Anthropic Console/)
 
   assert.match(resumeSource, /Loading Codex Code sessions…/)
   assert.match(resumeSource, /Error loading Codex Code sessions/)
@@ -149,6 +164,14 @@ test('secondary TUI copy no longer tells users to ask Claude', async () => {
     `${ROOT}/components/hooks/HooksConfigMenu.tsx`,
     'utf8',
   )
+  const autoModeSource = await readFile(
+    `${ROOT}/components/AutoModeOptInDialog.tsx`,
+    'utf8',
+  )
+  const settingsConfigSource = await readFile(
+    `${ROOT}/components/Settings/Config.tsx`,
+    'utf8',
+  )
 
   assert.match(interruptSource, /What should Codex Code do instead\?/)
   assert.doesNotMatch(interruptSource, /What should Claude do instead\?/)
@@ -160,6 +183,67 @@ test('secondary TUI copy no longer tells users to ask Claude', async () => {
   assert.match(matcherModeSource, /ask Codex Code\./)
   assert.match(hookModeSource, /ask Codex Code\./)
   assert.match(hooksMenuSource, /ask Codex Code\./)
+  assert.match(autoModeSource, /Auto mode lets Codex Code handle permission prompts/)
+  assert.doesNotMatch(autoModeSource, /Claude checks each tool call/)
+  assert.match(settingsConfigSource, /Push when Codex Code decides/)
+  assert.doesNotMatch(settingsConfigSource, /Push when Claude decides/)
+})
+
+test('project onboarding copy points to Codex Code rather than Claude', async () => {
+  const onboardingSource = await readFile(`${ROOT}/projectOnboardingState.ts`, 'utf8')
+
+  assert.match(onboardingSource, /Ask Codex Code to create a new app or clone a repository/)
+  assert.match(
+    onboardingSource,
+    /Run \/init to create a CLAUDE\.md file with instructions for Codex Code/,
+  )
+  assert.doesNotMatch(onboardingSource, /Ask Claude to create a new app or clone a repository/)
+  assert.doesNotMatch(
+    onboardingSource,
+    /Run \/init to create a CLAUDE\.md file with instructions for Claude/,
+  )
+})
+
+test('remaining visible help and warning copy avoid Claude-branded links and command names', async () => {
+  const claudeMdDialogSource = await readFile(
+    `${ROOT}/components/ClaudeMdExternalIncludesDialog.tsx`,
+    'utf8',
+  )
+  const hookEventSource = await readFile(
+    `${ROOT}/components/hooks/SelectEventMode.tsx`,
+    'utf8',
+  )
+  const sandboxOverridesSource = await readFile(
+    `${ROOT}/components/sandbox/SandboxOverridesTab.tsx`,
+    'utf8',
+  )
+  const sandboxSettingsSource = await readFile(
+    `${ROOT}/components/sandbox/SandboxSettings.tsx`,
+    'utf8',
+  )
+  const teleportMismatchSource = await readFile(
+    `${ROOT}/components/TeleportRepoMismatchDialog.tsx`,
+    'utf8',
+  )
+  const assistantMessageSource = await readFile(
+    `${ROOT}/components/messages/AssistantTextMessage.tsx`,
+    'utf8',
+  )
+
+  assert.doesNotMatch(claudeMdDialogSource, /code\.claude\.com/)
+  assert.doesNotMatch(hookEventSource, /code\.claude\.com/)
+  assert.match(hookEventSource, /ask Codex Code\./)
+
+  assert.match(sandboxOverridesSource, /Codex Code can retry/)
+  assert.doesNotMatch(sandboxOverridesSource, /Claude can retry/)
+  assert.doesNotMatch(sandboxOverridesSource, /code\.claude\.com/)
+  assert.doesNotMatch(sandboxSettingsSource, /code\.claude\.com/)
+
+  assert.match(teleportMismatchSource, /Run codex-code --teleport/)
+  assert.doesNotMatch(teleportMismatchSource, /Run claude --teleport/)
+
+  assert.doesNotMatch(assistantMessageSource, /platform\.claude\.com/)
+  assert.match(assistantMessageSource, /Add funds in your billing settings/)
 })
 
 test('tips, status notices, and chrome startup copy avoid stale Claude wording in Codex mode', async () => {

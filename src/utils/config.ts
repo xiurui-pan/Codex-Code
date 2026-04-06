@@ -23,6 +23,7 @@ import { getClaudeConfigHomeDir, isEnvTruthy } from './envUtils.js'
 import { ConfigParseError, getErrnoCode } from './errors.js'
 import { writeFileSyncAndFlush_DEPRECATED } from './file.js'
 import { getFsImplementation } from './fsOperations.js'
+import { findCanonicalGitRoot } from './git.js'
 import { safeParseJSON } from './json.js'
 import { stripBOM } from './jsonRead.js'
 import * as lockfile from './lockfile.js'
@@ -1654,7 +1655,6 @@ export const getProjectPathForConfig = memoize((): string => {
   if (currentStageDisableGitAwareConfig) {
     return normalizePathForConfigKey(resolve(originalCwd))
   }
-  const { findCanonicalGitRoot } = require('./git.js') as typeof import('./git.js')
   const gitRoot = findCanonicalGitRoot(originalCwd)
 
   if (gitRoot) {

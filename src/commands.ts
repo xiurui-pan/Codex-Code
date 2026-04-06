@@ -10,6 +10,7 @@ import clear from './commands/clear/index.js'
 import color from './commands/color/index.js'
 import commit from './commands/commit.js'
 import copy from './commands/copy/index.js'
+import cost from './commands/cost/index.js'
 import desktop from './commands/desktop/index.js'
 import commitPushPr from './commands/commit-push-pr.js'
 import compact from './commands/compact/index.js'
@@ -65,14 +66,6 @@ const clearPluginSkillsCache = currentStageDisableClaudePluginCommands
   : (() => {
       getPluginCommandsModule().clearPluginSkillsCache()
     })
-const isUsing3PServices = currentStageDisableClaudePluginCommands
-  ? (() => true)
-  : (require('./utils/auth.js') as typeof import('./utils/auth.js'))
-      .isUsing3PServices
-const isClaudeAISubscriber = currentStageDisableClaudePluginCommands
-  ? (() => false)
-  : (require('./utils/auth.js') as typeof import('./utils/auth.js'))
-      .isClaudeAISubscriber
 const agentsPlatform =
   process.env.USER_TYPE === 'ant'
     ? require('./commands/agents-platform/index.js').default
@@ -104,6 +97,7 @@ const disabledClaudeBusinessCommandNames = new Set([
   'remote-env',
   'stickers',
   'statusline',
+  'teleport',
   'think-back',
   'think-back-play',
   'upgrade',
@@ -147,10 +141,6 @@ const getRateLimitOptionsCommand = currentStageDisableClaudeProductCommands
   : (() =>
       (
         require('./commands/rate-limit-options/index.js') as typeof import('./commands/rate-limit-options/index.js')
-      ).default)
-const getCostCommand = (() =>
-      (
-        require('./commands/cost/index.js') as typeof import('./commands/cost/index.js')
       ).default)
 /* eslint-enable @typescript-eslint/no-require-imports */
 import securityReview from './commands/security-review.js'
@@ -265,6 +255,10 @@ import {
 import { getBundledSkills } from './skills/bundledSkills.js'
 import { getBuiltinPluginSkillCommands } from './plugins/builtinPlugins.js'
 import memoize from 'lodash-es/memoize.js'
+import {
+  isClaudeAISubscriber as isClaudeAISubscriberFromAuth,
+  isUsing3PServices as isUsing3PServicesFromAuth,
+} from './utils/auth.js'
 import { isFirstPartyAnthropicBaseUrl } from './utils/model/providers.js'
 import env from './commands/env/index.js'
 import exit from './commands/exit/index.js'
@@ -298,6 +292,12 @@ import {
   getCommandName,
   isCommandEnabled,
 } from './types/command.js'
+
+const isUsing3PServices = (): boolean =>
+  currentStageDisableClaudePluginCommands ? true : isUsing3PServicesFromAuth()
+
+const isClaudeAISubscriber = (): boolean =>
+  currentStageDisableClaudePluginCommands ? false : isClaudeAISubscriberFromAuth()
 
 // Re-export types from the centralized location
 export type {
@@ -436,7 +436,7 @@ const COMMANDS = memoize((): Command[] =>
     ...(process.env.USER_TYPE === 'ant' && !process.env.IS_DEMO
       ? INTERNAL_ONLY_COMMANDS
       : []),
-    ...(getCostCommand() ? [getCostCommand()!] : []), // Show session cost (local cost tracking)
+    cost, // Show session cost (local cost tracking)
   ].filter(
     command =>
       !currentStageDisableClaudeProductCommands ||
@@ -727,7 +727,7 @@ export const REMOTE_SAFE_COMMANDS: Set<Command> = new Set(
     theme, // Change terminal theme
     color, // Change agent color
     vim, // Toggle vim mode
-    ...(getCostCommand() ? [getCostCommand()!] : []), // Show session cost (local cost tracking)
+    cost, // Show session cost (local cost tracking)
     usage, // Show usage info
     copy, // Copy last message
     btw, // Quick note
@@ -756,7 +756,7 @@ export const BRIDGE_SAFE_COMMANDS: Set<Command> = new Set(
   [
     compact, // Shrink context — useful mid-session from a phone
     clear, // Wipe transcript
-    ...(getCostCommand() ? [getCostCommand()!] : []), // Show session cost
+    cost, // Show session cost
     summary, // Summarize conversation
     releaseNotes, // Show changelog
     files, // List tracked files

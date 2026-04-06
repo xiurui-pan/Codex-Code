@@ -139,7 +139,9 @@ async function withResponsesServer(run) {
 
 async function writeCodexConfig(homeDir, port) {
   const codexDir = join(homeDir, '.codex')
+  const claudeDir = join(homeDir, '.claude')
   await mkdir(codexDir, { recursive: true })
+  await mkdir(claudeDir, { recursive: true })
   await writeFile(
     join(codexDir, 'config.toml'),
     [
@@ -171,21 +173,22 @@ actions = json.loads(actions_json)
 master, slave = pty.openpty()
 env = os.environ.copy()
 env["HOME"] = temp_home
+env["CLAUDE_CONFIG_DIR"] = os.path.join(temp_home, ".claude")
 env["ANTHROPIC_API_KEY"] = "test-key"
 env["TERM"] = "xterm-256color"
 env["CODEX_CODE_DISABLE_TERMINAL_TITLE"] = "1"
 env["FORCE_COLOR"] = "0"
 env["DISABLE_AUTOUPDATER"] = "1"
-proc = subprocess.Popen(
-    ["node", cli_bin, "--dangerously-skip-permissions"],
-    cwd=cwd,
-    env=env,
-    stdin=slave,
-    stdout=slave,
-    stderr=slave,
-    close_fds=True,
-)
-os.close(slave)
+env["CODEX_CODE_DISABLE_BROWSER"] = "1"
+env["CODEX_CODE_DISABLE_SESSION_DATA_UPLOAD"] = "1"
+pid, master = pty.fork()
+if pid == 0:
+    os.chdir(cwd)
+    os.execvpe(
+        "node",
+        ["node", cli_bin, "--dangerously-skip-permissions"],
+        env,
+    )
 ansi_re = re.compile(r"\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\].*?(?:\x07|\x1b\\)")
 buffer = b""
 clean = ""
@@ -194,8 +197,6 @@ sent = []
 timeout_at = time.time() + 90
 
 while time.time() < timeout_at:
-    if proc.poll() is not None:
-        break
     ready, _, _ = select.select([master], [], [], 0.1)
     if ready:
         try:
@@ -219,17 +220,35 @@ while time.time() < timeout_at:
             if len(sent) == len(actions):
                 timeout_at = time.time() + 2.5
 
-if proc.poll() is None:
-    proc.send_signal(signal.SIGTERM)
+try:
+    pid_done, status = os.waitpid(pid, os.WNOHANG)
+except ChildProcessError:
+    pid_done, status = pid, 0
+
+if pid_done == 0:
+    os.kill(pid, signal.SIGTERM)
     try:
-        proc.wait(timeout=5)
-    except subprocess.TimeoutExpired:
-        proc.kill()
-        proc.wait(timeout=5)
+        limit = time.time() + 5
+        while time.time() < limit:
+            pid_done, status = os.waitpid(pid, os.WNOHANG)
+            if pid_done != 0:
+                break
+            time.sleep(0.1)
+        else:
+            os.kill(pid, signal.SIGKILL)
+            pid_done, status = os.waitpid(pid, 0)
+    except ChildProcessError:
+        pid_done, status = pid, 0
 
 clean = ansi_re.sub("", buffer.decode("utf-8", "ignore"))
+if os.WIFEXITED(status):
+    code = os.WEXITSTATUS(status)
+elif os.WIFSIGNALED(status):
+    code = -os.WTERMSIG(status)
+else:
+    code = None
 print(json.dumps({
-    "code": proc.returncode,
+    "code": code,
     "sent": sent,
     "cleanedTranscript": clean,
     "normalizedTranscript": re.sub(r"\s+", "", clean),

@@ -354,8 +354,8 @@ export function getOpus46PricingSuffix(fastMode: boolean): string {
 export function isOpus1mMergeEnabled(): boolean {
   if (
     is1mContextDisabled() ||
-    isProSubscriber() ||
-    getAPIProvider() !== 'firstParty'
+    getAPIProvider() !== 'firstParty' ||
+    isProSubscriber()
   ) {
     return false
   }

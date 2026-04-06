@@ -2,7 +2,7 @@
 
 [English](./README.md) | [简体中文](./README.zh-CN.md) | [日本語](./README.ja.md)
 
-Codex Code is a local coding agent for the terminal, built to preserve as much of the original Claude Code experience as possible while switching the model path to Codex / OpenAI Responses.
+Codex Code is a local coding agent for the terminal, built to preserve as much of the original Claude Code harness and interaction experience as possible while switching the model path to Codex / OpenAI Responses.
 
 The goal is simple: keep the proven local experience, replace the model runtime.
 That means the terminal harness, TUI structure, transcript view, tool invocation flow, permission loop, session resume, compaction, plan mode, and agent workflow stay familiar instead of being reinvented.
@@ -123,6 +123,17 @@ codex-code --help
 codex-code --version
 codex-code -p "Summarize this repository"
 ```
+
+## Troubleshooting
+
+- `codex-code: command not found`
+  - `pnpm install:local` installs the launcher to `~/.local/bin/codex-code` by default.
+  - Make sure `~/.local/bin` is on your `PATH`, then restart your shell or run `source ~/.zshrc`.
+- `node dist/cli.js` or `codex-code` fails after a local rebuild
+  - Re-run `pnpm build` first, then retry.
+  - If you replaced an existing launcher, also re-run `pnpm install:local --force`.
+- You want to verify the local launcher is wired correctly
+  - Run `codex-code --version` and `codex-code --help`.
 
 ## Build And Test
 

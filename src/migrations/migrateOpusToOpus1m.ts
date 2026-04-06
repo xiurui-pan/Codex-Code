@@ -22,12 +22,12 @@ import {
  * Idempotent: only writes if userSettings.model is exactly 'opus'.
  */
 export function migrateOpusToOpus1m(): void {
-  if (!isOpus1mMergeEnabled()) {
+  const model = getSettingsForSource('userSettings')?.model
+  if (model !== 'opus') {
     return
   }
 
-  const model = getSettingsForSource('userSettings')?.model
-  if (model !== 'opus') {
+  if (!isOpus1mMergeEnabled()) {
     return
   }
 

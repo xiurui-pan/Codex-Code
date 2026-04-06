@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
+import { closeSync, openSync } from 'node:fs'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -9,6 +10,7 @@ import { projectRoot } from './helpers/projectRoot.mjs'
 
 function makeEnv(overrides = {}) {
   const env = { ...process.env }
+  delete env.NODE_TEST_CONTEXT
   for (const [key, value] of Object.entries(overrides)) {
     if (value === undefined) {
       delete env[key]
@@ -20,48 +22,54 @@ function makeEnv(overrides = {}) {
 }
 
 async function run(command, args, envOverrides = {}) {
+  const tempDir = await mkdtemp(join(tmpdir(), 'codex-install-run-'))
+  const stdoutPath = join(tempDir, 'stdout.txt')
+  const stderrPath = join(tempDir, 'stderr.txt')
+  const stdoutFd = openSync(stdoutPath, 'w')
+  const stderrFd = openSync(stderrPath, 'w')
   const child = spawn(command, args, {
     cwd: projectRoot,
     env: makeEnv(envOverrides),
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', stdoutFd, stderrFd],
   })
-
-  let stdout = ''
-  let stderr = ''
-  child.stdout.setEncoding('utf8')
-  child.stderr.setEncoding('utf8')
-  child.stdout.on('data', chunk => {
-    stdout += chunk
-  })
-  child.stderr.on('data', chunk => {
-    stderr += chunk
-  })
-
-  const [code] = await once(child, 'close')
-  assert.equal(code, 0, stderr || `child exited with ${code}`)
-  return { stdout, stderr }
+  try {
+    const [code] = await once(child, 'close')
+    const [stdout, stderr] = await Promise.all([
+      readFile(stdoutPath, 'utf8'),
+      readFile(stderrPath, 'utf8'),
+    ])
+    assert.equal(code, 0, stderr || `child exited with ${code}`)
+    return { stdout, stderr }
+  } finally {
+    closeSync(stdoutFd)
+    closeSync(stderrFd)
+    await rm(tempDir, { recursive: true, force: true })
+  }
 }
 
 async function runAllowFailure(command, args, envOverrides = {}) {
+  const tempDir = await mkdtemp(join(tmpdir(), 'codex-install-run-'))
+  const stdoutPath = join(tempDir, 'stdout.txt')
+  const stderrPath = join(tempDir, 'stderr.txt')
+  const stdoutFd = openSync(stdoutPath, 'w')
+  const stderrFd = openSync(stderrPath, 'w')
   const child = spawn(command, args, {
     cwd: projectRoot,
     env: makeEnv(envOverrides),
-    stdio: ['ignore', 'pipe', 'pipe'],
+    stdio: ['ignore', stdoutFd, stderrFd],
   })
-
-  let stdout = ''
-  let stderr = ''
-  child.stdout.setEncoding('utf8')
-  child.stderr.setEncoding('utf8')
-  child.stdout.on('data', chunk => {
-    stdout += chunk
-  })
-  child.stderr.on('data', chunk => {
-    stderr += chunk
-  })
-
-  const [code] = await once(child, 'close')
-  return { code, stdout, stderr }
+  try {
+    const [code] = await once(child, 'close')
+    const [stdout, stderr] = await Promise.all([
+      readFile(stdoutPath, 'utf8'),
+      readFile(stderrPath, 'utf8'),
+    ])
+    return { code, stdout, stderr }
+  } finally {
+    closeSync(stdoutFd)
+    closeSync(stderrFd)
+    await rm(tempDir, { recursive: true, force: true })
+  }
 }
 
 test('install-local script creates a codex-code launcher that starts the CLI', async () => {

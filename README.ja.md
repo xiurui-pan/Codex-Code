@@ -3,7 +3,7 @@
 [English](./README.md) | [简体中文](./README.zh-CN.md) | [日本語](./README.ja.md)
 
 Codex Code は、ターミナルで動くローカルのコーディングエージェントです。
-このプロジェクトの狙いは、モデル実行の主経路を Codex / OpenAI Responses に切り替えつつ、元の Claude Code で評価されていたローカル体験をできるだけそのまま残すことです。
+このプロジェクトの狙いは、モデル実行の主経路を Codex / OpenAI Responses に切り替えつつ、元の Claude Code で評価されていたローカル体験とハーネスをできるだけそのまま残すことです。
 
 つまり残したいのは名前ではなく体験です。
 端末の実行環境、TUI の構成、会話記録表示、ツール呼び出し、権限確認、セッション再開、コンパクト、計画モード、サブエージェントのやり取りまで、実際の操作感を崩さないことを重視しています。
@@ -124,6 +124,18 @@ codex-code --help
 codex-code --version
 codex-code -p "Summarize this repository"
 ```
+
+## トラブルシュート
+
+- `codex-code: command not found` と出る
+  - `pnpm install:local` は標準で `~/.local/bin/codex-code` にランチャーを入れます
+  - `~/.local/bin` を `PATH` に追加し、shell を開き直すか `source ~/.zshrc` を実行してください
+- ローカル再ビルド後に `node dist/cli.js` や `codex-code` が起動しない
+  - まず `pnpm build` をやり直してください
+  - 古いローカルランチャーを上書きした場合は `pnpm install:local --force` も再実行してください
+- ローカルランチャーが正しくつながっているか確認したい
+  - `codex-code --version`
+  - `codex-code --help`
 
 ## ビルドとテスト
 

@@ -58,6 +58,11 @@ let telemetryInitialized = false
 export const init = memoize(async (): Promise<void> => {
   const initStartTime = Date.now()
   const currentPhaseCustomCodexProvider = isCurrentPhaseCustomCodexProvider()
+  const writeInitProbe = (message: string): void => {
+    if (process.argv.includes('--debug-to-stderr')) {
+      process.stderr.write(`[INIT_PROBE] ${message}\n`)
+    }
+  }
   logForDiagnosticsNoPII('info', 'init_started')
   profileCheckpoint('init_function_start')
 
@@ -155,6 +160,7 @@ export const init = memoize(async (): Promise<void> => {
     })
     logForDebugging('[init] configureGlobalAgents complete')
     profileCheckpoint('init_network_configured')
+    writeInitProbe('after-network-configured')
 
     // Preconnect to the Anthropic API — overlap TCP+TLS handshake
     // (~100-200ms) with the ~100ms of action-handler work before the API
@@ -192,6 +198,7 @@ export const init = memoize(async (): Promise<void> => {
 
     // Set up git-bash if relevant
     setShellIfWindows()
+    writeInitProbe('after-setShellIfWindows')
 
     // Register LSP manager cleanup (initialization happens in main.tsx after --plugin-dir is processed)
     registerCleanup(shutdownLspServerManager)
@@ -206,8 +213,10 @@ export const init = memoize(async (): Promise<void> => {
       )
       await cleanupSessionTeams()
     })
+    writeInitProbe('after-register-cleanup')
 
     // Initialize scratchpad directory if enabled
+    writeInitProbe(`before-scratchpad enabled=${isScratchpadEnabled() ? '1' : '0'}`)
     if (isScratchpadEnabled()) {
       const scratchpadStart = Date.now()
       await ensureScratchpadDir()
@@ -215,11 +224,13 @@ export const init = memoize(async (): Promise<void> => {
         duration_ms: Date.now() - scratchpadStart,
       })
     }
+    writeInitProbe('after-scratchpad')
 
     logForDiagnosticsNoPII('info', 'init_completed', {
       duration_ms: Date.now() - initStartTime,
     })
     profileCheckpoint('init_function_end')
+    writeInitProbe('end')
   } catch (error) {
     if (error instanceof ConfigParseError) {
       // Skip the interactive Ink dialog when we can't safely render it.

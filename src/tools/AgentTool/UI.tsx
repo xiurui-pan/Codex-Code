@@ -22,7 +22,7 @@ import { count } from '../../utils/array.js';
 import { getSearchOrReadFromContent, getSearchReadSummaryText } from '../../utils/collapseReadSearch.js';
 import { getDisplayPath } from '../../utils/file.js';
 import { formatDuration, formatNumber } from '../../utils/format.js';
-import { buildSubagentLookups, createAssistantMessage, EMPTY_LOOKUPS } from '../../utils/messages.js';
+import { buildSubagentLookups, CANCEL_MESSAGE, createAssistantMessage, EMPTY_LOOKUPS, INTERRUPT_MESSAGE_FOR_TOOL_USE, REJECT_MESSAGE } from '../../utils/messages.js';
 import type { ModelAlias } from '../../utils/model/aliases.js';
 import { getMainLoopModel, parseUserSpecifiedModel, renderModelName } from '../../utils/model/model.js';
 import type { Theme, ThemeName } from '../../utils/theme.js';
@@ -290,7 +290,7 @@ function VerboseAgentTranscript(t0) {
     const filteredMessages = progressMessages.filter(_temp4);
     let t3;
     if ($[8] !== agentLookups || $[9] !== inProgressToolUseIDs || $[10] !== tools || $[11] !== verbose) {
-      t3 = progressMessage => <MessageResponse key={progressMessage.uuid} height={1}><MessageComponent message={progressMessage.data.message} lookups={agentLookups} addMargin={false} tools={tools} commands={[]} verbose={verbose} inProgressToolUseIDs={inProgressToolUseIDs} progressMessagesForMessage={[]} shouldAnimate={false} shouldShowDot={false} isTranscriptMode={true} isStatic={true} /></MessageResponse>;
+      t3 = progressMessage => <MessageResponse key={progressMessage.uuid}><MessageComponent message={progressMessage.data.message} lookups={agentLookups} addMargin={false} tools={tools} commands={[]} verbose={verbose} inProgressToolUseIDs={inProgressToolUseIDs} progressMessagesForMessage={[]} shouldAnimate={false} shouldShowDot={false} isTranscriptMode={true} isStatic={true} /></MessageResponse>;
       $[8] = agentLookups;
       $[9] = inProgressToolUseIDs;
       $[10] = tools;
@@ -325,6 +325,17 @@ function _temp4(pm_1) {
   }
   const msg = pm_1.data.message;
   if (msg.type === "user" && msg.toolUseResult === undefined) {
+    const block = msg.message.content[0];
+    if (block?.type === 'tool_result') {
+      if (block.is_error) {
+        return true;
+      }
+      if (typeof block.content === 'string') {
+        if (block.content.startsWith(CANCEL_MESSAGE) || block.content.startsWith(REJECT_MESSAGE) || block.content === INTERRUPT_MESSAGE_FOR_TOOL_USE) {
+          return true;
+        }
+      }
+    }
     return false;
   }
   return true;
@@ -412,7 +423,7 @@ export function renderToolResultMessage(data: Output, progressMessagesForMessage
     content,
     prompt
   } = data;
-  const transcriptResponseContent = isTranscriptMode && content.length === 0 ? getResponseContentFromProgressMessages(progressMessagesForMessage) : content;
+  const responseContent = content.length > 0 ? content : getResponseContentFromProgressMessages(progressMessagesForMessage);
   const result = [totalToolUseCount === 1 ? '1 tool use' : `${totalToolUseCount} tool uses`, formatNumber(totalTokens) + ' tokens', formatDuration(totalDurationMs)];
   const completionMessage = `Done (${result.join(' · ')})`;
   const finalAssistantMessage = createAssistantMessage({
@@ -436,8 +447,11 @@ export function renderToolResultMessage(data: Output, progressMessagesForMessage
       {isTranscriptMode ? <SubAgentProvider>
           <VerboseAgentTranscript progressMessages={progressMessagesForMessage} tools={tools} verbose={verbose} />
         </SubAgentProvider> : null}
-      {isTranscriptMode && transcriptResponseContent.length > 0 && <MessageResponse>
-          <AgentResponseDisplay content={transcriptResponseContent} theme={theme} />
+      {isTranscriptMode && responseContent.length > 0 && <MessageResponse>
+          <AgentResponseDisplay content={responseContent} theme={theme} />
+        </MessageResponse>}
+      {!isTranscriptMode && responseContent.length > 0 && <MessageResponse>
+          <AgentResponseDisplay content={responseContent} theme={theme} />
         </MessageResponse>}
       <MessageResponse height={1}>
         <MessageComponent message={finalAssistantMessage} lookups={EMPTY_LOOKUPS} addMargin={false} tools={tools} commands={[]} verbose={verbose} inProgressToolUseIDs={new Set()} progressMessagesForMessage={[]} shouldAnimate={false} shouldShowDot={false} isTranscriptMode={false} isStatic={true} />

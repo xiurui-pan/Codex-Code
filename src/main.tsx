@@ -54,6 +54,7 @@ import {
   isCurrentPhaseCustomCodexProvider,
 } from './utils/currentPhase.js';
 import { seedEarlyInput, stopCapturingEarlyInput } from './utils/earlyInput.js';
+import { getInitialEffortSetting, parseEffortValue } from './utils/effort.js';
 import { applyConfigEnvironmentVariables } from './utils/managedEnv.js';
 import { createSystemMessage, createUserMessage } from './utils/messages.js';
 import { getPlatform } from './utils/platform.js';
@@ -63,6 +64,13 @@ import { settingsChangeDetector } from './utils/settings/changeDetector.js';
 import { skillChangeDetector } from './utils/skills/skillChangeDetector.js';
 import { jsonParse, writeFileSync_DEPRECATED } from './utils/slowOperations.js';
 import { computeInitialTeamContext } from './utils/swarm/reconnection.js';
+import {
+  canUserConfigureAdvisor as canUserConfigureAdvisorFromAdvisor,
+  getInitialAdvisorSetting as getInitialAdvisorSettingFromAdvisor,
+  isAdvisorEnabled as isAdvisorEnabledFromAdvisor,
+  isValidAdvisorModel as isValidAdvisorModelFromAdvisor,
+  modelSupportsAdvisor as modelSupportsAdvisorFromAdvisor,
+} from './utils/advisor.js';
 import { initializeWarningHandler } from './utils/warningHandler.js';
 import { isWorktreeModeEnabled } from './utils/worktreeModeEnabled.js';
 
@@ -79,17 +87,23 @@ const coordinatorModeModule = feature('COORDINATOR_MODE') ? require('./coordinat
 import { relative, resolve } from 'path';
 const require = createRequire(import.meta.url);
 const currentPhaseDisableLegacyStartupModules = isCurrentPhaseCustomCodexProvider();
-const getAdvisorModule = () => require('./utils/advisor.js') as typeof import('./utils/advisor.js');
-const canUserConfigureAdvisor = (...args: Parameters<typeof import('./utils/advisor.js')['canUserConfigureAdvisor']>) => currentPhaseDisableLegacyStartupModules ? false : getAdvisorModule().canUserConfigureAdvisor(...args);
-const getInitialAdvisorSetting = (...args: Parameters<typeof import('./utils/advisor.js')['getInitialAdvisorSetting']>) => currentPhaseDisableLegacyStartupModules ? undefined : getAdvisorModule().getInitialAdvisorSetting(...args);
-const isAdvisorEnabled = (...args: Parameters<typeof import('./utils/advisor.js')['isAdvisorEnabled']>) => currentPhaseDisableLegacyStartupModules ? false : getAdvisorModule().isAdvisorEnabled(...args);
-const isValidAdvisorModel = (...args: Parameters<typeof import('./utils/advisor.js')['isValidAdvisorModel']>) => currentPhaseDisableLegacyStartupModules ? false : getAdvisorModule().isValidAdvisorModel(...args);
-const modelSupportsAdvisor = (...args: Parameters<typeof import('./utils/advisor.js')['modelSupportsAdvisor']>) => currentPhaseDisableLegacyStartupModules ? false : getAdvisorModule().modelSupportsAdvisor(...args);
+const canUserConfigureAdvisor = (
+  ...args: Parameters<typeof import('./utils/advisor.js')['canUserConfigureAdvisor']>
+) => currentPhaseDisableLegacyStartupModules ? false : canUserConfigureAdvisorFromAdvisor(...args);
+const getInitialAdvisorSetting = (
+  ...args: Parameters<typeof import('./utils/advisor.js')['getInitialAdvisorSetting']>
+) => currentPhaseDisableLegacyStartupModules ? undefined : getInitialAdvisorSettingFromAdvisor(...args);
+const isAdvisorEnabled = (
+  ...args: Parameters<typeof import('./utils/advisor.js')['isAdvisorEnabled']>
+) => currentPhaseDisableLegacyStartupModules ? false : isAdvisorEnabledFromAdvisor(...args);
+const isValidAdvisorModel = (
+  ...args: Parameters<typeof import('./utils/advisor.js')['isValidAdvisorModel']>
+) => currentPhaseDisableLegacyStartupModules ? false : isValidAdvisorModelFromAdvisor(...args);
+const modelSupportsAdvisor = (
+  ...args: Parameters<typeof import('./utils/advisor.js')['modelSupportsAdvisor']>
+) => currentPhaseDisableLegacyStartupModules ? false : modelSupportsAdvisorFromAdvisor(...args);
 const getAgentSwarmsModule = () => require('./utils/agentSwarmsEnabled.js') as typeof import('./utils/agentSwarmsEnabled.js');
 const isAgentSwarmsEnabled = (...args: Parameters<typeof import('./utils/agentSwarmsEnabled.js')['isAgentSwarmsEnabled']>) => currentPhaseDisableLegacyStartupModules ? false : getAgentSwarmsModule().isAgentSwarmsEnabled(...args);
-const getEffortModule = () => require('./utils/effort.js') as typeof import('./utils/effort.js');
-const getInitialEffortSetting = (...args: Parameters<typeof import('./utils/effort.js')['getInitialEffortSetting']>) => getEffortModule().getInitialEffortSetting(...args);
-const parseEffortValue = (...args: Parameters<typeof import('./utils/effort.js')['parseEffortValue']>) => getEffortModule().parseEffortValue(...args);
 const getFastModeModule = () => require('./utils/fastMode.js') as typeof import('./utils/fastMode.js');
 const getInitialFastModeSetting = (...args: Parameters<typeof import('./utils/fastMode.js')['getInitialFastModeSetting']>) => currentPhaseDisableLegacyStartupModules ? undefined : getFastModeModule().getInitialFastModeSetting(...args);
 const isFastModeEnabled = (...args: Parameters<typeof import('./utils/fastMode.js')['isFastModeEnabled']>) => currentPhaseDisableLegacyStartupModules ? false : getFastModeModule().isFastModeEnabled(...args);
@@ -119,20 +133,6 @@ const getSystemContext = (
 const getUserContext = (
   ...args: Parameters<typeof import('./context.js')['getUserContext']>
 ) => getContextModule().getUserContext(...args);
-const getGitModule = () =>
-  require('./utils/git.js') as typeof import('./utils/git.js');
-const findGitRoot = (
-  ...args: Parameters<typeof import('./utils/git.js')['findGitRoot']>
-) => getGitModule().findGitRoot(...args);
-const getBranch = (
-  ...args: Parameters<typeof import('./utils/git.js')['getBranch']>
-) => getGitModule().getBranch(...args);
-const getIsGit = (
-  ...args: Parameters<typeof import('./utils/git.js')['getIsGit']>
-) => getGitModule().getIsGit(...args);
-const getWorktreeCount = (
-  ...args: Parameters<typeof import('./utils/git.js')['getWorktreeCount']>
-) => getGitModule().getWorktreeCount(...args);
 const getGithubAuthModule = () =>
   require('./utils/github/ghAuthStatus.js') as typeof import('./utils/github/ghAuthStatus.js');
 let agentLoadModulePromise: Promise<typeof import('./tools/AgentTool/loadAgentsDir.js')> | null = null;
@@ -224,6 +224,7 @@ import { errorMessage, getErrnoCode, isENOENT, TeleportOperationError, toError }
 import { getFsImplementation, safeResolvePath } from 'src/utils/fsOperations.js';
 import { gracefulShutdown, gracefulShutdownSync } from 'src/utils/gracefulShutdown.js';
 import { setAllHookEventsEnabled } from 'src/utils/hooks/hookEvents.js';
+import { findGitRoot, getBranch, getIsGit, getWorktreeCount } from './utils/git.js';
 import { peekForStdinData, writeToStderr } from 'src/utils/process.js';
 import { setCwd } from 'src/utils/Shell.js';
 import { type ProcessedResume, processResumedConversation } from 'src/utils/sessionRestore.js';
@@ -1368,6 +1369,11 @@ async function run(): Promise<CommanderCommand> {
       process.stderr.write(chalk.red(`Error: ${currentPhaseProviderError}\n`));
       process.exit(1);
     }
+    if (currentPhaseCustomCodexProvider) {
+      // Current-stage Codex startup should not touch Claude subscription-only
+      // 1M-context UI branches during first render.
+      process.env.CODEX_CODE_DISABLE_1M_CONTEXT ??= '1';
+    }
     const codexConfiguredModel = getCodexConfiguredModel();
     const codexConfiguredReasoningEffort = getCodexConfiguredReasoningEffort();
     logForDebugging('[STARTUP] provider/model section done');
@@ -2095,21 +2101,27 @@ async function run(): Promise<CommanderCommand> {
     const userSpecifiedModel = selectedModelOption === 'default' ? getDefaultMainLoopModel() : selectedModelOption;
     const userSpecifiedFallbackModel = fallbackModel === 'default' ? getDefaultMainLoopModel() : fallbackModel;
 
-    // Reuse preSetupCwd unless setup() chdir'd (worktreeEnabled). Saves a
-    // getCwd() syscall in the common path.
+    // Always re-read cwd after setup(). Most runs keep the same directory,
+    // but if setup adjusted cwd we must join commands/agents against the
+    // final location rather than the pre-setup snapshot.
     writeStartupProbe('action:before-current-cwd');
     logForDebugging('[STARTUP] before currentCwd/commands load');
-    const currentCwd = worktreeEnabled ? getCwd() : preSetupCwd;
+    const currentCwd = getCwd();
+    const startupCwdChanged = currentCwd !== preSetupCwd;
+    if (startupCwdChanged) {
+      logForDebugging(`[STARTUP] cwd updated during setup: ${preSetupCwd} -> ${currentCwd}`);
+    }
     logForDebugging('[STARTUP] Loading commands and agents...');
     const commandsStart = Date.now();
-    // Join the promises kicked before setup() (or start fresh if
-    // worktreeEnabled gated the early kick). Both memoized by cwd.
-    const commandsLoadPromise = (commandsPromise ?? getCommands(currentCwd)).then(result => {
+    // Reuse the pre-setup loaders only when setup left cwd untouched.
+    // Otherwise reload against the final cwd so command/agent discovery,
+    // path injection, and follow-up reads all agree on one directory.
+    const commandsLoadPromise = ((commandsPromise && !startupCwdChanged ? commandsPromise : null) ?? getCommands(currentCwd)).then(result => {
       logForDebugging(`[STARTUP] Commands loaded: ${result.length}`);
       writeStartupProbe('action:commands-ready');
       return result;
     });
-    const agentDefinitionsLoadPromise = (agentDefsPromise ?? getAgentDefinitionsWithOverrides(currentCwd)).then(result => {
+    const agentDefinitionsLoadPromise = ((agentDefsPromise && !startupCwdChanged ? agentDefsPromise : null) ?? getAgentDefinitionsWithOverrides(currentCwd)).then(result => {
       logForDebugging(`[STARTUP] Agents loaded: ${result.activeAgents.length}/${result.allAgents.length}`);
       writeStartupProbe('action:agents-ready');
       return result;
@@ -2419,201 +2431,6 @@ async function run(): Promise<CommanderCommand> {
     if (currentPhaseBareLocalMode && !isNonInteractiveSession) {
       if (teleport || remote !== null || (feature('DIRECT_CONNECT') && _pendingConnect?.url) || (feature('SSH_REMOTE') && _pendingSSH?.host) || (feature('KAIROS') && _pendingAssistantChat && (_pendingAssistantChat.sessionId || _pendingAssistantChat.discover))) {
         await exitWithError(root, '当前阶段的自定义 Codex provider 支持本地新会话与本地 resume/continue，不支持 teleport、remote、connect、ssh 或 assistant。', () => gracefulShutdown(1));
-      }
-
-      const currentPhaseInitialNotifications: Array<{
-        key: string;
-        text: string;
-        color?: 'warning';
-        priority: 'high';
-      }> = [];
-      if (permissionModeNotification) {
-        currentPhaseInitialNotifications.push({
-          key: 'permission-mode-notification',
-          text: permissionModeNotification,
-          priority: 'high'
-        });
-      }
-      if (overlyBroadBashPermissions.length > 0) {
-        const displayList = uniq(overlyBroadBashPermissions.map(p => p.ruleDisplay));
-        const displays = displayList.join(', ');
-        const sources = uniq(overlyBroadBashPermissions.map(p => p.sourceDisplay)).join(', ');
-        const n = displayList.length;
-        currentPhaseInitialNotifications.push({
-          key: 'overly-broad-bash-notification',
-          text: `${displays} allow ${plural(n, 'rule')} from ${sources} ${plural(n, 'was', 'were')} ignored — not available for Ants, please use auto-mode instead`,
-          color: 'warning',
-          priority: 'high'
-        });
-      }
-
-      let currentPhaseThinkingEnabled = shouldEnableThinkingByDefault();
-      let currentPhaseThinkingConfig: ThinkingConfig = currentPhaseThinkingEnabled !== false ? {
-        type: 'adaptive'
-      } : {
-        type: 'disabled'
-      };
-      if (options.thinking === 'adaptive' || options.thinking === 'enabled') {
-        currentPhaseThinkingEnabled = true;
-        currentPhaseThinkingConfig = {
-          type: 'adaptive'
-        };
-      } else if (options.thinking === 'disabled') {
-        currentPhaseThinkingEnabled = false;
-        currentPhaseThinkingConfig = {
-          type: 'disabled'
-        };
-      } else {
-        const maxThinkingTokens = process.env.MAX_THINKING_TOKENS ? parseInt(process.env.MAX_THINKING_TOKENS, 10) : options.maxThinkingTokens;
-        if (maxThinkingTokens !== undefined) {
-          if (maxThinkingTokens > 0) {
-            currentPhaseThinkingEnabled = true;
-            currentPhaseThinkingConfig = {
-              type: 'enabled',
-              budgetTokens: maxThinkingTokens
-            };
-          } else if (maxThinkingTokens === 0) {
-            currentPhaseThinkingEnabled = false;
-            currentPhaseThinkingConfig = {
-              type: 'disabled'
-            };
-          }
-        }
-      }
-
-      const currentPhaseInitialState: AppState = {
-        settings: getInitialSettings(),
-        tasks: {},
-        agentNameRegistry: new Map(),
-        verbose: verbose ?? false,
-        mainLoopModel: initialMainLoopModel,
-        mainLoopModelForSession: null,
-        statusLineText: undefined,
-        expandedView: 'none',
-        isBriefOnly: false,
-        showTeammateMessagePreview: false,
-        selectedIPAgentIndex: -1,
-        coordinatorTaskIndex: -1,
-        viewSelectionMode: 'none',
-        footerSelection: null,
-        kairosEnabled,
-        remoteSessionUrl: undefined,
-        remoteConnectionStatus: 'connecting',
-        remoteBackgroundTaskCount: 0,
-        replBridgeEnabled: false,
-        replBridgeExplicit: false,
-        replBridgeOutboundOnly: false,
-        replBridgeConnected: false,
-        replBridgeSessionActive: false,
-        replBridgeReconnecting: false,
-        replBridgeConnectUrl: undefined,
-        replBridgeSessionUrl: undefined,
-        replBridgeEnvironmentId: undefined,
-        replBridgeSessionId: undefined,
-        replBridgeError: undefined,
-        replBridgeInitialName: undefined,
-        showRemoteCallout: false,
-        toolPermissionContext,
-        agent: mainThreadAgentDefinition?.agentType,
-        agentDefinitions,
-        fileHistory: {
-          snapshots: [],
-          trackedFiles: new Set(),
-          snapshotSequence: 0
-        },
-        attribution: createEmptyAttributionState(),
-        mcp: {
-          clients: [],
-          tools: [],
-          commands: [],
-          resources: {},
-          pluginReconnectKey: 0
-        },
-        plugins: {
-          enabled: [],
-          disabled: [],
-          commands: [],
-          errors: [],
-          installationStatus: {
-            marketplaces: [],
-            plugins: []
-          },
-          needsRefresh: false
-        },
-        todos: {},
-        remoteAgentTaskSuggestions: [],
-        notifications: {
-          current: null,
-          queue: currentPhaseInitialNotifications
-        },
-        elicitation: {
-          queue: []
-        },
-        thinkingEnabled: currentPhaseThinkingEnabled,
-        promptSuggestionEnabled: false,
-        sessionHooks: new Map(),
-        inbox: {
-          messages: []
-        },
-        workerSandboxPermissions: {
-          queue: [],
-          selectedIndex: 0
-        },
-        pendingWorkerRequest: null,
-        pendingSandboxRequest: null,
-        promptSuggestion: {
-          text: null,
-          promptId: null,
-          shownAt: 0,
-          acceptedAt: 0,
-          generationRequestId: null
-        },
-        speculation: IDLE_SPECULATION_STATE,
-        speculationSessionTimeSavedMs: 0,
-        skillImprovement: {
-          suggestion: null
-        },
-        authVersion: 0,
-        initialMessage: inputPrompt ? {
-          message: createUserMessage({
-            content: String(inputPrompt)
-          })
-        } : null,
-        effortValue: parseEffortValue(options.effort ?? codexConfiguredReasoningEffort) ?? getInitialEffortSetting(),
-        activeOverlays: new Set<string>(),
-        fastMode: false,
-        ...(isAdvisorEnabled() && advisorModel && {
-          advisorModel
-        }),
-        teamContext: feature('KAIROS') ? assistantTeamContext ?? computeInitialTeamContext?.() : computeInitialTeamContext?.()
-      };
-
-      const currentPhaseSessionConfig = {
-        debug: debug || debugToStderr,
-        commands,
-        initialTools: tools,
-        mcpClients: [],
-        autoConnectIdeFlag: ide,
-        mainThreadAgentDefinition,
-        disableSlashCommands,
-        dynamicMcpConfig,
-        strictMcpConfig,
-        systemPrompt,
-        appendSystemPrompt,
-        taskListId,
-        thinkingConfig: currentPhaseThinkingConfig
-      };
-
-      if (!options.continue && !options.resume && !options.fromPr) {
-        logForDebugging('[STARTUP] current-phase interactive repl shortcut start');
-        writeStartupProbe('action:before-launchRepl');
-        await launchRepl(root, {
-          getFpsMetrics,
-          stats,
-          initialState: currentPhaseInitialState
-        }, currentPhaseSessionConfig, renderAndRun);
-        writeStartupProbe('action:after-launchRepl');
-        logForDebugging('[STARTUP] current-phase interactive repl shortcut done');
         return;
       }
     }
@@ -3348,6 +3165,14 @@ async function run(): Promise<CommanderCommand> {
       ...toolPermissionContext,
       mode: isAgentSwarmsEnabled() && getTeammateUtils().isPlanModeRequired() ? 'plan' as const : toolPermissionContext.mode
     };
+    const initialSettingsSnapshot = getInitialSettings();
+    writeStartupProbe('action:after-initial-settings-snapshot');
+    const initialAttributionState = createEmptyAttributionState();
+    writeStartupProbe('action:after-initial-attribution-state');
+    const initialEffortValue = parseEffortValue(options.effort ?? codexConfiguredReasoningEffort) ?? getInitialEffortSetting();
+    writeStartupProbe('action:after-initial-effort');
+    const initialTeamContext = feature('KAIROS') ? assistantTeamContext ?? computeInitialTeamContext?.() : computeInitialTeamContext?.();
+    writeStartupProbe('action:after-initial-team-context');
     // All startup opt-in paths (--tools, --brief, defaultView) have fired
     // above; initialIsBriefOnly just reads the resulting state.
     const initialIsBriefOnly = currentPhaseBareLocalMode ? false : (feature('KAIROS') || feature('KAIROS_BRIEF') ? getUserMsgOptIn() : false);
@@ -3362,7 +3187,7 @@ async function run(): Promise<CommanderCommand> {
       ccrMirrorEnabled = isCcrMirrorEnabled();
     }
     const initialState: AppState = currentPhaseBareLocalMode ? {
-      settings: getInitialSettings(),
+      settings: initialSettingsSnapshot,
       tasks: {},
       agentNameRegistry: new Map(),
       verbose: verbose ?? false,
@@ -3401,7 +3226,7 @@ async function run(): Promise<CommanderCommand> {
         trackedFiles: new Set(),
         snapshotSequence: 0
       },
-      attribution: createEmptyAttributionState(),
+      attribution: initialAttributionState,
       mcp: {
         clients: [],
         tools: [],
@@ -3459,15 +3284,15 @@ async function run(): Promise<CommanderCommand> {
           content: String(inputPrompt)
         })
       } : null,
-      effortValue: parseEffortValue(options.effort ?? codexConfiguredReasoningEffort) ?? getInitialEffortSetting(),
+      effortValue: initialEffortValue,
       activeOverlays: new Set<string>(),
       fastMode: false,
       ...(isAdvisorEnabled() && advisorModel && {
         advisorModel
       }),
-      teamContext: feature('KAIROS') ? assistantTeamContext ?? computeInitialTeamContext?.() : computeInitialTeamContext?.()
+      teamContext: initialTeamContext
     } : {
-      settings: getInitialSettings(),
+      settings: initialSettingsSnapshot,
       tasks: {},
       agentNameRegistry: new Map(),
       verbose: verbose ?? getGlobalConfig().verbose ?? false,
@@ -3533,7 +3358,7 @@ async function run(): Promise<CommanderCommand> {
         trackedFiles: new Set(),
         snapshotSequence: 0
       },
-      attribution: createEmptyAttributionState(),
+      attribution: initialAttributionState,
       thinkingEnabled,
       promptSuggestionEnabled: shouldEnablePromptSuggestion(),
       sessionHooks: new Map(),
@@ -3564,7 +3389,7 @@ async function run(): Promise<CommanderCommand> {
           content: String(inputPrompt)
         })
       } : null,
-      effortValue: parseEffortValue(options.effort ?? codexConfiguredReasoningEffort) ?? getInitialEffortSetting(),
+      effortValue: initialEffortValue,
       activeOverlays: new Set<string>(),
       fastMode: getInitialFastModeSetting(resolvedInitialModel),
       ...(isAdvisorEnabled() && advisorModel && {
@@ -3575,7 +3400,7 @@ async function run(): Promise<CommanderCommand> {
       // KAIROS block so Agent(name: "foo") can spawn in-process teammates
       // without TeamCreate. computeInitialTeamContext() is for tmux-spawned
       // teammates reading their own identity, not the assistant-mode leader.
-      teamContext: feature('KAIROS') ? assistantTeamContext ?? computeInitialTeamContext?.() : computeInitialTeamContext?.()
+      teamContext: initialTeamContext
     };
     writeStartupProbe('action:after-initial-state');
     logForDebugging(`[STARTUP] initialState prepared (currentPhaseBareLocalMode=${currentPhaseBareLocalMode})`);

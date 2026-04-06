@@ -13,6 +13,7 @@ import { Box, Text } from '../ink.js';
 import { useKeybinding, useKeybindings } from '../keybindings/useKeybinding.js';
 import type { Message, PartialCompactDirection, UserMessage } from '../types/message.js';
 import { stripDisplayTags } from '../utils/displayTags.js';
+import { selectableUserMessagesFilter } from '../utils/messageSelector.js';
 import { createUserMessage, extractTag, isEmptyMessageText, isSyntheticMessage, isToolUseResultMessage } from '../utils/messages.js';
 import { type OptionWithDescription, Select } from './CustomSelect/select.js';
 import { Spinner } from './Spinner.js';
@@ -29,6 +30,7 @@ import { formatRelativeTimeAgo, truncate } from '../utils/format.js';
 import type { Theme } from '../utils/theme.js';
 import { Divider } from './design-system/Divider.js';
 type RestoreOption = 'both' | 'conversation' | 'code' | 'summarize' | 'summarize_up_to' | 'nevermind';
+export { selectableUserMessagesFilter };
 function isSummarizeOption(option: RestoreOption | null): option is 'summarize' | 'summarize_up_to' {
   return option === 'summarize' || option === 'summarize_up_to';
 }
@@ -764,33 +766,6 @@ function computeDiffStatsBetweenMessages(messages: Message[], fromMessageId: UUI
     deletions
   };
 }
-export function selectableUserMessagesFilter(message: Message): message is UserMessage {
-  if (message.type !== 'user') {
-    return false;
-  }
-  if (Array.isArray(message.message.content) && message.message.content[0]?.type === 'tool_result') {
-    return false;
-  }
-  if (isSyntheticMessage(message)) {
-    return false;
-  }
-  if (message.isMeta) {
-    return false;
-  }
-  if (message.isCompactSummary || message.isVisibleInTranscriptOnly) {
-    return false;
-  }
-  const content = message.message.content;
-  const lastBlock = typeof content === 'string' ? null : content[content.length - 1];
-  const messageText = typeof content === 'string' ? content.trim() : lastBlock && isTextBlock(lastBlock) ? lastBlock.text.trim() : '';
-
-  // Filter out non-user-authored messages (command outputs, task notifications, ticks).
-  if (messageText.indexOf(`<${LOCAL_COMMAND_STDOUT_TAG}>`) !== -1 || messageText.indexOf(`<${LOCAL_COMMAND_STDERR_TAG}>`) !== -1 || messageText.indexOf(`<${BASH_STDOUT_TAG}>`) !== -1 || messageText.indexOf(`<${BASH_STDERR_TAG}>`) !== -1 || messageText.indexOf(`<${TASK_NOTIFICATION_TAG}>`) !== -1 || messageText.indexOf(`<${TICK_TAG}>`) !== -1 || messageText.indexOf(`<${TEAMMATE_MESSAGE_TAG}`) !== -1) {
-    return false;
-  }
-  return true;
-}
-
 /**
  * Checks if all messages after the given index are synthetic (interruptions, cancels, etc.)
  * or non-meaningful content. Returns true if there's nothing meaningful to confirm -

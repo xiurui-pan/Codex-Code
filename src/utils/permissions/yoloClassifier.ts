@@ -2,6 +2,7 @@ import { feature } from 'bun:bundle'
 import type Anthropic from '@anthropic-ai/sdk'
 import type { BetaToolUnion } from '@anthropic-ai/sdk/resources/beta/messages.js'
 import { mkdir, writeFile } from 'fs/promises'
+import { readFileSync } from 'fs'
 import { dirname, join } from 'path'
 import { z } from 'zod/v4'
 import {
@@ -43,30 +44,27 @@ import {
 } from './classifierShared.js'
 import { getClaudeTempDir } from './filesystem.js'
 
-// Dead code elimination: conditional imports for auto mode classifier prompts.
-// At build time, the bundler inlines .txt files as string literals. At test
-// time, require() returns {default: string} — txtRequire normalizes both.
-/* eslint-disable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
-function txtRequire(mod: string | { default: string }): string {
-  return typeof mod === 'string' ? mod : mod.default
+/* eslint-disable custom-rules/no-process-env-top-level */
+function readPromptFile(relativePath: string): string {
+  return readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 }
 
 const BASE_PROMPT: string = feature('TRANSCRIPT_CLASSIFIER')
-  ? txtRequire(require('./yolo-classifier-prompts/auto_mode_system_prompt.txt'))
+  ? readPromptFile('./yolo-classifier-prompts/auto_mode_system_prompt.txt')
   : ''
 
 // External template is loaded separately so it's available for
 // `claude auto-mode defaults` even in ant builds. Ant builds use
 // permissions_anthropic.txt at runtime but should dump external defaults.
 const EXTERNAL_PERMISSIONS_TEMPLATE: string = feature('TRANSCRIPT_CLASSIFIER')
-  ? txtRequire(require('./yolo-classifier-prompts/permissions_external.txt'))
+  ? readPromptFile('./yolo-classifier-prompts/permissions_external.txt')
   : ''
 
 const ANTHROPIC_PERMISSIONS_TEMPLATE: string =
   feature('TRANSCRIPT_CLASSIFIER') && process.env.USER_TYPE === 'ant'
-    ? txtRequire(require('./yolo-classifier-prompts/permissions_anthropic.txt'))
+    ? readPromptFile('./yolo-classifier-prompts/permissions_anthropic.txt')
     : ''
-/* eslint-enable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
+/* eslint-enable custom-rules/no-process-env-top-level */
 
 function isUsingExternalPermissions(): boolean {
   if (process.env.USER_TYPE !== 'ant') return true

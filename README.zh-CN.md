@@ -3,7 +3,7 @@
 [English](./README.md) | [简体中文](./README.zh-CN.md) | [日本語](./README.ja.md)
 
 Codex Code 是一个在终端里运行的本地编码代理。
-这个项目的核心目标很明确：在把模型主链路切到 Codex / OpenAI Responses 的同时，尽可能完整保留原版 Claude Code 已经被验证过的本地使用体验。
+这个项目的核心目标很明确：在把模型主链路切到 Codex / OpenAI Responses 的同时，尽可能完整保留原版 Claude Code 已经被验证过的本地使用体验和交互骨架。
 
 也就是说，我们优先保留的不是一个名字，而是整套实际工作流：终端执行环境、TUI 结构、对话记录视图、工具调用、权限确认、会话恢复、上下文压缩、计划模式，以及子代理协作时的交互逻辑。
 
@@ -123,6 +123,18 @@ codex-code --help
 codex-code --version
 codex-code -p "Summarize this repository"
 ```
+
+## 常见问题排查
+
+- 出现 `codex-code: command not found`
+  - `pnpm install:local` 默认会把启动器装到 `~/.local/bin/codex-code`
+  - 确认 `~/.local/bin` 已加入 `PATH`，然后重新打开 shell，或者执行一次 `source ~/.zshrc`
+- 本地重新构建后，`node dist/cli.js` 或 `codex-code` 启动失败
+  - 先重新执行 `pnpm build`
+  - 如果你覆盖过旧的本地启动器，再执行一次 `pnpm install:local --force`
+- 想确认本地启动器链路是否正常
+  - 先跑 `codex-code --version`
+  - 再跑 `codex-code --help`
 
 ## 构建与测试
 

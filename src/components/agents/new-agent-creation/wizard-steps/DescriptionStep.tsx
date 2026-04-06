@@ -86,7 +86,7 @@ export function DescriptionStep() {
   }
   let t5;
   if ($[8] === Symbol.for("react.memo_cache_sentinel")) {
-    t5 = <Text>When should Claude use this agent?</Text>;
+    t5 = <Text>When should Codex Code use this agent?</Text>;
     $[8] = t5;
   } else {
     t5 = $[8];

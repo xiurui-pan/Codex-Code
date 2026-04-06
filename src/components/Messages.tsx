@@ -19,7 +19,7 @@ import type { Tools } from '../Tool.js';
 import { findToolByName } from '../Tool.js';
 import type { AgentDefinitionsResult } from '../tools/AgentTool/loadAgentsDir.js';
 import { createRequire } from 'node:module';
-import type { Message as MessageType, NormalizedMessage, ProgressMessage as ProgressMessageType, RenderableMessage } from '../types/message.js';
+import type { Message as MessageType, NormalizedMessage, NormalizedUserMessage, ProgressMessage as ProgressMessageType, RenderableMessage } from '../types/message.js';
 import { type AdvisorBlock, isAdvisorBlock } from '../utils/advisor.js';
 import { collapseBackgroundBashNotifications } from '../utils/collapseBackgroundBashNotifications.js';
 import { collapseHookSummaries } from '../utils/collapseHookSummaries.js';
@@ -349,6 +349,41 @@ export function computeSliceStart(collapsed: ReadonlyArray<{
   }
   return start;
 }
+
+export function shouldRenderToolResultMessage(
+  msg: NormalizedUserMessage,
+  lookups: ReturnType<typeof buildMessageLookups>,
+  tools: Tools,
+): boolean {
+  const toolResultBlock = msg.message.content[0]
+  if (toolResultBlock?.type !== 'tool_result') {
+    return true
+  }
+
+  const toolUse = lookups.toolUseByToolUseID.get(toolResultBlock.tool_use_id)
+  if (!toolUse) {
+    return false
+  }
+
+  const tool = findToolByName(tools, toolUse.name)
+  if (!tool) {
+    return false
+  }
+
+  // Error tool_results render through UserToolErrorMessage and do not require
+  // a parsed toolUseResult payload, so keep them visible in both the card and transcript.
+  if (toolResultBlock.is_error) {
+    return true
+  }
+
+  if (msg.toolUseResult === undefined) {
+    return false
+  }
+
+  const parsedOutput = tool.outputSchema?.safeParse(msg.toolUseResult)
+  return !parsedOutput || parsedOutput.success
+}
+
 const MessagesImpl = ({
   messages,
   tools,
@@ -545,15 +580,7 @@ const MessagesImpl = ({
         return true;
       }
       // For user messages with tool results, validate they can be rendered
-      const toolResultBlock = msg.message.content[0];
-      if (toolResultBlock?.type !== 'tool_result') return true;
-      const toolUse = initialLookups.toolUseByToolUseID.get(toolResultBlock.tool_use_id);
-      if (!toolUse) return false;
-      const tool = findToolByName(tools, toolUse.name);
-      if (!tool) return false;
-      if (msg.toolUseResult === undefined) return false;
-      const parsedOutput = tool.outputSchema?.safeParse(msg.toolUseResult);
-      return !parsedOutput || parsedOutput.success;
+      return shouldRenderToolResultMessage(msg, initialLookups, tools);
     }) as Exclude<NormalizedMessage, ProgressMessageType>[];
     const {
       messages: groupedMessages

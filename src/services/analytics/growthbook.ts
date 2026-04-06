@@ -1,37 +1,32 @@
 import { GrowthBook } from '@growthbook/growthbook'
-import { createRequire } from 'node:module'
 import { isEqual, memoize } from 'lodash-es'
 import {
   getIsNonInteractiveSession,
   getSessionTrustAccepted,
 } from '../../bootstrap/state.js'
 import { getGrowthBookClientKey } from '../../constants/keys.js'
+import {
+  checkHasTrustDialogAccepted,
+  getGlobalConfig,
+  saveGlobalConfig,
+} from '../../utils/config.js'
 import { logForDebugging } from '../../utils/debug.js'
 import { toError } from '../../utils/errors.js'
+import { getAuthHeaders } from '../../utils/http.js'
 import { logError } from '../../utils/log.js'
 import { createSignal } from '../../utils/signal.js'
 import { jsonStringify } from '../../utils/slowOperations.js'
-import type { GitHubActionsMetadata } from '../../utils/user.js'
+import {
+  type GitHubActionsMetadata,
+  getUserForGrowthBook,
+} from '../../utils/user.js'
+import {
+  is1PEventLoggingEnabled,
+  logGrowthBookExperimentTo1P,
+} from './firstPartyEventLogger.js'
 
-const require = createRequire(import.meta.url)
 const currentStageDisableGrowthbook =
   process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
-
-function getConfigModule() {
-  return require('../../utils/config.js') as typeof import('../../utils/config.js')
-}
-
-function getHttpModule() {
-  return require('../../utils/http.js') as typeof import('../../utils/http.js')
-}
-
-function getUserModule() {
-  return require('../../utils/user.js') as typeof import('../../utils/user.js')
-}
-
-function getFirstPartyEventLoggerModule() {
-  return require('./firstPartyEventLogger.js') as typeof import('./firstPartyEventLogger.js')
-}
 
 /**
  * User attributes sent to GrowthBook for targeting.
@@ -220,7 +215,7 @@ function getConfigOverrides(): Record<string, unknown> | undefined {
   if (currentStageDisableGrowthbook) return undefined
   if (process.env.USER_TYPE !== 'ant') return undefined
   try {
-    return getConfigModule().getGlobalConfig().growthBookOverrides
+    return getGlobalConfig().growthBookOverrides
   } catch {
     // getGlobalConfig() throws before configReadingAllowed is set (early
     // main.tsx startup path). Same degrade as the disk-cache fallback below.
@@ -240,7 +235,7 @@ export function getAllGrowthBookFeatures(): Record<string, unknown> {
   if (remoteEvalFeatureValues.size > 0) {
     return Object.fromEntries(remoteEvalFeatureValues)
   }
-  return getConfigModule().getGlobalConfig().cachedGrowthBookFeatures ?? {}
+  return getGlobalConfig().cachedGrowthBookFeatures ?? {}
 }
 
 export function getGrowthBookConfigOverrides(): Record<string, unknown> {
@@ -261,7 +256,7 @@ export function setGrowthBookConfigOverride(
   if (currentStageDisableGrowthbook) return
   if (process.env.USER_TYPE !== 'ant') return
   try {
-    getConfigModule().saveGlobalConfig(c => {
+    saveGlobalConfig(c => {
       const current = c.growthBookOverrides ?? {}
       if (value === undefined) {
         if (!(feature in current)) return c
@@ -287,7 +282,7 @@ export function clearGrowthBookConfigOverrides(): void {
   if (currentStageDisableGrowthbook) return
   if (process.env.USER_TYPE !== 'ant') return
   try {
-    getConfigModule().saveGlobalConfig(c => {
+    saveGlobalConfig(c => {
       if (
         !c.growthBookOverrides ||
         Object.keys(c.growthBookOverrides).length === 0
@@ -317,7 +312,7 @@ function logExposureForFeature(feature: string): void {
   const expData = experimentDataByFeature.get(feature)
   if (expData) {
     loggedExposures.add(feature)
-    getFirstPartyEventLoggerModule().logGrowthBookExperimentTo1P({
+    logGrowthBookExperimentTo1P({
       experimentId: expData.experimentId,
       variationId: expData.variationId,
       userAttributes: getUserAttributes(),
@@ -422,11 +417,11 @@ async function processRemoteEvalPayload(
 function syncRemoteEvalToDisk(): void {
   if (currentStageDisableGrowthbook) return
   const fresh = Object.fromEntries(remoteEvalFeatureValues)
-  const config = getConfigModule().getGlobalConfig()
+  const config = getGlobalConfig()
   if (isEqual(config.cachedGrowthBookFeatures, fresh)) {
     return
   }
-  getConfigModule().saveGlobalConfig(current => ({
+  saveGlobalConfig(current => ({
     ...current,
     cachedGrowthBookFeatures: fresh,
   }))
@@ -440,7 +435,7 @@ function isGrowthBookEnabled(): boolean {
     return false
   }
   // GrowthBook depends on 1P event logging.
-  return getFirstPartyEventLoggerModule().is1PEventLoggingEnabled()
+  return is1PEventLoggingEnabled()
 }
 
 /**
@@ -471,13 +466,13 @@ export function getApiBaseUrlHost(): string | undefined {
  * Get user attributes for GrowthBook from CoreUserData
  */
 function getUserAttributes(): GrowthBookUserAttributes {
-  const user = getUserModule().getUserForGrowthBook()
+  const user = getUserForGrowthBook()
 
   // For ants, always try to include email from OAuth config even if ANTHROPIC_API_KEY is set.
   // This ensures GrowthBook targeting by email works regardless of auth method.
   let email = user.email
   if (!email && process.env.USER_TYPE === 'ant') {
-    email = getConfigModule().getGlobalConfig().oauthAccount?.emailAddress
+    email = getGlobalConfig().oauthAccount?.emailAddress
   }
 
   const apiBaseUrlHost = getApiBaseUrlHost()
@@ -531,11 +526,11 @@ const getGrowthBookClient = memoize(
     // without persisting trust for the specific CWD (e.g., home directory) —
     // showSetupScreens() sets this after the trust dialog flow completes.
     const hasTrust =
-      getConfigModule().checkHasTrustDialogAccepted() ||
+      checkHasTrustDialogAccepted() ||
       getSessionTrustAccepted() ||
       getIsNonInteractiveSession()
     const authHeaders = hasTrust
-      ? getHttpModule().getAuthHeaders()
+      ? getAuthHeaders()
       : { headers: {}, error: 'trust not established' }
     const hasAuth = !authHeaders.error
     clientCreatedWithAuth = hasAuth
@@ -650,11 +645,11 @@ export const initializeGrowthBook = memoize(
     // Only check if trust is established to avoid triggering apiKeyHelper before trust dialog
     if (!clientCreatedWithAuth) {
       const hasTrust =
-        getConfigModule().checkHasTrustDialogAccepted() ||
+        checkHasTrustDialogAccepted() ||
         getSessionTrustAccepted() ||
         getIsNonInteractiveSession()
       if (hasTrust) {
-        const currentAuth = getHttpModule().getAuthHeaders()
+        const currentAuth = getAuthHeaders()
         if (!currentAuth.error) {
           if (process.env.USER_TYPE === 'ant') {
             logForDebugging(
@@ -786,7 +781,7 @@ export function getFeatureValue_CACHED_MAY_BE_STALE<T>(
 
   // Fall back to disk cache (survives across process restarts)
   try {
-    const cached = getConfigModule().getGlobalConfig().cachedGrowthBookFeatures?.[feature]
+    const cached = getGlobalConfig().cachedGrowthBookFeatures?.[feature]
     return cached !== undefined ? (cached as T) : defaultValue
   } catch {
     return defaultValue
@@ -853,7 +848,7 @@ export function checkStatsigFeatureGate_CACHED_MAY_BE_STALE(
   // Return cached value immediately from disk
   // First check GrowthBook cache, then fall back to Statsig cache for migration
   logForDebugging(`[growthbook:gate] ${gate} getGlobalConfig start`)
-  const config = getConfigModule().getGlobalConfig()
+  const config = getGlobalConfig()
   logForDebugging(`[growthbook:gate] ${gate} getGlobalConfig done`)
   const gbCached = config.cachedGrowthBookFeatures?.[gate]
   if (gbCached !== undefined) {
@@ -899,7 +894,7 @@ export async function checkSecurityRestrictionGate(
   }
 
   // Check Statsig cache first - it may have correct value from previous logged-in session
-  const config = getConfigModule().getGlobalConfig()
+  const config = getGlobalConfig()
   const statsigCached = config.cachedStatsigGates?.[gate]
   if (statsigCached !== undefined) {
     return Boolean(statsigCached)
@@ -946,7 +941,7 @@ export async function checkGate_CACHED_OR_BLOCKING(
   }
 
   // Fast path: disk cache already says true — trust it
-  const cached = getConfigModule().getGlobalConfig().cachedGrowthBookFeatures?.[gate]
+  const cached = getGlobalConfig().cachedGrowthBookFeatures?.[gate]
   if (cached === true) {
     // Log experiment exposure if data is available, otherwise defer
     if (experimentDataByFeature.has(gate)) {

@@ -2,13 +2,15 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { once } from 'node:events'
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { closeSync, openSync } from 'node:fs'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { projectRoot } from './helpers/projectRoot.mjs'
 
 function makeEnv(overrides = {}) {
   const env = { ...process.env }
+  delete env.NODE_TEST_CONTEXT
   for (const [key, value] of Object.entries(overrides)) {
     if (value === undefined) {
       delete env[key]
@@ -20,30 +22,33 @@ function makeEnv(overrides = {}) {
 }
 
 async function runInlineModule(source, envOverrides = {}) {
+  const tempDir = await mkdtemp(join(tmpdir(), 'codex-feature-inline-'))
+  const stdoutPath = join(tempDir, 'stdout.txt')
+  const stderrPath = join(tempDir, 'stderr.txt')
+  const stdoutFd = openSync(stdoutPath, 'w')
+  const stderrFd = openSync(stderrPath, 'w')
   const child = spawn(
     process.execPath,
     ['--import', 'tsx', '--loader', './dist/loader.mjs', '--input-type=module', '-e', source],
     {
       cwd: projectRoot,
       env: makeEnv(envOverrides),
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ['ignore', stdoutFd, stderrFd],
     },
   )
-
-  let stdout = ''
-  let stderr = ''
-  child.stdout.setEncoding('utf8')
-  child.stderr.setEncoding('utf8')
-  child.stdout.on('data', chunk => {
-    stdout += chunk
-  })
-  child.stderr.on('data', chunk => {
-    stderr += chunk
-  })
-
-  const [code] = await once(child, 'close')
-  assert.equal(code, 0, stderr || `child exited with ${code}`)
-  return stdout.trim()
+  try {
+    const [code] = await once(child, 'close')
+    const [stdout, stderr] = await Promise.all([
+      readFile(stdoutPath, 'utf8'),
+      readFile(stderrPath, 'utf8'),
+    ])
+    assert.equal(code, 0, stderr || `child exited with ${code}`)
+    return stdout.trim()
+  } finally {
+    closeSync(stdoutFd)
+    closeSync(stderrFd)
+    await rm(tempDir, { recursive: true, force: true })
+  }
 }
 
 test('BUDDY defaults off but can be explicitly enabled', async () => {

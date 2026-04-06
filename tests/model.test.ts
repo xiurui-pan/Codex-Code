@@ -117,6 +117,19 @@ test('custom provider helper agents resolve haiku through small_fast_model', asy
   )
 })
 
+test('custom provider opus 1m merge gate exits before touching claude auth state', async () => {
+  await withEnv(
+    {
+      CODEX_CODE_USE_CODEX_PROVIDER: '1',
+    },
+    async () => {
+      const { isOpus1mMergeEnabled } = await import('../src/utils/model/model.ts')
+
+      assert.equal(isOpus1mMergeEnabled(), false)
+    },
+  )
+})
+
 test('preferred response conversion keeps payload first and only wraps at the outer assistant edge', () => {
   const payload = preferredTurnResultToPayload({
     kind: 'preferred_content',
