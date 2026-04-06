@@ -28,6 +28,43 @@ export function getTokenUsage(message: Message): Usage | undefined {
 }
 
 /**
+ * Compaction keeps a short suffix of recent messages verbatim. Any assistant
+ * usage on those preserved messages still reflects the pre-compact request, so
+ * leaving it in place makes the next token estimate think the compacted thread
+ * is still huge. Clear the usage fields before the preserved messages are
+ * reused for in-memory continuation or resume.
+ */
+export function stripStaleAssistantUsage<T extends Message>(message: T): T {
+  const usage = getTokenUsage(message)
+  if (!usage) {
+    return message
+  }
+
+  const usageWithIterations = usage as Usage & { iterations?: unknown }
+  const nextUsage: Usage & { iterations?: unknown } = {
+    ...usageWithIterations,
+    input_tokens: 0,
+    output_tokens: 0,
+    cache_creation_input_tokens: 0,
+    cache_read_input_tokens: 0,
+  }
+
+  if ('iterations' in usageWithIterations) {
+    nextUsage.iterations = Array.isArray(usageWithIterations.iterations)
+      ? []
+      : usageWithIterations.iterations ?? null
+  }
+
+  return {
+    ...message,
+    message: {
+      ...message.message,
+      usage: nextUsage,
+    },
+  } as T
+}
+
+/**
  * Get the API response id for an assistant message with real (non-synthetic) usage.
  * Used to identify split assistant records that came from the same API response —
  * when parallel tool calls are streamed, each content block becomes a separate

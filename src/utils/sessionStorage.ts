@@ -91,6 +91,7 @@ import {
 } from './sessionStoragePortable.js'
 import { getSettings_DEPRECATED } from './settings/settings.js'
 import { jsonParse, jsonStringify } from './slowOperations.js'
+import { stripStaleAssistantUsage } from './tokens.js'
 import type { ContentReplacementRecord } from './toolResultStorage.js'
 import { validateUuid } from './uuid.js'
 
@@ -1918,24 +1919,12 @@ function applyPreservedSegmentRelinks(
       }
     }
     // Zero stale usage: on-disk input_tokens reflect pre-compact context
-    // (~190K) — stripStaleUsage only patched in-memory copies that were
+    // (~190K) — stripStaleAssistantUsage only patched in-memory copies that were
     // dedup-skipped. Without this, resume → immediate autocompact spiral.
     for (const uuid of preservedUuids) {
       const msg = messages.get(uuid)
       if (msg?.type !== 'assistant') continue
-      messages.set(uuid, {
-        ...msg,
-        message: {
-          ...msg.message,
-          usage: {
-            ...msg.message.usage,
-            input_tokens: 0,
-            output_tokens: 0,
-            cache_creation_input_tokens: 0,
-            cache_read_input_tokens: 0,
-          },
-        },
-      })
+      messages.set(uuid, stripStaleAssistantUsage(msg))
     }
   }
 

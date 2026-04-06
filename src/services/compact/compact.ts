@@ -84,6 +84,7 @@ import { asSystemPrompt } from '../../utils/systemPromptType.js'
 import { getTaskOutputPath } from '../../utils/task/diskOutput.js'
 import {
   getTokenUsage,
+  stripStaleAssistantUsage,
   tokenCountFromLastAPIResponse,
   tokenCountWithEstimation,
 } from '../../utils/tokens.js'
@@ -347,7 +348,7 @@ export function buildPostCompactMessages(result: CompactionResult): Message[] {
   return [
     result.boundaryMarker,
     ...result.summaryMessages,
-    ...(result.messagesToKeep ?? []),
+    ...(result.messagesToKeep?.map(stripStaleAssistantUsage) ?? []),
     ...result.attachments,
     ...result.hookResults,
   ]
