@@ -1492,11 +1492,17 @@ async function* queryLoop(
       }
 
       // ── Harness completion gates (Codex-specific, not in upstream Claude Code) ──
-      // The Codex model tends to stop mid-task with "I'll continue later" language,
-      // leaving in_progress/pending tasks unfinished. This gate checks for those
-      // tasks and auto-injects a continuation prompt to keep the agent running.
-      // Capped at 3 consecutive retries to prevent infinite loops.
-      {
+      // Main-thread only: subagents share the parent session/task context, so
+      // checking the task list from inside a child can pick up unrelated
+      // pending work and force an extra "continue" turn after the child
+      // already finished, often producing a stray "Done." reply.
+      //
+      // The Codex model tends to stop mid-task with "I'll continue later"
+      // language, leaving in_progress/pending tasks unfinished. This gate
+      // checks for those tasks and auto-injects a continuation prompt to keep
+      // the main agent running. Capped at 3 consecutive retries to prevent
+      // infinite loops.
+      if (!toolUseContext.agentId) {
         const taskListId = getTaskListId()
         const tasks = await listTasks(taskListId)
         const hasIncomplete = tasks.some(
