@@ -69,7 +69,15 @@ import {
   modelSupportsAdvisor as modelSupportsAdvisorFromAdvisor,
 } from './utils/advisor.js';
 import { initializeWarningHandler } from './utils/warningHandler.js';
+import { initUser, resetUserCache } from './utils/user.js';
 import { isWorktreeModeEnabled } from './utils/worktreeModeEnabled.js';
+import { getSystemContext, getUserContext } from './context.js';
+import {
+  getFeatureValue_CACHED_MAY_BE_STALE as getFeatureValueCachedMayBeStaleFromGrowthbook,
+  hasGrowthBookEnvOverride as hasGrowthBookEnvOverrideFromGrowthbook,
+  initializeGrowthBook as initializeGrowthBookFromGrowthbook,
+  refreshGrowthBookAfterAuthChange as refreshGrowthBookAfterAuthChangeFromGrowthbook,
+} from './services/analytics/growthbook.js';
 
 // Lazy require to avoid circular dependency: teammate.ts -> AppState.tsx -> ... -> main.tsx
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -123,13 +131,6 @@ const getModelCapabilitiesModule = () => require('src/utils/model/modelCapabilit
 const refreshModelCapabilities = (...args: Parameters<typeof import('src/utils/model/modelCapabilities.js')['refreshModelCapabilities']>) => currentPhaseDisableLegacyStartupModules ? Promise.resolve() : getModelCapabilitiesModule().refreshModelCapabilities(...args);
 import { isAnalyticsDisabled } from 'src/services/analytics/config.js';
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from 'src/services/analytics/index.js';
-const getContextModule = () => require('./context.js') as typeof import('./context.js');
-const getSystemContext = (
-  ...args: Parameters<typeof import('./context.js')['getSystemContext']>
-) => getContextModule().getSystemContext(...args);
-const getUserContext = (
-  ...args: Parameters<typeof import('./context.js')['getUserContext']>
-) => getContextModule().getUserContext(...args);
 const getGithubAuthModule = () =>
   require('./utils/github/ghAuthStatus.js') as typeof import('./utils/github/ghAuthStatus.js');
 let agentLoadModulePromise: Promise<typeof import('./tools/AgentTool/loadAgentsDir.js')> | null = null;
@@ -141,20 +142,11 @@ const getAgentDefinitionsWithOverrides = async (
 const getGhAuthStatus = (
   ...args: Parameters<typeof import('./utils/github/ghAuthStatus.js')['getGhAuthStatus']>
 ) => getGithubAuthModule().getGhAuthStatus(...args);
-const getUserModule = () =>
-  require('./utils/user.js') as typeof import('./utils/user.js');
-const initUser = (
-  ...args: Parameters<typeof import('./utils/user.js')['initUser']>
-) => getUserModule().initUser(...args);
-const resetUserCache = (
-  ...args: Parameters<typeof import('./utils/user.js')['resetUserCache']>
-) => getUserModule().resetUserCache(...args);
 const currentStageDisableGrowthbookStartup = isCurrentPhaseCustomCodexProvider();
-const getGrowthbookModule = () => require('./services/analytics/growthbook.js') as typeof import('./services/analytics/growthbook.js');
-const hasGrowthBookEnvOverride = currentStageDisableGrowthbookStartup ? ((_key: string) => false) : ((key: string) => getGrowthbookModule().hasGrowthBookEnvOverride(key));
-const initializeGrowthBook = currentStageDisableGrowthbookStartup ? (async () => {}) : (() => getGrowthbookModule().initializeGrowthBook());
-const refreshGrowthBookAfterAuthChange = currentStageDisableGrowthbookStartup ? (() => {}) : (() => getGrowthbookModule().refreshGrowthBookAfterAuthChange());
-const getFeatureValue_CACHED_MAY_BE_STALE = currentStageDisableGrowthbookStartup ? ((_key: string, fallbackValue: unknown) => fallbackValue) : ((key: string, fallbackValue: unknown) => getGrowthbookModule().getFeatureValue_CACHED_MAY_BE_STALE(key, fallbackValue));
+const hasGrowthBookEnvOverride = currentStageDisableGrowthbookStartup ? ((_key: string) => false) : hasGrowthBookEnvOverrideFromGrowthbook;
+const initializeGrowthBook = currentStageDisableGrowthbookStartup ? (async () => {}) : initializeGrowthBookFromGrowthbook;
+const refreshGrowthBookAfterAuthChange = currentStageDisableGrowthbookStartup ? (() => {}) : refreshGrowthBookAfterAuthChangeFromGrowthbook;
+const getFeatureValue_CACHED_MAY_BE_STALE = currentStageDisableGrowthbookStartup ? ((_key: string, fallbackValue: unknown) => fallbackValue) : getFeatureValueCachedMayBeStaleFromGrowthbook;
 import { getOriginalCwd, setAdditionalDirectoriesForClaudeMd, setIsRemoteMode, setMainLoopModelOverride, setMainThreadAgentType, setTeleportedSessionInfo } from './bootstrap/state.js';
 import { filterCommandsForRemoteMode, getCommands } from './commands.js';
 import type { StatsStore } from './context/stats.js';

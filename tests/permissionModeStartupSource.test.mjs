@@ -34,3 +34,25 @@ test(
     )
   },
 )
+
+test('main source imports user helpers without a require shim', () => {
+  const source = readSource('src/main.tsx')
+
+  assert.match(
+    source,
+    /import \{ initUser, resetUserCache \} from '\.\/utils\/user\.js';/,
+  )
+  assert.doesNotMatch(source, /const getUserModule = \(\) =>/)
+  assert.doesNotMatch(source, /require\('\.\/utils\/user\.js'\)/)
+})
+
+test('main source imports context helpers without a require shim', () => {
+  const source = readSource('src/main.tsx')
+
+  assert.match(
+    source,
+    /import \{ getSystemContext, getUserContext \} from '\.\/context\.js';/,
+  )
+  assert.doesNotMatch(source, /const getContextModule = \(\) =>/)
+  assert.doesNotMatch(source, /require\('\.\/context\.js'\)/)
+})
