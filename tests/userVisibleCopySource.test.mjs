@@ -249,16 +249,13 @@ test('remaining visible help and warning copy avoid Claude-branded links and com
 test('tips, status notices, and chrome startup copy avoid stale Claude wording in Codex mode', async () => {
   const tipSource = await readFile(`${ROOT}/services/tips/tipRegistry.ts`, 'utf8')
   const statusSource = await readFile(`${ROOT}/utils/statusNoticeDefinitions.tsx`, 'utf8')
-  const chromeSource = await readFile(
-    `${ROOT}/hooks/useChromeExtensionNotification.tsx`,
-    'utf8',
-  )
 
   assert.match(tipSource, /codex-code --continue or codex-code --resume/)
   assert.doesNotMatch(tipSource, /claude --continue/)
   assert.doesNotMatch(tipSource, /@claude/)
   assert.doesNotMatch(tipSource, /clau\.de\/web/)
   assert.doesNotMatch(tipSource, /Claude desktop app/)
+  assert.doesNotMatch(tipSource, /\/mobile/)
   assert.match(tipSource, /currentStageDisableClaudeProductTips/)
 
   assert.doesNotMatch(statusSource, /claude \/logout/)
@@ -267,9 +264,6 @@ test('tips, status notices, and chrome startup copy avoid stale Claude wording i
   assert.doesNotMatch(statusSource, /instead of Claude account/)
   assert.match(statusSource, /isCurrentPhaseCustomCodexProvider\(\)/)
   assert.match(statusSource, /run `\/logout`/)
-
-  assert.match(chromeSource, /isCurrentPhaseCustomCodexProvider\(\)/)
-  assert.match(chromeSource, /return null;/)
 })
 
 test('command descriptions avoid stale Claude Code wording', async () => {

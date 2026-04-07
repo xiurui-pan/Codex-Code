@@ -367,9 +367,6 @@ export type GlobalConfig = {
   // Plan mode usage tracking
   lastPlanModeUse?: number // Timestamp of last plan mode usage
 
-  // Subscription notice tracking
-  subscriptionNoticeCount?: number // Number of times the subscription notice has been shown
-  hasAvailableSubscription?: boolean // Cached result of whether user has a subscription available
   subscriptionUpsellShownCount?: number // Number of times the subscription upsell has been shown (deprecated)
   recommendedSubscription?: string // Cached config value from Statsig (deprecated)
 
@@ -425,10 +422,6 @@ export type GlobalConfig = {
   // accounts cap at 3 config writes; healthy+transient-blip self-heals in ~210s.
   bridgeOauthDeadExpiresAt?: number
   bridgeOauthDeadFailCount?: number
-
-  // Desktop upsell startup dialog tracking
-  desktopUpsellSeenCount?: number // Total showings (max 3)
-  desktopUpsellDismissed?: boolean // "Don't ask again" picked
 
   // Idle-return dialog tracking
   idleReturnDismissed?: boolean // "Don't ask again" picked

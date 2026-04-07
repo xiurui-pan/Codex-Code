@@ -7,7 +7,6 @@ import {
   getSettingsForSource,
 } from 'src/utils/settings/settings.js'
 import { shouldOfferTerminalSetup } from '../../commands/terminalSetup/terminalSetup.js'
-import { getDesktopUpsellConfig } from '../../components/DesktopUpsell/DesktopUpsellStartup.js'
 import { color } from '../../components/design-system/color.js'
 import { shouldShowOverageCreditUpsell } from '../../components/LogoV2/OverageCreditUpsell.js'
 import { getShortcutDisplay } from '../../keybindings/shortcutFormat.js'
@@ -451,31 +450,8 @@ const externalTips: Tip[] = [
       !currentStageDisableClaudeProductTips && getPlatform() !== 'linux',
   },
   {
-    id: 'desktop-shortcut',
-    content: async ctx => {
-      const blue = color('suggestion', ctx.theme)
-      return `Continue your session in Codex Code Desktop with ${blue('/desktop')}`
-    },
-    cooldownSessions: 15,
-    isRelevant: async () => {
-      if (currentStageDisableClaudeProductTips) return false
-      if (!getDesktopUpsellConfig().enable_shortcut_tip) return false
-      return (
-        process.platform === 'darwin' ||
-        (process.platform === 'win32' && process.arch === 'x64')
-      )
-    },
-  },
-  {
     id: 'web-app',
     content: async () => 'Run tasks in the cloud while you keep coding locally',
-    cooldownSessions: 15,
-    isRelevant: async () => !currentStageDisableClaudeProductTips,
-  },
-  {
-    id: 'mobile-app',
-    content: async () =>
-      '/mobile to use Codex Code from the Codex Code app on your phone',
     cooldownSessions: 15,
     isRelevant: async () => !currentStageDisableClaudeProductTips,
   },
