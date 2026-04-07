@@ -12,12 +12,13 @@ test('codexResponses provider chain: has explicit request-stage timeout for hang
   assert.match(source, /CODEX_RESPONSES_REQUEST_TIMEOUT_MS/)
   assert.match(source, /DEFAULT_REQUEST_TIMEOUT_MS = 30_000/)
   assert.match(source, /async function fetchWithRequestTimeout/)
+  assert.match(source, /async function fetchWithRequestRetries/)
   assert.match(
     source,
     /request timed out \(waiting for response\) after \$\{requestTimeoutMs\}ms/,
   )
   assert.match(
     source,
-    /fetchWithRequestTimeout\(getResponsesBaseUrl\(\),/,
+    /fetchWithRequestRetries\(\s*getResponsesBaseUrl\(\),/,
   )
 })

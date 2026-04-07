@@ -167,3 +167,20 @@ test('responses request builder drops orphan function_call_output entries from h
   assert.equal(result.inputTypes.includes('function_call_output'), true)
   assert.equal(result.functionCallOutputIds.includes('tool-orphan'), false)
 })
+
+test('custom codex provider retries a failed request before surfacing an error', async () => {
+  const result = await runBehavior('request-retry')
+
+  assert.equal(result.requestCount, 2)
+  assert.equal(result.errorMessage, null)
+  assert.equal(result.finalText, 'retried request ok')
+})
+
+test('custom codex provider retries an incomplete SSE stream and emits reconnect progress', async () => {
+  const result = await runBehavior('stream-retry-incomplete')
+
+  assert.equal(result.requestCount, 2)
+  assert.deepEqual(result.retryMessages, ['Reconnecting... 1/1'])
+  assert.equal(result.errorMessage, null)
+  assert.equal(result.finalText, 'retried stream ok')
+})

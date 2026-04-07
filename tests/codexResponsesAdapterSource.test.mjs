@@ -62,3 +62,18 @@ test('codex responses adapter sends function_call_output as plain text output', 
   assert.match(source, /type: 'function_call_output'/)
   assert.match(source, /output: getLocalExecutionOutputText\(turnItems\)/)
 })
+
+test('codex responses adapter retries incomplete streams and surfaces reconnect messages', async () => {
+  const source = await readFile(SOURCE_PATH, 'utf8')
+
+  assert.match(source, /stream closed before response\.completed/)
+  assert.match(source, /kind: 'retry'/)
+  assert.match(source, /Reconnecting\.\.\. \$\{streamRetryCount\}\/\$\{streamMaxRetries\}/)
+})
+
+test('codex responses adapter maps response.incomplete into a visible API error', async () => {
+  const source = await readFile(SOURCE_PATH, 'utf8')
+
+  assert.match(source, /type: 'response\.incomplete'/)
+  assert.match(source, /Incomplete response returned, reason:/)
+})

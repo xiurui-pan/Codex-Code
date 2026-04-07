@@ -247,3 +247,55 @@ test('codex config can update model_context_window in ~/.codex/config.toml', asy
     await rm(tempDir, { recursive: true, force: true })
   }
 })
+
+test('codex config exposes provider retry and stream timeout settings', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'codex-config-retry-'))
+  const codexDir = join(tempDir, '.codex')
+  const configPath = join(codexDir, 'config.toml')
+  await mkdir(codexDir, { recursive: true })
+  await writeFile(
+    configPath,
+    [
+      'model_provider = "test-provider"',
+      '',
+      '[model_providers.test-provider]',
+      'base_url = "https://example.invalid/v1"',
+      'request_max_retries = 7',
+      'stream_max_retries = 9',
+      'stream_idle_timeout_ms = 450000',
+      '',
+    ].join('\n'),
+  )
+
+  try {
+    await withEnv(
+      {
+        CODEX_CODE_REQUEST_MAX_RETRIES: undefined,
+        CODEX_CODE_STREAM_MAX_RETRIES: undefined,
+        CODEX_CODE_STREAM_IDLE_TIMEOUT_MS: undefined,
+      },
+      async () => {
+        const {
+          applyCodexConfigToEnv,
+          getCodexRequestMaxRetries,
+          getCodexStreamIdleTimeoutMs,
+          getCodexStreamMaxRetries,
+          loadCodexConfig,
+        } = await import('../src/utils/codexConfig.ts')
+
+        const config = await loadCodexConfig(configPath)
+        assert.equal(config.requestMaxRetries, 7)
+        assert.equal(config.streamMaxRetries, 9)
+        assert.equal(config.streamIdleTimeoutMs, 450000)
+
+        applyCodexConfigToEnv(config)
+
+        assert.equal(getCodexRequestMaxRetries(), 7)
+        assert.equal(getCodexStreamMaxRetries(), 9)
+        assert.equal(getCodexStreamIdleTimeoutMs(), 450000)
+      },
+    )
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})

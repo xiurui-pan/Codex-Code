@@ -40,6 +40,23 @@ test('codex config exposes context window and auto compact helpers', async () =>
   assert.match(source, /export async function writeCodexConfigModelContextWindow/)
 })
 
+test('codex config exposes provider retry and stream timeout helpers', async () => {
+  const source = await readFile(SOURCE_PATH, 'utf8')
+
+  assert.match(source, /CODEX_DEFAULT_REQUEST_MAX_RETRIES = 4/)
+  assert.match(source, /CODEX_DEFAULT_STREAM_MAX_RETRIES = 5/)
+  assert.match(source, /CODEX_DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000/)
+  assert.match(source, /key === 'request_max_retries'/)
+  assert.match(source, /key === 'stream_max_retries'/)
+  assert.match(source, /key === 'stream_idle_timeout_ms'/)
+  assert.match(source, /CODEX_CODE_REQUEST_MAX_RETRIES/)
+  assert.match(source, /CODEX_CODE_STREAM_MAX_RETRIES/)
+  assert.match(source, /CODEX_CODE_STREAM_IDLE_TIMEOUT_MS/)
+  assert.match(source, /export function getCodexRequestMaxRetries/)
+  assert.match(source, /export function getCodexStreamMaxRetries/)
+  assert.match(source, /export function getCodexStreamIdleTimeoutMs/)
+})
+
 test('codex config parses and exports small_fast_model helpers', async () => {
   const source = await readFile(SOURCE_PATH, 'utf8')
 

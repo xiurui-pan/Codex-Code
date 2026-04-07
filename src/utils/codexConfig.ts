@@ -10,10 +10,18 @@ export const CODEX_DEFAULT_EFFECTIVE_CONTEXT_WINDOW = Math.floor(
 export const CODEX_DEFAULT_AUTO_COMPACT_TOKEN_LIMIT = Math.floor(
   (CODEX_DEFAULT_CONTEXT_WINDOW * 90) / 100,
 )
+export const CODEX_DEFAULT_REQUEST_MAX_RETRIES = 4
+export const CODEX_DEFAULT_STREAM_MAX_RETRIES = 5
+export const CODEX_DEFAULT_STREAM_IDLE_TIMEOUT_MS = 300_000
+export const CODEX_MAX_REQUEST_MAX_RETRIES = 100
+export const CODEX_MAX_STREAM_MAX_RETRIES = 100
 
 type MinimalCodexProvider = {
   base_url?: string
   env_key?: string
+  request_max_retries?: number
+  stream_max_retries?: number
+  stream_idle_timeout_ms?: number
 }
 
 type MinimalCodexWebSearchLocation = {
@@ -42,6 +50,9 @@ export type LoadedCodexConfig = {
   responseStorage?: boolean
   webSearchMode?: string
   webSearch?: MinimalCodexWebSearchConfig
+  requestMaxRetries?: number
+  streamMaxRetries?: number
+  streamIdleTimeoutMs?: number
   apiKeyEnvName?: string
   apiKey?: string
 }
@@ -200,6 +211,19 @@ function parsePositiveIntegerEnvValue(value: string | undefined): number | undef
   return parsed
 }
 
+function parseNonNegativeIntegerEnvValue(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined
+  }
+
+  const parsed = Number.parseInt(value, 10)
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return undefined
+  }
+
+  return parsed
+}
+
 function parseMinimalToml(source: string): {
   model_provider?: string
   model?: string
@@ -258,8 +282,26 @@ function parseMinimalToml(source: string): {
     if (currentSection?.startsWith('model_providers.')) {
       const providerId = currentSection.slice('model_providers.'.length)
       root.model_providers[providerId] ??= {}
-      root.model_providers[providerId][key as keyof MinimalCodexProvider] =
-        String(value)
+      if (key === 'base_url' && typeof value === 'string') {
+        root.model_providers[providerId].base_url = value
+      } else if (key === 'env_key' && typeof value === 'string') {
+        root.model_providers[providerId].env_key = value
+      } else if (
+        key === 'request_max_retries' &&
+        typeof value === 'number'
+      ) {
+        root.model_providers[providerId].request_max_retries = value
+      } else if (
+        key === 'stream_max_retries' &&
+        typeof value === 'number'
+      ) {
+        root.model_providers[providerId].stream_max_retries = value
+      } else if (
+        key === 'stream_idle_timeout_ms' &&
+        typeof value === 'number'
+      ) {
+        root.model_providers[providerId].stream_idle_timeout_ms = value
+      }
       continue
     }
 
@@ -365,6 +407,9 @@ export async function loadCodexConfig(
     responseStorage,
     webSearchMode: parsed.web_search,
     webSearch: parsed.tools.web_search,
+    requestMaxRetries: provider.request_max_retries,
+    streamMaxRetries: provider.stream_max_retries,
+    streamIdleTimeoutMs: provider.stream_idle_timeout_ms,
     apiKeyEnvName: provider.env_key,
     apiKey: provider.env_key ? process.env[provider.env_key] : undefined,
   }
@@ -504,6 +549,19 @@ export function applyCodexConfigToEnv(config: LoadedCodexConfig): void {
       process.env.CODEX_CODE_API_KEY = apiKey
     }
   }
+
+  if (config.requestMaxRetries !== undefined) {
+    process.env.CODEX_CODE_REQUEST_MAX_RETRIES = `${config.requestMaxRetries}`
+  }
+
+  if (config.streamMaxRetries !== undefined) {
+    process.env.CODEX_CODE_STREAM_MAX_RETRIES = `${config.streamMaxRetries}`
+  }
+
+  if (config.streamIdleTimeoutMs !== undefined) {
+    process.env.CODEX_CODE_STREAM_IDLE_TIMEOUT_MS =
+      `${config.streamIdleTimeoutMs}`
+  }
 }
 
 export function getCodexConfiguredBaseUrl(): string | undefined {
@@ -626,6 +684,39 @@ export function getCodexConfiguredAuthEnvKey(): string | undefined {
 
 export function getCodexConfiguredApiKey(): string | undefined {
   return process.env.CODEX_CODE_API_KEY ?? process.env.ANTHROPIC_API_KEY
+}
+
+export function getCodexConfiguredRequestMaxRetries(): number | undefined {
+  return parseNonNegativeIntegerEnvValue(process.env.CODEX_CODE_REQUEST_MAX_RETRIES)
+}
+
+export function getCodexConfiguredStreamMaxRetries(): number | undefined {
+  return parseNonNegativeIntegerEnvValue(process.env.CODEX_CODE_STREAM_MAX_RETRIES)
+}
+
+export function getCodexConfiguredStreamIdleTimeoutMs(): number | undefined {
+  return parseNonNegativeIntegerEnvValue(process.env.CODEX_CODE_STREAM_IDLE_TIMEOUT_MS)
+}
+
+export function getCodexRequestMaxRetries(): number {
+  return Math.min(
+    getCodexConfiguredRequestMaxRetries() ?? CODEX_DEFAULT_REQUEST_MAX_RETRIES,
+    CODEX_MAX_REQUEST_MAX_RETRIES,
+  )
+}
+
+export function getCodexStreamMaxRetries(): number {
+  return Math.min(
+    getCodexConfiguredStreamMaxRetries() ?? CODEX_DEFAULT_STREAM_MAX_RETRIES,
+    CODEX_MAX_STREAM_MAX_RETRIES,
+  )
+}
+
+export function getCodexStreamIdleTimeoutMs(): number {
+  return (
+    getCodexConfiguredStreamIdleTimeoutMs() ??
+    CODEX_DEFAULT_STREAM_IDLE_TIMEOUT_MS
+  )
 }
 
 export function shouldSendCodexRequestIdentity(): boolean {

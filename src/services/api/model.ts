@@ -140,7 +140,11 @@ function codexChunkToPreferredAssistantTurnResult(
     }
   }
 
-  if (chunk.kind === 'stream_event' || chunk.kind === 'usage') {
+  if (
+    chunk.kind === 'stream_event' ||
+    chunk.kind === 'usage' ||
+    chunk.kind === 'retry'
+  ) {
     return { kind: 'empty' }
   }
 

@@ -281,6 +281,14 @@ export const WebSearchTool = buildTool({
         throw new Error(chunk.errorMessage)
       }
 
+      if (
+        chunk.kind === 'stream_event' ||
+        chunk.kind === 'usage' ||
+        chunk.kind === 'retry'
+      ) {
+        continue
+      }
+
       const collected = collectCodexWebSearchResponse(chunk.turnItems, query)
       allContentBlocks.push(...collected.blocks)
 

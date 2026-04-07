@@ -10,6 +10,9 @@ import {
   getCodexConfiguredApiKey,
   getCodexConfiguredWebSearchAllowedDomains,
   getCodexConfiguredBaseUrl,
+  getCodexRequestMaxRetries,
+  getCodexStreamIdleTimeoutMs,
+  getCodexStreamMaxRetries,
   getCodexConfiguredWebSearchContextSize,
   getCodexConfiguredWebSearchLocation,
   getCodexConfiguredModel,
@@ -18,6 +21,7 @@ import {
 } from '../../utils/codexConfig.js'
 import { errorMessage } from '../../utils/errors.js'
 import { resolveAppliedEffort } from '../../utils/effort.js'
+import { sleep } from '../../utils/sleep.js'
 import {
   ensureToolResultPairing,
   normalizeMessagesForAPI,
@@ -90,11 +94,20 @@ export type CodexUsageChunk = {
   usage: ResponsesCompletedUsage
 }
 
+export type CodexRetryChunk = {
+  kind: 'retry'
+  message: string
+  attempt: number
+  maxRetries: number
+  delayMs: number
+}
+
 export type CodexResponseChunk =
   | CodexTurnItemChunk
   | CodexApiErrorChunk
   | CodexStreamEventChunk
   | CodexUsageChunk
+  | CodexRetryChunk
 
 export type CodexResponseResult = {
   turnItems: ModelTurnItem[]
@@ -163,10 +176,26 @@ type ResponsesOutputAddedEvent = {
 type ResponsesFailureEvent = {
   type: 'response.failed' | 'error'
   error?: {
+    code?: string
     message?: string
+  }
+  response?: {
+    error?: {
+      code?: string
+      message?: string
+    }
   }
   detail?: string
   message?: string
+}
+
+type ResponsesIncompleteEvent = {
+  type: 'response.incomplete'
+  response?: {
+    incomplete_details?: {
+      reason?: string
+    }
+  }
 }
 
 type ResponsesReasoningSummaryPartAddedEvent = {
@@ -191,6 +220,7 @@ type ResponsesStreamEvent =
   | ResponsesOutputTextDeltaEvent
   | ResponsesOutputAddedEvent
   | ResponsesFailureEvent
+  | ResponsesIncompleteEvent
   | ResponsesReasoningSummaryPartAddedEvent
   | ResponsesReasoningSummaryTextDeltaEvent
   | { type?: string }
@@ -671,6 +701,17 @@ const DEFAULT_FIRST_EVENT_TIMEOUT_MS = 30_000
 const DEFAULT_STREAM_IDLE_TIMEOUT_MS = 30_000
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 const DEFAULT_NETWORK_TOOL_TIMEOUT_MS = 90_000
+const CODEX_RETRY_BASE_DELAY_MS = 200
+
+class RetryableResponsesStreamError extends Error {
+  readonly delayMs?: number
+
+  constructor(message: string, delayMs?: number) {
+    super(message)
+    this.name = 'RetryableResponsesStreamError'
+    this.delayMs = delayMs
+  }
+}
 
 function parseTimeoutMs(
   raw: string | undefined,
@@ -699,22 +740,105 @@ function getTimeoutDefaultMs(
 function getFirstEventTimeoutMs(tools: Tools | undefined): number {
   return parseTimeoutMs(
     process.env.CODEX_RESPONSES_FIRST_EVENT_TIMEOUT_MS,
-    getTimeoutDefaultMs(tools, DEFAULT_FIRST_EVENT_TIMEOUT_MS),
+    getTimeoutDefaultMs(
+      tools,
+      Math.max(DEFAULT_FIRST_EVENT_TIMEOUT_MS, getCodexStreamIdleTimeoutMs()),
+    ),
   )
 }
 
 function getStreamIdleTimeoutMs(tools: Tools | undefined): number {
   return parseTimeoutMs(
     process.env.CODEX_RESPONSES_STREAM_IDLE_TIMEOUT_MS,
-    getTimeoutDefaultMs(tools, DEFAULT_STREAM_IDLE_TIMEOUT_MS),
+    getTimeoutDefaultMs(
+      tools,
+      Math.max(DEFAULT_STREAM_IDLE_TIMEOUT_MS, getCodexStreamIdleTimeoutMs()),
+    ),
   )
 }
 
 function getRequestTimeoutMs(tools: Tools | undefined): number {
   return parseTimeoutMs(
     process.env.CODEX_RESPONSES_REQUEST_TIMEOUT_MS,
-    getTimeoutDefaultMs(tools, DEFAULT_REQUEST_TIMEOUT_MS),
+    getTimeoutDefaultMs(
+      tools,
+      Math.max(DEFAULT_REQUEST_TIMEOUT_MS, getCodexStreamIdleTimeoutMs()),
+    ),
   )
+}
+
+function getRetryDelayMs(attempt: number): number {
+  const exponentialDelay =
+    CODEX_RETRY_BASE_DELAY_MS * Math.pow(2, Math.max(0, attempt - 1))
+  const jitterMultiplier = 0.9 + Math.random() * 0.2
+  return Math.max(1, Math.round(exponentialDelay * jitterMultiplier))
+}
+
+function shouldRetryResponseStatus(status: number): boolean {
+  return status >= 500
+}
+
+function maybeCancelResponseBody(response: Response): void {
+  void response.body?.cancel().catch(() => {})
+}
+
+function parseRetryDelayMsFromFailureMessage(
+  code: string | undefined,
+  message: string | undefined,
+): number | undefined {
+  if (code !== 'rate_limit_exceeded' || !message) {
+    return undefined
+  }
+
+  const match = message.match(
+    /try again in\s*(\d+(?:\.\d+)?)\s*(s|ms|seconds?)/i,
+  )
+  if (!match?.[1] || !match[2]) {
+    return undefined
+  }
+
+  const value = Number.parseFloat(match[1])
+  if (!Number.isFinite(value) || value < 0) {
+    return undefined
+  }
+
+  return match[2].toLowerCase() === 'ms'
+    ? Math.round(value)
+    : Math.round(value * 1000)
+}
+
+function classifyResponsesFailureEvent(event: ResponsesFailureEvent): {
+  retryable: boolean
+  message: string
+  delayMs?: number
+} {
+  const errorDetails = event.error ?? event.response?.error
+  const code = errorDetails?.code
+  const message =
+    errorDetails?.message ??
+    event.detail ??
+    event.message ??
+    'custom Codex provider request failed'
+
+  if (
+    code === 'context_length_exceeded' ||
+    code === 'insufficient_quota' ||
+    code === 'usage_not_included' ||
+    code === 'invalid_prompt' ||
+    code === 'server_is_overloaded' ||
+    code === 'slow_down'
+  ) {
+    return {
+      retryable: false,
+      message,
+    }
+  }
+
+  return {
+    retryable: true,
+    message,
+    delayMs: parseRetryDelayMsFromFailureMessage(code, message),
+  }
 }
 
 async function fetchWithRequestTimeout(
@@ -751,6 +875,44 @@ async function fetchWithRequestTimeout(
   } finally {
     clearTimeout(timeoutId)
   }
+}
+
+async function fetchWithRequestRetries(
+  url: string,
+  init: RequestInit,
+  requestTimeoutMs: number,
+  signal: AbortSignal,
+): Promise<Response> {
+  const maxRetries = getCodexRequestMaxRetries()
+
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt += 1) {
+    try {
+      const response = await fetchWithRequestTimeout(
+        url,
+        init,
+        requestTimeoutMs,
+        signal,
+      )
+
+      if (
+        response.ok ||
+        !shouldRetryResponseStatus(response.status) ||
+        attempt > maxRetries
+      ) {
+        return response
+      }
+
+      maybeCancelResponseBody(response)
+    } catch (error) {
+      if (signal.aborted || attempt > maxRetries) {
+        throw error
+      }
+    }
+
+    await sleep(getRetryDelayMs(attempt), signal)
+  }
+
+  throw new Error('custom Codex provider request failed without a response')
 }
 
 async function readWithTimeout(
@@ -815,6 +977,7 @@ async function* iterateResponsesSseEvents(
   const decoder = new TextDecoder()
   let buffer = ''
   let seenEvent = false
+  let completed = false
 
   while (true) {
     const timeoutMs = seenEvent
@@ -838,6 +1001,9 @@ async function* iterateResponsesSseEvents(
       const payload = parseResponsesSseEvent(block)
       if (payload) {
         seenEvent = true
+        if (payload.type === 'response.completed') {
+          completed = true
+        }
         yield payload
       }
       separatorIndex = buffer.indexOf('\n\n')
@@ -852,8 +1018,17 @@ async function* iterateResponsesSseEvents(
     const payload = parseResponsesSseEvent(buffer)
     if (payload) {
       seenEvent = true
+      if (payload.type === 'response.completed') {
+        completed = true
+      }
       yield payload
     }
+  }
+
+  if (!completed) {
+    throw new RetryableResponsesStreamError(
+      'Custom Codex provider stream closed before response.completed',
+    )
   }
 }
 
@@ -864,133 +1039,68 @@ export async function* queryCodexResponsesStream({
   options,
   signal,
 }: CodexStreamingArgs): AsyncGenerator<CodexResponseChunk, void, unknown> {
-  try {
+  const requestIdentity = buildCodexRequestIdentity()
+  const requestTimeoutMs = getRequestTimeoutMs(tools)
+  const streamMaxRetries = getCodexStreamMaxRetries()
+  const requestBody = JSON.stringify(
+    await buildResponsesBody({
+      messages,
+      systemPrompt,
+      tools,
+      options,
+    }),
+  )
+
+  let streamRetryCount = 0
+
+  while (true) {
     const startedTextBlocks = new Set<string>()
     const startedThinkingBlocks = new Set<string>()
-    const requestIdentity = buildCodexRequestIdentity()
-    const requestTimeoutMs = getRequestTimeoutMs(tools)
-    const response = await fetchWithRequestTimeout(getResponsesBaseUrl(), {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
-        ...(getResponsesApiKey()
-          ? { authorization: `Bearer ${getResponsesApiKey()}` }
-          : {}),
-        'x-app': 'cli',
-        ...requestIdentity.headers,
-      },
-      body: JSON.stringify(
-        await buildResponsesBody({
-          messages,
-          systemPrompt,
-          tools,
-          options,
-        }),
-      ),
-    }, requestTimeoutMs, signal)
+    let yieldedVisibleOutput = false
 
-    if (!response.ok) {
-      const errorText = await response.text()
-      yield {
-        kind: 'api_error',
-        errorMessage: formatCodexProviderApiError(
-          `Custom Codex provider request failed: ${response.status} ${errorText}`,
-        ),
-      }
-      return
-    }
+    try {
+      const response = await fetchWithRequestRetries(
+        getResponsesBaseUrl(),
+        {
+          method: 'POST',
+          headers: {
+            'content-type': 'application/json',
+            ...(getResponsesApiKey()
+              ? { authorization: `Bearer ${getResponsesApiKey()}` }
+              : {}),
+            'x-app': 'cli',
+            ...requestIdentity.headers,
+          },
+          body: requestBody,
+        },
+        requestTimeoutMs,
+        signal,
+      )
 
-    for await (const event of iterateResponsesSseEvents(response, tools)) {
-      if (event.type === 'response.content_part.added' && event.part) {
-        if (event.part.type === 'output_text') {
-          const outputIndex =
-            typeof event.output_index === 'number' ? event.output_index : 0
-          const contentIndex =
-            typeof event.content_index === 'number' ? event.content_index : 0
-          const blockKey = `${outputIndex}:${contentIndex}`
-          if (startedTextBlocks.has(blockKey)) {
-            continue
-          }
-          startedTextBlocks.add(blockKey)
-          yield {
-            kind: 'stream_event',
-            event: {
-              type: 'content_block_start',
-              index: contentIndex,
-              output_index: outputIndex,
-              content_block: {
-                type: 'text',
-                text: '',
-              },
-            },
-          }
+      if (!response.ok) {
+        const errorText = await response.text()
+        yield {
+          kind: 'api_error',
+          errorMessage: formatCodexProviderApiError(
+            `Custom Codex provider request failed: ${response.status} ${errorText}`,
+          ),
         }
-        continue
+        return
       }
 
-      // Handle reasoning summary part added (start of a thinking block)
-      if (event.type === 'response.reasoning_summary_part.added') {
-        const summaryIndex =
-          typeof event.summary_index === 'number' ? event.summary_index : 0
-        const outputIndex =
-          typeof event.output_index === 'number' ? event.output_index : 0
-        const blockKey = `thinking:${outputIndex}:${summaryIndex}`
-        if (!startedThinkingBlocks.has(blockKey)) {
-          startedThinkingBlocks.add(blockKey)
-          yield {
-            kind: 'stream_event',
-            event: {
-              type: 'content_block_start',
-              index: summaryIndex,
-              output_index: outputIndex,
-              content_block: { type: 'thinking', thinking: '' },
-            },
-          }
-        }
-        continue
-      }
-
-      // Handle reasoning summary text delta
-      if (event.type === 'response.reasoning_summary_text.delta') {
-        if (typeof event.delta === 'string' && event.delta.length > 0) {
-          const summaryIndex =
-            typeof event.summary_index === 'number' ? event.summary_index : 0
-          const outputIndex =
-            typeof event.output_index === 'number' ? event.output_index : 0
-          const blockKey = `thinking:${outputIndex}:${summaryIndex}`
-          if (!startedThinkingBlocks.has(blockKey)) {
-            startedThinkingBlocks.add(blockKey)
-            yield {
-              kind: 'stream_event',
-              event: {
-                type: 'content_block_start',
-                index: summaryIndex,
-                output_index: outputIndex,
-                content_block: { type: 'thinking', thinking: '' },
-              },
+      for await (const event of iterateResponsesSseEvents(response, tools)) {
+        if (event.type === 'response.content_part.added' && event.part) {
+          if (event.part.type === 'output_text') {
+            const outputIndex =
+              typeof event.output_index === 'number' ? event.output_index : 0
+            const contentIndex =
+              typeof event.content_index === 'number' ? event.content_index : 0
+            const blockKey = `${outputIndex}:${contentIndex}`
+            if (startedTextBlocks.has(blockKey)) {
+              continue
             }
-          }
-          yield {
-            kind: 'stream_event',
-            event: {
-              type: 'content_block_delta',
-              index: summaryIndex,
-              delta: { type: 'thinking_delta', thinking: event.delta },
-            },
-          }
-        }
-        continue
-      }
-
-      if (event.type === 'response.output_text.delta') {
-        if (typeof event.delta === 'string' && event.delta.length > 0) {
-          const outputIndex =
-            typeof event.output_index === 'number' ? event.output_index : 0
-          const contentIndex =
-            typeof event.content_index === 'number' ? event.content_index : 0
-          const blockKey = `${outputIndex}:${contentIndex}`
-          if (!startedTextBlocks.has(blockKey)) {
             startedTextBlocks.add(blockKey)
+            yieldedVisibleOutput = true
             yield {
               kind: 'stream_event',
               event: {
@@ -1004,85 +1114,207 @@ export async function* queryCodexResponsesStream({
               },
             }
           }
-          yield {
-            kind: 'stream_event',
-            event: {
-              type: 'content_block_delta',
-              index: contentIndex,
-              delta: {
-                type: 'text_delta',
-                text: event.delta,
+          continue
+        }
+
+        if (event.type === 'response.reasoning_summary_part.added') {
+          const summaryIndex =
+            typeof event.summary_index === 'number' ? event.summary_index : 0
+          const outputIndex =
+            typeof event.output_index === 'number' ? event.output_index : 0
+          const blockKey = `thinking:${outputIndex}:${summaryIndex}`
+          if (!startedThinkingBlocks.has(blockKey)) {
+            startedThinkingBlocks.add(blockKey)
+            yieldedVisibleOutput = true
+            yield {
+              kind: 'stream_event',
+              event: {
+                type: 'content_block_start',
+                index: summaryIndex,
+                output_index: outputIndex,
+                content_block: { type: 'thinking', thinking: '' },
               },
-            },
+            }
           }
+          continue
         }
-        continue
-      }
 
-      if (event.type === 'response.output_item.added' && event.item) {
-        const turnItems =
-          event.item.type === 'web_search_call'
-            ? normalizeResponsesOutputToTurnItems([event.item])
-            : []
-        if (turnItems.length > 0) {
+        if (event.type === 'response.reasoning_summary_text.delta') {
+          if (typeof event.delta === 'string' && event.delta.length > 0) {
+            const summaryIndex =
+              typeof event.summary_index === 'number' ? event.summary_index : 0
+            const outputIndex =
+              typeof event.output_index === 'number' ? event.output_index : 0
+            const blockKey = `thinking:${outputIndex}:${summaryIndex}`
+            if (!startedThinkingBlocks.has(blockKey)) {
+              startedThinkingBlocks.add(blockKey)
+              yieldedVisibleOutput = true
+              yield {
+                kind: 'stream_event',
+                event: {
+                  type: 'content_block_start',
+                  index: summaryIndex,
+                  output_index: outputIndex,
+                  content_block: { type: 'thinking', thinking: '' },
+                },
+              }
+            }
+            yieldedVisibleOutput = true
+            yield {
+              kind: 'stream_event',
+              event: {
+                type: 'content_block_delta',
+                index: summaryIndex,
+                delta: { type: 'thinking_delta', thinking: event.delta },
+              },
+            }
+          }
+          continue
+        }
+
+        if (event.type === 'response.output_text.delta') {
+          if (typeof event.delta === 'string' && event.delta.length > 0) {
+            const outputIndex =
+              typeof event.output_index === 'number' ? event.output_index : 0
+            const contentIndex =
+              typeof event.content_index === 'number' ? event.content_index : 0
+            const blockKey = `${outputIndex}:${contentIndex}`
+            if (!startedTextBlocks.has(blockKey)) {
+              startedTextBlocks.add(blockKey)
+              yieldedVisibleOutput = true
+              yield {
+                kind: 'stream_event',
+                event: {
+                  type: 'content_block_start',
+                  index: contentIndex,
+                  output_index: outputIndex,
+                  content_block: {
+                    type: 'text',
+                    text: '',
+                  },
+                },
+              }
+            }
+            yieldedVisibleOutput = true
+            yield {
+              kind: 'stream_event',
+              event: {
+                type: 'content_block_delta',
+                index: contentIndex,
+                delta: {
+                  type: 'text_delta',
+                  text: event.delta,
+                },
+              },
+            }
+          }
+          continue
+        }
+
+        if (event.type === 'response.output_item.added' && event.item) {
+          const turnItems =
+            event.item.type === 'web_search_call'
+              ? normalizeResponsesOutputToTurnItems([event.item])
+              : []
+          if (turnItems.length > 0) {
+            yieldedVisibleOutput = true
+            yield {
+              kind: 'turn_items',
+              turnItems,
+            }
+          }
+          continue
+        }
+
+        if (event.type === 'response.output_item.done' && event.item) {
+          const normalizedItem =
+            event.item.type === 'web_search_call' && !event.item.status
+              ? { ...event.item, status: 'completed' }
+              : event.item
+          const turnItems = normalizeResponsesOutputToTurnItems([normalizedItem])
+          if (turnItems.length > 0) {
+            yieldedVisibleOutput = true
+            yield {
+              kind: 'turn_items',
+              turnItems,
+            }
+          }
+          continue
+        }
+
+        if (event.type === 'response.completed') {
+          if (event.response?.usage) {
+            yield {
+              kind: 'usage',
+              usage: event.response.usage,
+            }
+          }
+          return
+        }
+
+        if (event.type === 'response.incomplete') {
+          const reason =
+            event.response?.incomplete_details?.reason?.trim() || 'unknown'
           yield {
-            kind: 'turn_items',
-            turnItems,
+            kind: 'api_error',
+            errorMessage: formatCodexProviderApiError(
+              `Incomplete response returned, reason: ${reason}`,
+            ),
           }
+          return
         }
-        continue
-      }
 
-      if (event.type === 'response.output_item.done' && event.item) {
-        const normalizedItem =
-          event.item.type === 'web_search_call' && !event.item.status
-            ? { ...event.item, status: 'completed' }
-            : event.item
-        const turnItems = normalizeResponsesOutputToTurnItems([normalizedItem])
-        if (turnItems.length > 0) {
+        if (event.type === 'response.failed' || event.type === 'error') {
+          const failure = classifyResponsesFailureEvent(event)
+          if (
+            failure.retryable &&
+            !yieldedVisibleOutput &&
+            streamRetryCount < streamMaxRetries
+          ) {
+            throw new RetryableResponsesStreamError(
+              failure.message,
+              failure.delayMs,
+            )
+          }
           yield {
-            kind: 'turn_items',
-            turnItems,
+            kind: 'api_error',
+            errorMessage: formatCodexProviderApiError(failure.message),
           }
+          return
         }
-        continue
       }
 
-      // Extract usage data from response.completed
-      if (event.type === 'response.completed') {
-        if (event.response?.usage) {
-          yield {
-            kind: 'usage',
-            usage: event.response.usage,
-          }
-        }
-        continue
-      }
-
-      if (event.type === 'response.failed' || event.type === 'error') {
-        const errorMessage =
-          event.error?.message ??
-          event.detail ??
-          event.message ??
-          'custom Codex provider request failed'
-        yield {
-          kind: 'api_error',
-          errorMessage: formatCodexProviderApiError(errorMessage),
-        }
+      return
+    } catch (error) {
+      if (signal.aborted) {
         return
       }
-    }
-  } catch (error) {
-    // User-triggered cancellation should not be surfaced as provider failure.
-    if (signal.aborted) {
-      return
-    }
 
-    yield {
-      kind: 'api_error',
-      errorMessage: formatCodexProviderApiError(
-        `Custom Codex provider request failed: ${errorMessage(error)}`,
-      ),
+      if (
+        error instanceof RetryableResponsesStreamError &&
+        !yieldedVisibleOutput &&
+        streamRetryCount < streamMaxRetries
+      ) {
+        streamRetryCount += 1
+        const delayMs = error.delayMs ?? getRetryDelayMs(streamRetryCount)
+        yield {
+          kind: 'retry',
+          message: `Reconnecting... ${streamRetryCount}/${streamMaxRetries}`,
+          attempt: streamRetryCount,
+          maxRetries: streamMaxRetries,
+          delayMs,
+        }
+        await sleep(delayMs, signal)
+        continue
+      }
+
+      yield {
+        kind: 'api_error',
+        errorMessage: formatCodexProviderApiError(
+          `Custom Codex provider request failed: ${errorMessage(error)}`,
+        ),
+      }
+      return
     }
   }
 }
@@ -1112,6 +1344,10 @@ export async function queryCodexResponses({
         turnItems,
         errorMessage: chunk.errorMessage,
       }
+    }
+
+    if (chunk.kind === 'retry') {
+      continue
     }
 
     if (chunk.kind === 'usage') {

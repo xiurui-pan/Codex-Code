@@ -747,7 +747,14 @@ async function* queryLoop(
               | null = null
             let internalAssistantMessage: AssistantMessage | null = null
 
-            if ((chunk as CodexResponseChunk).kind === 'api_error') {
+            if ((chunk as CodexResponseChunk).kind === 'retry') {
+              const retryChunk = chunk as Extract<
+                CodexResponseChunk,
+                { kind: 'retry' }
+              >
+              yield createSystemMessage(retryChunk.message, 'info')
+              continue
+            } else if ((chunk as CodexResponseChunk).kind === 'api_error') {
               const errorChunk = chunk as CodexResponseChunk
               message =
                 createAssistantMessageFromPreferredAssistantResponsePayload(

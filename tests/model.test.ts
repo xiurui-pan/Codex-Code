@@ -244,3 +244,9 @@ test('codex responses entry now returns raw turn-item chunks and leaves assistan
   assert.equal(source.includes('mergeStreamedAssistantMessages'), false)
   assert.equal(source.includes('codex-synthetic'), false)
 })
+
+test('codex streaming model adapter ignores reconnect progress chunks', async () => {
+  const source = await readModelSource()
+
+  assert.match(source, /chunk\.kind === 'retry'/)
+})
