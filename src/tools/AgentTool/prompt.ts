@@ -59,6 +59,7 @@ export function formatAgentLine(agent: AgentDefinition): string {
  * Override with CODEX_CODE_AGENT_LIST_IN_MESSAGES=true/false for testing.
  */
 export function shouldInjectAgentListInMessages(): boolean {
+  if (process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1') return false
   if (isEnvTruthy(process.env.CODEX_CODE_AGENT_LIST_IN_MESSAGES)) return true
   if (isEnvDefinedFalsy(process.env.CODEX_CODE_AGENT_LIST_IN_MESSAGES))
     return false

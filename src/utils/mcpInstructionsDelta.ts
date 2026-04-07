@@ -35,6 +35,7 @@ export type ClientSideInstruction = {
  * wins over both ant bypass and the GrowthBook gate.
  */
 export function isMcpInstructionsDeltaEnabled(): boolean {
+  if (process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1') return false
   if (isEnvTruthy(process.env.CODEX_CODE_MCP_INSTR_DELTA)) return true
   if (isEnvDefinedFalsy(process.env.CODEX_CODE_MCP_INSTR_DELTA)) return false
   return (

@@ -259,58 +259,34 @@ import { DevBar } from '../components/DevBar.js';
 // Current-stage local Codex mode does not ship the Tungsten live monitor path.
 const TungstenLiveMonitor = (): null => null;
 const useInstallMessages = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useInstallMessages.js').useInstallMessages;
-const useChromeExtensionNotification = currentStageDisableStartupNotifications ? () => {} : require('../hooks/useChromeExtensionNotification.js').useChromeExtensionNotification;
-const useOfficialMarketplaceNotification = currentStageDisableStartupNotifications ? () => {} : require('../hooks/useOfficialMarketplaceNotification.js').useOfficialMarketplaceNotification;
-const usePromptsFromClaudeInChrome = currentStageDisableStartupNotifications ? (_mcpClients?: unknown, _mode?: unknown) => {} : require('../hooks/usePromptsFromClaudeInChrome.js').usePromptsFromClaudeInChrome;
 const useSettingsErrors = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useSettingsErrors.js').useSettingsErrors;
 const useMcpConnectivityStatus = currentStageDisableStartupNotifications ? (_args?: unknown) => {} : require('../hooks/notifs/useMcpConnectivityStatus.js').useMcpConnectivityStatus;
 const useLspInitializationNotification = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useLspInitializationNotification.js').useLspInitializationNotification;
 const useLspPluginRecommendation = currentStageDisableStartupNotifications ? () => ({ recommendation: null, handleResponse: () => {} }) : require('../hooks/useLspPluginRecommendation.js').useLspPluginRecommendation;
 const LspRecommendationMenu = currentStageDisableStartupNotifications ? (() => null) : require('../components/LspRecommendation/LspRecommendationMenu.js').LspRecommendationMenu;
-const useClaudeCodeHintRecommendation = currentStageDisableStartupNotifications ? () => ({ recommendation: null, handleResponse: () => {} }) : require('../hooks/useClaudeCodeHintRecommendation.js').useClaudeCodeHintRecommendation;
-const PluginHintMenu = currentStageDisableStartupNotifications ? (() => null) : require('../components/ClaudeCodeHint/PluginHintMenu.js').PluginHintMenu;
-const DesktopUpsellStartup = currentStageDisableStartupNotifications ? (() => null) : require('../components/DesktopUpsell/DesktopUpsellStartup.js').DesktopUpsellStartup;
-const shouldShowDesktopUpsellStartup = currentStageDisableStartupNotifications ? (() => false) : require('../components/DesktopUpsell/DesktopUpsellStartup.js').shouldShowDesktopUpsellStartup;
 const usePluginInstallationStatus = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/usePluginInstallationStatus.js').usePluginInstallationStatus;
 const usePluginAutoupdateNotification = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/usePluginAutoupdateNotification.js').usePluginAutoupdateNotification;
 const performStartupChecks = currentStageDisableStartupNotifications ? (() => {}) : require('../utils/plugins/performStartupChecks.js').performStartupChecks;
-const AwsAuthStatusBox = currentStageDisableStartupNotifications ? (() => null) : require('../components/AwsAuthStatusBox.js').AwsAuthStatusBox;
-const useRateLimitWarningNotification = currentStageDisableStartupNotifications ? (_model?: unknown) => {} : require('../hooks/notifs/useRateLimitWarningNotification.js').useRateLimitWarningNotification;
-const useDeprecationWarningNotification = currentStageDisableStartupNotifications ? (_model?: unknown) => {} : require('../hooks/notifs/useDeprecationWarningNotification.js').useDeprecationWarningNotification;
 const useNpmDeprecationNotification = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useNpmDeprecationNotification.js').useNpmDeprecationNotification;
 const useIDEStatusIndicator = currentStageDisableStartupNotifications ? (_args?: unknown) => {} : require('../hooks/notifs/useIDEStatusIndicator.js').useIDEStatusIndicator;
-const useModelMigrationNotifications = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useModelMigrationNotifications.js').useModelMigrationNotifications;
-const useCanSwitchToExistingSubscription = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useCanSwitchToExistingSubscription.js').useCanSwitchToExistingSubscription;
 const useTeammateLifecycleNotification = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useTeammateShutdownNotification.js').useTeammateLifecycleNotification;
 const useFastModeNotification = currentStageDisableStartupNotifications ? () => {} : require('../hooks/notifs/useFastModeNotification.js').useFastModeNotification;
-const useModelMigrationNotificationsForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useModelMigrationNotifications;
-const useCanSwitchToExistingSubscriptionForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useCanSwitchToExistingSubscription;
 const useIDEStatusIndicatorForCurrentStage = currentStageDisableStartupNotifications ? (_args?: unknown) => {} : useIDEStatusIndicator;
 const useMcpConnectivityStatusForCurrentStage = currentStageDisableStartupNotifications ? (_args?: unknown) => {} : useMcpConnectivityStatus;
 const useAutoModeUnavailableNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useAutoModeUnavailableNotification;
 const usePluginInstallationStatusForCurrentStage = currentStageDisableStartupNotifications ? () => {} : usePluginInstallationStatus;
 const usePluginAutoupdateNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : usePluginAutoupdateNotification;
 const useSettingsErrorsForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useSettingsErrors;
-const useRateLimitWarningNotificationForCurrentStage = currentStageDisableStartupNotifications ? (_model?: unknown) => {} : useRateLimitWarningNotification;
 const useFastModeNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useFastModeNotification;
-const useDeprecationWarningNotificationForCurrentStage = currentStageDisableStartupNotifications ? (_model?: unknown) => {} : useDeprecationWarningNotification;
 const useNpmDeprecationNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useNpmDeprecationNotification;
 const useAntOrgWarningNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useAntOrgWarningNotification;
 const useInstallMessagesForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useInstallMessages;
-const useChromeExtensionNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useChromeExtensionNotification;
-const useOfficialMarketplaceNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useOfficialMarketplaceNotification;
 const useLspInitializationNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useLspInitializationNotification;
 const useTeammateLifecycleNotificationForCurrentStage = currentStageDisableStartupNotifications ? () => {} : useTeammateLifecycleNotification;
-const usePromptsFromClaudeInChromeForCurrentStage = currentStageDisableStartupNotifications ? (_mcpClients?: unknown, _mode?: unknown) => {} : usePromptsFromClaudeInChrome;
 const useLspPluginRecommendationForCurrentStage = currentStageDisableStartupNotifications ? () => ({
   recommendation: null,
   handleResponse: () => {}
 }) : useLspPluginRecommendation;
-const useClaudeCodeHintRecommendationForCurrentStage = currentStageDisableStartupNotifications ? () => ({
-  recommendation: null,
-  handleResponse: () => {}
-}) : useClaudeCodeHintRecommendation;
-const PRODUCT_NAME = isCurrentPhaseCustomCodexProvider() ? 'Codex Code' : 'Codex Code';
 const EffortCallout = currentStageDisableStartupNotifications ? (() => null) : require('../components/EffortCallout.js').EffortCallout;
 const shouldShowEffortCallout = currentStageDisableStartupNotifications ? (() => false) : require('../components/EffortCallout.js').shouldShowEffortCallout;
 const RemoteCallout = currentStageDisableStartupNotifications ? (() => null) : require('../components/RemoteCallout.js').RemoteCallout;
@@ -789,10 +765,7 @@ export function REPL({
   });
   const [showEffortCallout, setShowEffortCallout] = useState(() => shouldShowEffortCallout(mainLoopModel));
   const showRemoteCallout = useAppState(s => s.showRemoteCallout);
-  const [showDesktopUpsellStartup, setShowDesktopUpsellStartup] = useState(() => shouldShowDesktopUpsellStartup());
   // notifications
-  useModelMigrationNotificationsForCurrentStage();
-  useCanSwitchToExistingSubscriptionForCurrentStage();
   useIDEStatusIndicatorForCurrentStage({
     ideSelection,
     mcpClients,
@@ -805,24 +778,16 @@ export function REPL({
   usePluginInstallationStatusForCurrentStage();
   usePluginAutoupdateNotificationForCurrentStage();
   useSettingsErrorsForCurrentStage();
-  useRateLimitWarningNotificationForCurrentStage(mainLoopModel);
   useFastModeNotificationForCurrentStage();
-  useDeprecationWarningNotificationForCurrentStage(mainLoopModel);
   useNpmDeprecationNotificationForCurrentStage();
   useAntOrgWarningNotificationForCurrentStage();
   useInstallMessagesForCurrentStage();
-  useChromeExtensionNotificationForCurrentStage();
-  useOfficialMarketplaceNotificationForCurrentStage();
   useLspInitializationNotificationForCurrentStage();
   useTeammateLifecycleNotificationForCurrentStage();
   const {
     recommendation: lspRecommendation,
     handleResponse: handleLspResponse
   } = useLspPluginRecommendationForCurrentStage();
-  const {
-    recommendation: hintRecommendation,
-    handleResponse: handleHintResponse
-  } = useClaudeCodeHintRecommendationForCurrentStage();
 
   // Memoize the combined initial tools array to prevent reference changes
   const combinedInitialTools = useMemo(() => {
@@ -850,8 +815,6 @@ export function REPL({
 
   // Allow Codex in Browser MCP to send prompts through MCP notifications
   // and sync permission mode changes to the Chrome extension
-  usePromptsFromClaudeInChromeForCurrentStage(isRemoteSession ? EMPTY_MCP_CLIENTS : mcpClients, toolPermissionContext.mode);
-
   // Initialize swarm features: teammate hooks and context
   // Handles both fresh spawns and resumed teammate sessions
   useSwarmInitialization(setAppState, initialMessages, {
@@ -2100,7 +2063,7 @@ export function REPL({
   // Permission and interactive dialogs can show even when toolJSX is set,
   // as long as shouldContinueAnimation is true. This prevents deadlocks when
   // agents set background hints while waiting for user interaction.
-  function getFocusedInputDialog(): 'message-selector' | 'sandbox-permission' | 'tool-permission' | 'prompt' | 'worker-sandbox-permission' | 'elicitation' | 'cost' | 'idle-return' | 'init-onboarding' | 'ide-onboarding' | 'model-switch' | 'undercover-callout' | 'effort-callout' | 'remote-callout' | 'lsp-recommendation' | 'plugin-hint' | 'desktop-upsell' | 'ultraplan-choice' | 'ultraplan-launch' | undefined {
+  function getFocusedInputDialog(): 'message-selector' | 'sandbox-permission' | 'tool-permission' | 'prompt' | 'worker-sandbox-permission' | 'elicitation' | 'cost' | 'idle-return' | 'init-onboarding' | 'ide-onboarding' | 'model-switch' | 'undercover-callout' | 'effort-callout' | 'remote-callout' | 'lsp-recommendation' | 'ultraplan-choice' | 'ultraplan-launch' | undefined {
     // Exit states always take precedence
     if (isExiting || exitFlow) return undefined;
 
@@ -2141,11 +2104,6 @@ export function REPL({
     // LSP plugin recommendation (lowest priority - non-blocking suggestion)
     if (allowDialogsWithAnimation && lspRecommendation) return 'lsp-recommendation';
 
-    // Plugin hint from CLI/SDK stderr (same priority band as LSP rec)
-    if (allowDialogsWithAnimation && hintRecommendation) return 'plugin-hint';
-
-    // Desktop app upsell (max 3 launches, lowest priority)
-    if (allowDialogsWithAnimation && showDesktopUpsellStartup) return 'desktop-upsell';
     return undefined;
   }
   const focusedInputDialog = getFocusedInputDialog();
@@ -4716,7 +4674,6 @@ export function REPL({
       }} scrollable={<>
               <TeammateViewHeader />
               <Messages messages={displayedMessages} tools={tools} commands={commands} verbose={verbose} toolJSX={toolJSX} toolUseConfirmQueue={toolUseConfirmQueue} inProgressToolUseIDs={viewedTeammateTask ? viewedTeammateTask.inProgressToolUseIDs ?? new Set() : inProgressToolUseIDs} isMessageSelectorVisible={isMessageSelectorVisible} conversationId={conversationId} screen={screen} streamingToolUses={streamingToolUses} showAllInTranscript={showAllInTranscript} agentDefinitions={agentDefinitions} onOpenRateLimitOptions={handleOpenRateLimitOptions} isLoading={isLoading} streamingText={isLoading && !viewedAgentTask ? visibleStreamingText : null} isBriefOnly={viewedAgentTask ? false : isBriefOnly} unseenDivider={viewedAgentTask ? undefined : unseenDivider} scrollRef={isFullscreenEnvEnabled() ? scrollRef : undefined} trackStickyPrompt={isFullscreenEnvEnabled() ? true : undefined} cursor={cursor} setCursor={setCursor} cursorNavRef={cursorNavRef} />
-              <AwsAuthStatusBox />
               {/* Hide the processing placeholder while a modal is showing —
                   it would sit at the last visible transcript row right above
                   the ▔ divider, showing "❯ /config" as redundant clutter
@@ -4989,11 +4946,7 @@ export function REPL({
 
                 {exitFlow}
 
-                {focusedInputDialog === 'plugin-hint' && hintRecommendation && <PluginHintMenu pluginName={hintRecommendation.pluginName} pluginDescription={hintRecommendation.pluginDescription} marketplaceName={hintRecommendation.marketplaceName} sourceCommand={hintRecommendation.sourceCommand} onResponse={handleHintResponse} />}
-
                 {focusedInputDialog === 'lsp-recommendation' && lspRecommendation && <LspRecommendationMenu pluginName={lspRecommendation.pluginName} pluginDescription={lspRecommendation.pluginDescription} fileExtension={lspRecommendation.fileExtension} onResponse={handleLspResponse} />}
-
-                {focusedInputDialog === 'desktop-upsell' && <DesktopUpsellStartup onDone={() => setShowDesktopUpsellStartup(false)} />}
 
                 {feature('ULTRAPLAN') && !currentStageDisableUltraplan ? focusedInputDialog === 'ultraplan-choice' && ultraplanPendingChoice && <UltraplanChoiceDialog plan={ultraplanPendingChoice.plan} sessionId={ultraplanPendingChoice.sessionId} taskId={ultraplanPendingChoice.taskId} setMessages={setMessages} readFileState={readFileState.current} getAppState={() => store.getState()} setConversationId={setConversationId} /> : null}
 

@@ -14,5 +14,8 @@ export function shouldIncludeGitInstructions(): boolean {
   const envVal = process.env.CODEX_CODE_DISABLE_GIT_INSTRUCTIONS
   if (isEnvTruthy(envVal)) return false
   if (isEnvDefinedFalsy(envVal)) return true
+  if (process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1') {
+    return getInitialSettings().includeGitInstructions ?? false
+  }
   return getInitialSettings().includeGitInstructions ?? true
 }

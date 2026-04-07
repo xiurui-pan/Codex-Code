@@ -828,37 +828,6 @@ export async function getAttachments(
     maybe('ultrathink_effort', () =>
       Promise.resolve(getUltrathinkEffortAttachment(input)),
     ),
-    maybe('deferred_tools_delta', () =>
-      Promise.resolve(
-        getDeferredToolsDeltaAttachment(
-          toolUseContext.options.tools,
-          toolUseContext.options.mainLoopModel,
-          messages,
-          {
-            callSite: isMainThread
-              ? 'attachments_main'
-              : 'attachments_subagent',
-            querySource,
-          },
-        ),
-      ),
-    ),
-    maybe('agent_listing_delta', () =>
-      Promise.resolve(getAgentListingDeltaAttachment(toolUseContext, messages)),
-    ),
-    maybe('mcp_instructions_delta', () =>
-      Promise.resolve(
-        getMcpInstructionsDeltaAttachment(
-          toolUseContext.options.mcpClients,
-          toolUseContext.options.tools,
-          toolUseContext.options.mainLoopModel,
-          messages,
-        ),
-      ),
-    ),
-    maybe('companion_intro', () =>
-      Promise.resolve(getCompanionIntroAttachment(messages)),
-    ),
     maybe('changed_files', () => getChangedFiles(context)),
     maybe('nested_memory', () => getNestedMemoryAttachments(context)),
     // relevant_memories moved to async prefetch (startRelevantMemoryPrefetch)
@@ -910,25 +879,6 @@ export async function getAttachments(
     maybe('critical_system_reminder', () =>
       Promise.resolve(getCriticalSystemReminderAttachment(toolUseContext)),
     ),
-    ...(feature('COMPACTION_REMINDERS')
-      ? [
-          maybe('compaction_reminder', () =>
-            Promise.resolve(
-              getCompactionReminderAttachment(
-                messages ?? [],
-                toolUseContext.options.mainLoopModel,
-              ),
-            ),
-          ),
-        ]
-      : []),
-    ...(feature('HISTORY_SNIP')
-      ? [
-          maybe('context_efficiency', () =>
-            Promise.resolve(getContextEfficiencyAttachment(messages ?? [])),
-          ),
-        ]
-      : []),
   ]
 
   // Attachments which are semantically only for the main conversation or don't have concurrency-safe implementations
@@ -951,25 +901,6 @@ export async function getAttachments(
         ),
         maybe('async_hook_responses', async () =>
           getAsyncHookResponseAttachments(),
-        ),
-        maybe('token_usage', async () =>
-          Promise.resolve(
-            getTokenUsageAttachment(
-              messages ?? [],
-              toolUseContext.options.mainLoopModel,
-            ),
-          ),
-        ),
-        maybe('budget_usd', async () =>
-          Promise.resolve(
-            getMaxBudgetUsdAttachment(toolUseContext.options.maxBudgetUsd),
-          ),
-        ),
-        maybe('output_token_usage', async () =>
-          Promise.resolve(getOutputTokenUsageAttachment()),
-        ),
-        maybe('verify_plan_reminder', async () =>
-          getVerifyPlanReminderAttachment(messages, toolUseContext),
         ),
       ]
     : []

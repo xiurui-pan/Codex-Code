@@ -91,9 +91,19 @@ const teamMemPaths = feature('TEAMMEM')
 let hasLoggedInitialLoad = false
 
 const MEMORY_INSTRUCTION_PROMPT =
-  'Codebase and user instructions are shown below. Be sure to adhere to these instructions. IMPORTANT: These instructions OVERRIDE any default behavior and you MUST follow them exactly as written.'
+  'Repo and user instructions are shown below. They override default behavior when they apply.'
 // Recommended max character count for a memory file
 export const MAX_MEMORY_CHARACTER_COUNT = 40000
+const MAX_TOTAL_MEMORY_PROMPT_CHARACTERS = 32000
+const MIN_TRUNCATED_MEMORY_CONTENT_CHARS = 400
+const MEMORY_PROMPT_TYPE_PRIORITY: Record<MemoryType, number> = {
+  Managed: 0,
+  Project: 1,
+  Local: 2,
+  User: 3,
+  AutoMem: 4,
+  TeamMem: 5,
+}
 
 // File extensions that are allowed for @include directives
 // This prevents binary files (images, PDFs, etc.) from being loaded into memory
@@ -1159,43 +1169,85 @@ export const getClaudeMds = (
   filter?: (type: MemoryType) => boolean,
 ): string => {
   const memories: string[] = []
+  let remainingCharacters = MAX_TOTAL_MEMORY_PROMPT_CHARACTERS
+  let skippedEntries = 0
   const skipProjectLevel = getFeatureValue_CACHED_MAY_BE_STALE(
     'tengu_paper_halyard',
     false,
   )
 
-  for (const file of memoryFiles) {
+  const eligibleFiles = memoryFiles
+    .filter(file => {
+      if (filter && !filter(file.type)) return false
+      if (
+        skipProjectLevel &&
+        (file.type === 'Project' || file.type === 'Local')
+      ) {
+        return false
+      }
+      return Boolean(file.content)
+    })
+    .sort(
+      (a, b) =>
+        MEMORY_PROMPT_TYPE_PRIORITY[a.type] - MEMORY_PROMPT_TYPE_PRIORITY[b.type],
+    )
+
+  for (const file of eligibleFiles) {
     if (filter && !filter(file.type)) continue
     if (skipProjectLevel && (file.type === 'Project' || file.type === 'Local'))
       continue
-    if (file.content) {
-      const description =
-        file.type === 'Project'
-          ? ' (project instructions, checked into the codebase)'
-          : file.type === 'Local'
-            ? " (user's private project instructions, not checked in)"
-            : feature('TEAMMEM') && file.type === 'TeamMem'
-              ? ' (shared team memory, synced across the organization)'
-              : file.type === 'AutoMem'
-                ? " (user's auto-memory, persists across conversations)"
-                : " (user's private global instructions for all projects)"
+    const description =
+      file.type === 'Project'
+        ? ' (project instructions, checked into the codebase)'
+        : file.type === 'Local'
+          ? " (user's private project instructions, not checked in)"
+          : feature('TEAMMEM') && file.type === 'TeamMem'
+            ? ' (shared team memory, synced across the organization)'
+            : file.type === 'AutoMem'
+              ? " (user's auto-memory, persists across conversations)"
+              : " (user's private global instructions for all projects)"
 
-      const content = file.content.trim()
-      if (feature('TEAMMEM') && file.type === 'TeamMem') {
-        memories.push(
-          `Contents of ${file.path}${description}:\n\n<team-memory-content source="shared">\n${content}\n</team-memory-content>`,
-        )
-      } else {
-        memories.push(`Contents of ${file.path}${description}:\n\n${content}`)
-      }
+    const content = file.content.trim()
+    const wrapMemoryContent = (body: string): string =>
+      feature('TEAMMEM') && file.type === 'TeamMem'
+        ? `Contents of ${file.path}${description}:\n\n<team-memory-content source="shared">\n${body}\n</team-memory-content>`
+        : `Contents of ${file.path}${description}:\n\n${body}`
+    const fullEntry = wrapMemoryContent(content)
+
+    if (fullEntry.length <= remainingCharacters) {
+      memories.push(fullEntry)
+      remainingCharacters -= fullEntry.length
+      continue
     }
+
+    const baseEntry = wrapMemoryContent('')
+    const contentBudget =
+      remainingCharacters - baseEntry.length - '\n...[truncated to fit prompt budget]'.length
+    if (contentBudget < MIN_TRUNCATED_MEMORY_CONTENT_CHARS) {
+      skippedEntries++
+      continue
+    }
+
+    memories.push(
+      wrapMemoryContent(
+        `${content.slice(0, contentBudget).trimEnd()}\n...[truncated to fit prompt budget]`,
+      ),
+    )
+    remainingCharacters = 0
+    skippedEntries++
+    break
   }
 
   if (memories.length === 0) {
     return ''
   }
 
-  return `${MEMORY_INSTRUCTION_PROMPT}\n\n${memories.join('\n\n')}`
+  const trimmedNotice =
+    skippedEntries > 0
+      ? `\n\nAdditional memory files were skipped to keep the prompt focused. Re-open memory files explicitly if you need more history.`
+      : ''
+
+  return `${MEMORY_INSTRUCTION_PROMPT}\n\n${memories.join('\n\n')}${trimmedNotice}`
 }
 
 /**
