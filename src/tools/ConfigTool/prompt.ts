@@ -14,6 +14,7 @@ export const DESCRIPTION = 'Get or set Codex Code configuration settings.'
 export function generatePrompt(): string {
   const globalSettings: string[] = []
   const projectSettings: string[] = []
+  const codexSettings: string[] = []
 
   for (const [key, config] of Object.entries(SUPPORTED_SETTINGS)) {
     // Skip model - it gets its own section with dynamic options
@@ -40,6 +41,8 @@ export function generatePrompt(): string {
 
     if (config.source === 'global') {
       globalSettings.push(line)
+    } else if (config.source === 'codex') {
+      codexSettings.push(line)
     } else {
       projectSettings.push(line)
     }
@@ -65,6 +68,9 @@ ${globalSettings.join('\n')}
 ### Project Settings (stored in settings.json)
 ${projectSettings.join('\n')}
 
+### Codex Provider Settings (stored in ~/.codex/config.toml)
+${codexSettings.join('\n')}
+
 ${modelSection}
 ## Examples
 - Get theme: { "setting": "theme" }
@@ -72,6 +78,7 @@ ${modelSection}
 - Enable vim mode: { "setting": "editorMode", "value": "vim" }
 - Enable verbose: { "setting": "verbose", "value": true }
 - Change model: { "setting": "model", "value": "gpt-5.1-codex" }
+- Change context window: { "setting": "modelContextWindow", "value": 400000 }
 - Change permission mode: { "setting": "permissions.defaultMode", "value": "plan" }
 `
 }

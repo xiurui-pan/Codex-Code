@@ -37,6 +37,7 @@ test('codex config exposes context window and auto compact helpers', async () =>
   assert.match(source, /CODEX_CODE_MODEL_AUTO_COMPACT_TOKEN_LIMIT/)
   assert.match(source, /export function getCodexEffectiveContextWindow/)
   assert.match(source, /export function getCodexAutoCompactTokenLimit/)
+  assert.match(source, /export async function writeCodexConfigModelContextWindow/)
 })
 
 test('codex config parses and exports small_fast_model helpers', async () => {

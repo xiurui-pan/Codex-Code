@@ -13,8 +13,8 @@ import { THEME_NAMES, THEME_SETTINGS } from '../../utils/theme.js'
 type SyncableAppStateKey = 'verbose' | 'mainLoopModel' | 'thinkingEnabled'
 
 type SettingConfig = {
-  source: 'global' | 'settings'
-  type: 'boolean' | 'string'
+  source: 'global' | 'settings' | 'codex'
+  type: 'boolean' | 'string' | 'number'
   description: string
   path?: string[]
   options?: readonly string[]
@@ -103,6 +103,23 @@ export const SUPPORTED_SETTINGS: Record<string, SettingConfig> = {
     },
     validateOnWrite: v => validateModel(String(v)),
     formatOnRead: v => (v === null ? 'default' : v),
+  },
+  modelContextWindow: {
+    source: 'codex',
+    type: 'number',
+    description:
+      'Override the Codex context window raw size in ~/.codex/config.toml',
+    formatOnRead: v => (v === undefined ? 'default' : v),
+    validateOnWrite: async v => {
+      const parsed = Number(v)
+      if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed <= 0) {
+        return {
+          valid: false,
+          error: 'modelContextWindow requires a positive integer.',
+        }
+      }
+      return { valid: true }
+    },
   },
   alwaysThinkingEnabled: {
     source: 'settings',

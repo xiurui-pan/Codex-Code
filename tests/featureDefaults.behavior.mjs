@@ -51,10 +51,12 @@ async function runInlineModule(source, envOverrides = {}) {
   }
 }
 
-test('BUDDY defaults off but can be explicitly enabled', async () => {
+test('BUDDY defaults on and can still be explicitly overridden', async () => {
   const probe = [
     "import { feature } from './shims/bun-bundle.ts'",
-    "process.stdout.write(JSON.stringify({ buddy: feature('BUDDY') }))",
+    "import { getCommands } from './src/commands.ts'",
+    'const commands = await getCommands(process.cwd())',
+    "process.stdout.write(JSON.stringify({ buddy: feature('BUDDY'), hasBuddyCommand: commands.some(command => command.name === 'buddy') }))",
   ].join('\n')
 
   const defaultState = JSON.parse(
@@ -63,15 +65,17 @@ test('BUDDY defaults off but can be explicitly enabled', async () => {
       CLAUDE_CODE_ENABLED_FEATURES: undefined,
     }),
   )
-  assert.equal(defaultState.buddy, false)
+  assert.equal(defaultState.buddy, true)
+  assert.equal(defaultState.hasBuddyCommand, true)
 
-  const enabledState = JSON.parse(
+  const disabledState = JSON.parse(
     await runInlineModule(probe, {
-      CLAUDE_CODE_FEATURE_BUDDY: '1',
+      CLAUDE_CODE_FEATURE_BUDDY: '0',
       CLAUDE_CODE_ENABLED_FEATURES: undefined,
     }),
   )
-  assert.equal(enabledState.buddy, true)
+  assert.equal(disabledState.buddy, false)
+  assert.equal(disabledState.hasBuddyCommand, true)
 })
 
 test('auto-dream defaults on when unset but respects settings override', async () => {

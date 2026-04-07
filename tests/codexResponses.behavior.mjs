@@ -148,3 +148,22 @@ test('queryCodexResponsesStream synthesizes streaming text blocks when delta eve
   assert.deepEqual(result.eventIndexes, [0, 0, 0])
   assert.deepEqual(result.deltaTexts, ['FIRST_STREAM_OK', ' SECOND_DONE'])
 })
+
+test('custom codex provider HTTP failures are normalized into API Error messages', async () => {
+  const result = await runBehavior('api-error-prefix')
+
+  assert.match(result.errorMessage ?? '', /^API Error: /)
+  assert.match(
+    result.errorMessage ?? '',
+    /No tool call found for function call output/,
+  )
+})
+
+test('responses request builder drops orphan function_call_output entries from history', async () => {
+  const result = await runBehavior('orphan-tool-result-pairing')
+
+  assert.deepEqual(result.functionCallIds, ['tool-1'])
+  assert.deepEqual(result.functionCallOutputIds, ['tool-1'])
+  assert.equal(result.inputTypes.includes('function_call_output'), true)
+  assert.equal(result.functionCallOutputIds.includes('tool-orphan'), false)
+})

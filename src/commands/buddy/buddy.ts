@@ -7,6 +7,7 @@ import {
   getBuddyDetailText,
   getPetReaction,
 } from '../../buddy/soul.js'
+import { getBuddyState } from '../../buddy/state.js'
 import { getGlobalConfig, saveGlobalConfig } from '../../utils/config.js'
 
 function usageText(): string {
@@ -82,12 +83,38 @@ function missingBuddyText(): string {
   return 'No buddy hatched yet. Run /buddy first.'
 }
 
+function disabledBuddyText(): string {
+  return 'Buddy mode is not enabled in this build. Set the BUDDY feature flag first.'
+}
+
 function textResult(value: string): LocalCommandResult {
   return { type: 'text', value }
 }
 
+function currentStatusText(): string {
+  const state = getBuddyState()
+  if (!state.featureEnabled) {
+    return disabledBuddyText()
+  }
+  if (!state.hatched || !state.companion) {
+    return 'Buddy status: not hatched yet. Run /buddy to hatch one.'
+  }
+
+  const lines = [
+    `Buddy status: ${state.muted ? 'muted' : 'active'}`,
+    getBuddyDetailText(),
+  ]
+
+  return lines.join('\n')
+}
+
 export const call: LocalCommandCall = async (args, context) => {
   const command = getPrimaryArg(args)
+  const buddyState = getBuddyState()
+
+  if (!buddyState.featureEnabled) {
+    return textResult(disabledBuddyText())
+  }
 
   switch (command) {
     case '': {
@@ -108,7 +135,7 @@ export const call: LocalCommandCall = async (args, context) => {
     }
 
     case 'status': {
-      return textResult(getBuddyDetailText())
+      return textResult(currentStatusText())
     }
 
     case 'pet': {
@@ -137,6 +164,9 @@ export const call: LocalCommandCall = async (args, context) => {
     case 'off': {
       const companion = getCompanion()
       if (!companion) return textResult(missingBuddyText())
+      if (getGlobalConfig().companionMuted) {
+        return textResult(`${companion.name} is already muted.`)
+      }
       setMuted(true)
       clearBuddyReaction(context)
       return textResult(`${companion.name} is muted for now.`)
@@ -146,6 +176,9 @@ export const call: LocalCommandCall = async (args, context) => {
     case 'on': {
       const companion = getCompanion()
       if (!companion) return textResult(missingBuddyText())
+      if (!getGlobalConfig().companionMuted) {
+        return textResult(`${companion.name} is already active beside the prompt.`)
+      }
       setMuted(false)
       return textResult(`${companion.name} is back beside the prompt.`)
     }

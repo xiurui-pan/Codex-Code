@@ -15,7 +15,7 @@ function readFeatureSet() {
   )
 }
 
-const DEFAULT_ENABLED_FEATURES = new Set([])
+const DEFAULT_ENABLED_FEATURES = new Set(['BUDDY'])
 
 export function feature(name) {
   const direct = process.env[`CLAUDE_CODE_FEATURE_${name}`]

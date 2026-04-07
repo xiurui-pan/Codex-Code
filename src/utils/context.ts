@@ -11,6 +11,7 @@ import { getDisplayContextUsageBreakdown } from './tokens.js'
 // Codex CLI uses a 272k raw model window with 95% effective usable context
 // when no narrower runtime model metadata is available.
 export const MODEL_CONTEXT_WINDOW_DEFAULT = getCodexEffectiveContextWindow()
+export const CONTEXT_WINDOW_BASELINE_TOKENS = 12_000
 
 // Maximum output tokens for compact operations
 export const COMPACT_MAX_OUTPUT_TOKENS = 20_000
@@ -153,14 +154,40 @@ export function calculateContextPercentages(
   const totalContextTokens =
     getDisplayContextUsageBreakdown(currentUsage).displayTokens
 
-  const usedPercentage = Math.round(
-    (totalContextTokens / contextWindowSize) * 100,
+  return calculateContextPercentagesFromTokenCount(
+    totalContextTokens,
+    contextWindowSize,
   )
-  const clampedUsed = Math.min(100, Math.max(0, usedPercentage))
+}
+
+export function calculateContextPercentagesFromTokenCount(
+  totalContextTokens: number,
+  contextWindowSize: number,
+): { used: number | null; remaining: number | null } {
+  if (
+    !Number.isFinite(totalContextTokens) ||
+    !Number.isFinite(contextWindowSize) ||
+    contextWindowSize <= 0
+  ) {
+    return { used: null, remaining: null }
+  }
+
+  if (contextWindowSize <= CONTEXT_WINDOW_BASELINE_TOKENS) {
+    return { used: 100, remaining: 0 }
+  }
+
+  const effectiveWindow = contextWindowSize - CONTEXT_WINDOW_BASELINE_TOKENS
+  const usedTokens = Math.max(
+    0,
+    totalContextTokens - CONTEXT_WINDOW_BASELINE_TOKENS,
+  )
+  const remainingTokens = Math.max(0, effectiveWindow - usedTokens)
+  const remaining = Math.round((remainingTokens / effectiveWindow) * 100)
+  const clampedRemaining = Math.min(100, Math.max(0, remaining))
 
   return {
-    used: clampedUsed,
-    remaining: 100 - clampedUsed,
+    used: 100 - clampedRemaining,
+    remaining: clampedRemaining,
   }
 }
 

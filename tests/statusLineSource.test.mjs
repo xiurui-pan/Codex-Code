@@ -22,8 +22,37 @@ test('StatusLine context summary uses the shared display token count helper', ()
 
   assert.match(source, /getDisplayContextTokenCount/)
   assert.match(source, /includeRestoredTotals: false/)
+  assert.match(source, /const displayContextTokens = getDisplayContextTokenCount\(messages, \{/)
+  assert.match(source, /calculateContextPercentagesFromTokenCount\(displayContextTokens, contextWindowSize\)/)
   assert.match(
     source,
-    /return `🧠 \$\{formatUsedTokensForStatusLine\(totalTokens\)\} \/ \$\{formatTokenCountForStatusLine\(contextWindowSize\)\} \(\$\{usedPercentage\}%\)`/,
+    /const usedPercentage = calculateContextPercentagesFromTokenCount\(totalTokens, contextWindowSize\)\.used/,
   )
+  assert.match(
+    source,
+    /return `🧠 \$\{formatUsedTokensForStatusLine\(totalTokens\)\} \/ \$\{formatTokenCountForStatusLine\(contextWindowSize\)\} \(\$\{usedPercentage \?\? 0\}%\)`/,
+  )
+  assert.match(
+    source,
+    /return `🧠 \$\{formatTokenCountForStatusLine\(contextWindowSize\)\} window`/,
+  )
+})
+
+test('StatusLine statusline payload includes session and today billing data', () => {
+  const source = readSource('src/components/StatusLine.tsx')
+
+  assert.match(source, /billing_available: !isCurrentPhaseCustomCodexProvider\(\)/)
+  assert.match(source, /today_cost_usd: getTodayCost\(\)/)
+  assert.match(source, /total_cost_usd: getTotalCost\(\)/)
+  assert.match(source, /total_duration_ms: getTotalDuration\(\)/)
+})
+
+test('StatusLine payload exposes current context tokens and provider-aware session token totals', () => {
+  const source = readSource('src/components/StatusLine.tsx')
+
+  assert.match(source, /current_tokens: displayContextTokens/)
+  assert.match(source, /token_usage: \{/)
+  assert.match(source, /used_tokens: sessionTokenUsage\.displayTokens/)
+  assert.match(source, /cached_input_tokens: sessionTokenUsage\.cachedInputTokens/)
+  assert.match(source, /uncached_input_tokens: sessionTokenUsage\.uncachedInputTokens/)
 })

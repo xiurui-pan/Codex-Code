@@ -213,3 +213,37 @@ test('codex config exposes context window and auto compact limits through env he
     await rm(tempDir, { recursive: true, force: true })
   }
 })
+
+test('codex config can update model_context_window in ~/.codex/config.toml', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'codex-config-write-'))
+  const codexDir = join(tempDir, '.codex')
+  const configPath = join(codexDir, 'config.toml')
+  await mkdir(codexDir, { recursive: true })
+  await writeFile(
+    configPath,
+    [
+      'model_provider = "test-provider"',
+      '',
+      '[model_providers.test-provider]',
+      'base_url = "https://example.invalid/v1"',
+      '',
+    ].join('\n'),
+  )
+
+  try {
+    const {
+      loadCodexConfig,
+      writeCodexConfigModelContextWindow,
+    } = await import('../src/utils/codexConfig.ts')
+
+    await writeCodexConfigModelContextWindow(400000, configPath)
+    let config = await loadCodexConfig(configPath)
+    assert.equal(config.modelContextWindow, 400000)
+
+    await writeCodexConfigModelContextWindow(undefined, configPath)
+    config = await loadCodexConfig(configPath)
+    assert.equal(config.modelContextWindow, undefined)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})

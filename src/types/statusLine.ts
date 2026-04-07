@@ -17,7 +17,9 @@ export type StatusLineCommandInput = {
     name: string
   }
   cost?: {
+    billing_available?: boolean
     total_cost_usd: number
+    today_cost_usd: number
     total_duration_ms: number
     total_api_duration_ms: number
     total_lines_added: number
@@ -27,6 +29,7 @@ export type StatusLineCommandInput = {
     total_input_tokens: number
     total_output_tokens: number
     context_window_size: number
+    current_tokens?: number
     current_usage: {
       input_tokens: number
       output_tokens: number
@@ -35,6 +38,13 @@ export type StatusLineCommandInput = {
     } | null
     used_percentage: number | null
     remaining_percentage: number | null
+  }
+  token_usage?: {
+    used_tokens: number
+    total_input_tokens: number
+    total_output_tokens: number
+    cached_input_tokens: number
+    uncached_input_tokens: number
   }
   exceeds_200k_tokens?: boolean
   rate_limits?: {

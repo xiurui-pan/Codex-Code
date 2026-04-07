@@ -1,12 +1,11 @@
 import type { Message } from '../types/message.js'
-import { getGlobalConfig } from '../utils/config.js'
 import {
   getAssistantMessageText,
   getUserMessageText,
 } from '../utils/messages.js'
 import { escapeRegExp } from '../utils/stringUtils.js'
-import { getCompanion } from './companion.js'
 import { getMentionReaction } from './soul.js'
+import { getBuddyState } from './state.js'
 
 function getLastVisibleUserMessage(messages: readonly Message[]): Message | null {
   for (let index = messages.length - 1; index >= 0; index--) {
@@ -32,8 +31,8 @@ export function fireCompanionObserver(
   messages: readonly Message[],
   onReaction: (reaction: string | undefined) => void,
 ): void {
-  const companion = getCompanion()
-  if (!companion || getGlobalConfig().companionMuted) return
+  const { companion, visible } = getBuddyState()
+  if (!visible || !companion) return
 
   const latestUser = getLastVisibleUserMessage(messages)
   const latestUserText = latestUser ? getUserMessageText(latestUser) : null

@@ -253,6 +253,7 @@ import { IssueFlagBanner } from '../components/PromptInput/IssueFlagBanner.js';
 import { useIssueFlagBanner } from '../hooks/useIssueFlagBanner.js';
 import { CompanionSprite, CompanionFloatingBubble, MIN_COLS_FOR_FULL_SPRITE } from '../buddy/CompanionSprite.js';
 import { fireCompanionObserver } from '../buddy/observer.js';
+import { getBuddyState } from '../buddy/state.js';
 import { DevBar } from '../components/DevBar.js';
 // Current-stage local Codex mode does not ship the Tungsten live monitor path.
 const TungstenLiveMonitor = (): null => null;
@@ -1346,7 +1347,7 @@ export function REPL({
       // Dismiss the companion bubble on scroll — it's absolute-positioned
       // at bottom-right and covers transcript content. Scrolling = user is
       // trying to read something under it.
-      if (feature('BUDDY')) {
+      if (getBuddyState().visible) {
         setAppState(prev => prev.companionReaction === undefined ? prev : {
           ...prev,
           companionReaction: undefined
@@ -2887,7 +2888,7 @@ export function REPL({
     })) {
       onQueryEvent(event);
     }
-    if (feature('BUDDY')) {
+    if (getBuddyState().visible) {
       void fireCompanionObserver(messagesRef.current, reaction => setAppState(prev => prev.companionReaction === reaction ? prev : {
         ...prev,
         companionReaction: reaction
@@ -4668,6 +4669,7 @@ export function REPL({
   // Narrow terminals: companion collapses to a one-liner that REPL stacks
   // on its own row (above input in fullscreen, below in scrollback) instead
   // of row-beside. Wide terminals keep the row layout with sprite on the right.
+  const { visible: buddyVisible } = getBuddyState();
   const companionNarrow = transcriptCols < MIN_COLS_FOR_FULL_SPRITE;
   // Hide the sprite when PromptInput early-returns BackgroundTasksDialog.
   // The sprite sits as a row sibling of PromptInput, so the dialog's Pane
@@ -4709,7 +4711,7 @@ export function REPL({
       {feature('MESSAGE_ACTIONS') && isFullscreenEnvEnabled() && !disableMessageActions ? <MessageActionsKeybindings handlers={messageActionHandlers} isActive={cursor !== null} /> : null}
       <CancelRequestHandler {...cancelRequestProps} />
       <MCPConnectionManager key={remountKey} dynamicMcpConfig={dynamicMcpConfig} isStrictMcpConfig={strictMcpConfig}>
-        <FullscreenLayout scrollRef={scrollRef} overlay={toolPermissionOverlay} bottomFloat={feature('BUDDY') && companionVisible && !companionNarrow ? <CompanionFloatingBubble /> : undefined} modal={centeredModal} modalScrollRef={modalScrollRef} dividerYRef={dividerYRef} hidePill={!!viewedAgentTask} hideSticky={!!viewedTeammateTask} newMessageCount={unseenDivider?.count ?? 0} onPillClick={() => {
+        <FullscreenLayout scrollRef={scrollRef} overlay={toolPermissionOverlay} bottomFloat={buddyVisible && companionVisible && !companionNarrow ? <CompanionFloatingBubble /> : undefined} modal={centeredModal} modalScrollRef={modalScrollRef} dividerYRef={dividerYRef} hidePill={!!viewedAgentTask} hideSticky={!!viewedTeammateTask} newMessageCount={unseenDivider?.count ?? 0} onPillClick={() => {
         setCursor(null);
         jumpToNew(scrollRef.current);
       }} scrollable={<>
@@ -4734,8 +4736,8 @@ export function REPL({
               {showSpinner && <SpinnerWithVerb mode={streamMode} spinnerTip={spinnerTip} responseLengthRef={responseLengthRef} apiMetricsRef={apiMetricsRef} overrideMessage={spinnerMessage} spinnerSuffix={stopHookSpinnerSuffix} verbose={verbose} loadingStartTimeRef={loadingStartTimeRef} totalPausedMsRef={totalPausedMsRef} pauseStartTimeRef={pauseStartTimeRef} overrideColor={spinnerColor} overrideShimmerColor={spinnerShimmerColor} hasActiveTools={inProgressToolUseIDs.size > 0} leaderIsIdle={!isLoading} />}
               {!showSpinner && !isLoading && !userInputOnProcessing && !hasRunningTeammates && isBriefOnly && !viewedAgentTask && <BriefIdleStatus />}
               {isFullscreenEnvEnabled() && <PromptInputQueuedCommands />}
-            </>} bottom={<Box flexDirection={feature('BUDDY') && companionNarrow ? 'column' : 'row'} width="100%" alignItems={feature('BUDDY') && companionNarrow ? undefined : 'flex-end'}>
-              {feature('BUDDY') && companionNarrow && isFullscreenEnvEnabled() && companionVisible ? <CompanionSprite /> : null}
+            </>} bottom={<Box flexDirection={buddyVisible && companionNarrow ? 'column' : 'row'} width="100%" alignItems={buddyVisible && companionNarrow ? undefined : 'flex-end'}>
+              {buddyVisible && companionNarrow && isFullscreenEnvEnabled() && companionVisible ? <CompanionSprite /> : null}
               <Box flexDirection="column" flexGrow={1}>
                 {permissionStickyFooter}
                 {/* Immediate local-jsx commands (/btw, /sandbox, /assistant,
@@ -5140,7 +5142,7 @@ export function REPL({
           }} />}
                 {"external" === 'ant' && <DevBar />}
               </Box>
-              {feature('BUDDY') && !(companionNarrow && isFullscreenEnvEnabled()) && companionVisible ? <CompanionSprite /> : null}
+              {buddyVisible && !(companionNarrow && isFullscreenEnvEnabled()) && companionVisible ? <CompanionSprite /> : null}
             </Box>} />
       </MCPConnectionManager>
     </KeybindingSetup>;

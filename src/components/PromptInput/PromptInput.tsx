@@ -13,6 +13,7 @@ import { getCwd } from '../../utils/cwd.js';
 import { isQueuedCommandEditable, popAllEditable } from '../../utils/messageQueueManager.js';
 import stripAnsi from 'strip-ansi';
 import { companionReservedColumns } from '../../buddy/CompanionSprite.js';
+import { getBuddyState } from '../../buddy/state.js';
 import { findBuddyTriggerPositions, useBuddyNotification } from '../../buddy/useBuddyNotification.js';
 import { FastModePicker } from '../../commands/fast/fast.js';
 import { isUltrareviewEnabled } from '../../commands/review/ultrareviewEnabled.js';
@@ -306,14 +307,7 @@ function PromptInput({
   const viewingAgentTaskId = useAppState(s => s.viewingAgentTaskId);
   const viewSelectionMode = useAppState(s => s.viewSelectionMode);
   const showSpinnerTree = useAppState(s => s.expandedView) === 'teammates';
-  const {
-    companion: _companion,
-    companionMuted
-  } = feature('BUDDY') ? getGlobalConfig() : {
-    companion: undefined,
-    companionMuted: undefined
-  };
-  const companionFooterVisible = !!_companion && !companionMuted;
+  const { companion: buddyCompanion, visible: companionFooterVisible } = getBuddyState();
   // Brief mode: BriefSpinner/BriefIdleStatus own the 2-row footprint above
   // the input. Dropping marginTop here lets the spinner sit flush against
   // the input bar. viewingAgentTaskId mirrors the gate on both (Spinner.tsx,
@@ -1776,7 +1770,7 @@ function PromptInput({
       }
       switch (footerItemSelected) {
         case 'companion':
-          if (feature('BUDDY')) {
+          if (buddyCompanion) {
             selectFooterItem(null);
             void onSubmit('/buddy');
           }
@@ -1971,9 +1965,7 @@ function PromptInput({
     });
   }, [effortNotificationText, addNotification, removeNotification]);
   useBuddyNotification();
-  const companionSpeaking = feature('BUDDY') ?
-  // biome-ignore lint/correctness/useHookAtTopLevel: feature() is a compile-time constant
-  useAppState(s => s.companionReaction !== undefined) : false;
+  const companionSpeaking = useAppState(s => s.companionReaction !== undefined);
   const {
     columns,
     rows

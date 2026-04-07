@@ -18,7 +18,10 @@ import {
 } from '../../utils/codexConfig.js'
 import { errorMessage } from '../../utils/errors.js'
 import { resolveAppliedEffort } from '../../utils/effort.js'
-import { normalizeMessagesForAPI } from '../../utils/messages.js'
+import {
+  ensureToolResultPairing,
+  normalizeMessagesForAPI,
+} from '../../utils/messages.js'
 import {
   DEFAULT_CODEX_MODEL,
   getCodexSupportedEffortLevels,
@@ -40,6 +43,7 @@ import {
 import { buildCodexRequestIdentity } from './codexRequestIdentity.js'
 import { getSessionId } from '../../bootstrap/state.js'
 import { getCodexProviderProfile } from './providerProfiles.js'
+import { API_ERROR_MESSAGE_PREFIX } from './errors.js'
 
 type CodexResponsesEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
 
@@ -316,6 +320,17 @@ function pushMessageInput(
   })
 }
 
+function formatCodexProviderApiError(message: string): string {
+  const trimmedMessage = message.trim()
+  if (!trimmedMessage) {
+    return API_ERROR_MESSAGE_PREFIX
+  }
+  if (trimmedMessage.startsWith(API_ERROR_MESSAGE_PREFIX)) {
+    return trimmedMessage
+  }
+  return `${API_ERROR_MESSAGE_PREFIX}: ${trimmedMessage}`
+}
+
 function buildResponsesInput(
   messages: Message[],
   tools: Tools = [],
@@ -323,7 +338,11 @@ function buildResponsesInput(
   const items: ResponsesInputItem[] = []
   const toolNameByUseId = new Map<string, string>()
 
-  for (const message of normalizeMessagesForAPI(messages, tools)) {
+  const normalizedMessages = ensureToolResultPairing(
+    normalizeMessagesForAPI(messages, tools),
+  )
+
+  for (const message of normalizedMessages) {
     if (typeof message.message.content === 'string') {
       pushMessageInput(items, message.type, message.message.content)
       continue
@@ -874,7 +893,9 @@ export async function* queryCodexResponsesStream({
       const errorText = await response.text()
       yield {
         kind: 'api_error',
-        errorMessage: `Custom Codex provider request failed: ${response.status} ${errorText}`,
+        errorMessage: formatCodexProviderApiError(
+          `Custom Codex provider request failed: ${response.status} ${errorText}`,
+        ),
       }
       return
     }
@@ -1046,7 +1067,7 @@ export async function* queryCodexResponsesStream({
           'custom Codex provider request failed'
         yield {
           kind: 'api_error',
-          errorMessage,
+          errorMessage: formatCodexProviderApiError(errorMessage),
         }
         return
       }
@@ -1059,7 +1080,9 @@ export async function* queryCodexResponsesStream({
 
     yield {
       kind: 'api_error',
-      errorMessage: `Custom Codex provider request failed: ${errorMessage(error)}`,
+      errorMessage: formatCodexProviderApiError(
+        `Custom Codex provider request failed: ${errorMessage(error)}`,
+      ),
     }
   }
 }

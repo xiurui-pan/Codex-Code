@@ -332,11 +332,8 @@ export function getDisplayContextTokenCount(
   messages: Message[],
   options: ContextUsageFallbackOptions = {},
 ): number {
-  const usage = getCurrentUsage(messages)
-  if (usage) {
-    return getTokenCountFromUsage(usage)
-  }
-
+  // Display surfaces should match autocompact's current-context accounting,
+  // so include any messages added after the last API usage snapshot.
   const estimatedTokens = tokenCountWithEstimation(messages)
   if (estimatedTokens > 0) {
     return estimatedTokens

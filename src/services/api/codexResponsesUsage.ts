@@ -1,4 +1,5 @@
 import { addToTotalSessionCost } from '../../cost-tracker.js'
+import { isCurrentPhaseCustomCodexProvider } from '../../utils/currentPhase.js'
 import { calculateUSDCost } from '../../utils/modelCost.js'
 
 type ResponsesCompletedUsage = {
@@ -35,6 +36,8 @@ export function convertResponsesUsageToAnthropicAndTrack(
     server_tool_use: undefined,
   }
 
-  const costUSD = calculateUSDCost(resolvedModel, anthropicUsage)
+  const costUSD = isCurrentPhaseCustomCodexProvider()
+    ? 0
+    : calculateUSDCost(resolvedModel, anthropicUsage)
   addToTotalSessionCost(costUSD, anthropicUsage, resolvedModel)
 }

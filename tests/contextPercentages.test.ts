@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
 import { afterEach, test } from 'node:test'
 
-import { calculateContextPercentages } from '../src/utils/context.js'
+import {
+  calculateContextPercentages,
+  calculateContextPercentagesFromTokenCount,
+} from '../src/utils/context.js'
 import { getDisplayContextUsageBreakdown } from '../src/utils/tokens.js'
 
 const ORIGINAL_CODEX_PROVIDER = process.env.CODEX_CODE_USE_CODEX_PROVIDER
@@ -29,18 +32,20 @@ test('calculateContextPercentages returns null instead of NaN for incomplete usa
   )
 })
 
-test('calculateContextPercentages rounds valid usage normally', () => {
+test('calculateContextPercentages rounds valid usage normally for non-Codex providers', () => {
+  delete process.env.CODEX_CODE_USE_CODEX_PROVIDER
+
   assert.deepEqual(
     calculateContextPercentages(
       {
-        input_tokens: 1000,
-        output_tokens: 500,
-        cache_creation_input_tokens: 250,
-        cache_read_input_tokens: 250,
+        input_tokens: 10_000,
+        output_tokens: 3_000,
+        cache_creation_input_tokens: 500,
+        cache_read_input_tokens: 500,
       },
-      4_000,
+      20_000,
     ),
-    { used: 50, remaining: 50 },
+    { used: 25, remaining: 75 },
   )
 })
 
@@ -74,6 +79,18 @@ test('calculateContextPercentages avoids double-counting cached input for Codex 
       },
       100_000,
     ),
-    { used: 42, remaining: 58 },
+    { used: 34, remaining: 66 },
+  )
+})
+
+test('calculateContextPercentagesFromTokenCount matches codex-rs baseline behavior', () => {
+  assert.deepEqual(
+    calculateContextPercentagesFromTokenCount(13_679, 272_000),
+    { used: 1, remaining: 99 },
+  )
+
+  assert.deepEqual(
+    calculateContextPercentagesFromTokenCount(12_000, 272_000),
+    { used: 0, remaining: 100 },
   )
 })

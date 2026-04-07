@@ -61,6 +61,8 @@ type State = {
   // Use for project identity (history, skills, sessions) not file operations.
   projectRoot: string
   totalCostUSD: number
+  todayCostUSD: number
+  todayCostDate: string
   totalAPIDuration: number
   totalAPIDurationWithoutRetries: number
   totalToolDuration: number
@@ -271,6 +273,22 @@ type State = {
 }
 
 // ALSO HERE - THINK THRICE BEFORE MODIFYING
+function getLocalDateString(date: Date = new Date()): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function syncTodayCostWindow(): void {
+  const today = getLocalDateString()
+  if (STATE.todayCostDate === today) {
+    return
+  }
+  STATE.todayCostDate = today
+  STATE.todayCostUSD = 0
+}
+
 function getInitialState(): State {
   // Resolve symlinks in cwd to match behavior of shell.ts setCwd
   // This ensures consistency with how paths are sanitized for session storage
@@ -292,6 +310,8 @@ function getInitialState(): State {
     originalCwd: resolvedCwd,
     projectRoot: resolvedCwd,
     totalCostUSD: 0,
+    todayCostUSD: 0,
+    todayCostDate: getLocalDateString(),
     totalAPIDuration: 0,
     totalAPIDurationWithoutRetries: 0,
     totalToolDuration: 0,
@@ -566,6 +586,8 @@ export function resetTotalDurationStateAndCost_FOR_TESTS_ONLY(): void {
   STATE.totalAPIDuration = 0
   STATE.totalAPIDurationWithoutRetries = 0
   STATE.totalCostUSD = 0
+  STATE.todayCostUSD = 0
+  STATE.todayCostDate = getLocalDateString()
 }
 
 export function addToTotalCostState(
@@ -573,12 +595,19 @@ export function addToTotalCostState(
   modelUsage: ModelUsage,
   model: string,
 ): void {
+  syncTodayCostWindow()
   STATE.modelUsage[model] = modelUsage
   STATE.totalCostUSD += cost
+  STATE.todayCostUSD += cost
 }
 
 export function getTotalCostUSD(): number {
   return STATE.totalCostUSD
+}
+
+export function getTodayCostUSD(): number {
+  syncTodayCostWindow()
+  return STATE.todayCostUSD
 }
 
 export function getTotalAPIDuration(): number {
@@ -877,6 +906,8 @@ export function setSdkBetas(betas: string[] | undefined): void {
 
 export function resetCostState(): void {
   STATE.totalCostUSD = 0
+  STATE.todayCostUSD = 0
+  STATE.todayCostDate = getLocalDateString()
   STATE.totalAPIDuration = 0
   STATE.totalAPIDurationWithoutRetries = 0
   STATE.totalToolDuration = 0
@@ -894,6 +925,8 @@ export function resetCostState(): void {
  */
 export function setCostStateForRestore({
   totalCostUSD,
+  todayCostUSD,
+  todayCostDate,
   totalAPIDuration,
   totalAPIDurationWithoutRetries,
   totalToolDuration,
@@ -908,6 +941,8 @@ export function setCostStateForRestore({
   modelUsage,
 }: {
   totalCostUSD: number
+  todayCostUSD: number
+  todayCostDate: string | undefined
   totalAPIDuration: number
   totalAPIDurationWithoutRetries: number
   totalToolDuration: number
@@ -922,6 +957,9 @@ export function setCostStateForRestore({
   modelUsage: { [modelName: string]: ModelUsage } | undefined
 }): void {
   STATE.totalCostUSD = totalCostUSD
+  const currentDate = getLocalDateString()
+  STATE.todayCostDate = currentDate
+  STATE.todayCostUSD = todayCostDate === currentDate ? todayCostUSD : 0
   STATE.totalAPIDuration = totalAPIDuration
   STATE.totalAPIDurationWithoutRetries = totalAPIDurationWithoutRetries
   STATE.totalToolDuration = totalToolDuration

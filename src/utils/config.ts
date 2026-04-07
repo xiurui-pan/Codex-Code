@@ -86,6 +86,8 @@ export type ProjectConfig = {
   lastAPIDurationWithoutRetries?: number
   lastToolDuration?: number
   lastCost?: number
+  lastTodayCost?: number
+  lastTodayCostDate?: string
   lastDuration?: number
   lastLinesAdded?: number
   lastLinesRemoved?: number

@@ -789,21 +789,23 @@ export function renderGroupedAgentToolUse(toolUses: Array<{
   return <Box flexDirection="column" marginTop={1}>
       <Box flexDirection="row">
         <ToolUseLoader shouldAnimate={shouldAnimate && anyUnresolved} isUnresolved={anyUnresolved} isError={anyError} />
-        <Text>
-          {allComplete ? allAsync ? <>
-                <Text bold>{toolUses.length}</Text> background agents launched{' '}
-                <Text dimColor>
-                  <KeyboardShortcutHint shortcut="↓" action="manage" parens />
-                </Text>
-              </> : <>
-                <Text bold>{toolUses.length}</Text>{' '}
-                {commonType ? `${commonType} agents` : 'agents'} finished
-              </> : <>
-              Running <Text bold>{toolUses.length}</Text>{' '}
-              {commonType ? `${commonType} agents` : 'agents'}…
-            </>}{' '}
-        </Text>
-        {!allAsync && <CtrlOToExpand />}
+        <Box flexShrink={1}>
+          <Text wrap="truncate-end">
+            {allComplete ? allAsync ? <>
+                  <Text bold>{toolUses.length}</Text> background agents launched{' '}
+                  <Text dimColor>
+                    <KeyboardShortcutHint shortcut="↓" action="manage" parens />
+                  </Text>
+                </> : <>
+                  <Text bold>{toolUses.length}</Text>{' '}
+                  {commonType ? `${commonType} agents` : 'agents'} finished
+                </> : <>
+                Running <Text bold>{toolUses.length}</Text>{' '}
+                {commonType ? `${commonType} agents` : 'agents'}…
+              </>}
+          </Text>
+        </Box>
+        {!allAsync && <Box flexShrink={0}><CtrlOToExpand /></Box>}
       </Box>
       {agentStats.map((stat, index) => <AgentProgressLine key={stat.id} agentType={stat.agentType} description={stat.description} descriptionColor={stat.descriptionColor} taskDescription={stat.taskDescription} toolUseCount={stat.toolUseCount} tokens={stat.tokens} color={stat.color} isLast={index === agentStats.length - 1} isResolved={stat.isResolved} isError={stat.isError} isAsync={stat.isAsync} shouldAnimate={shouldAnimate} lastToolInfo={stat.lastToolInfo} hideType={allSameType} name={stat.name} />)}
     </Box>;

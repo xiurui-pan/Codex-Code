@@ -3,7 +3,7 @@ import { feature } from 'bun:bundle';
 import React, { useEffect } from 'react';
 import { useNotifications } from '../context/notifications.js';
 import { Text } from '../ink.js';
-import { getGlobalConfig } from '../utils/config.js';
+import { getBuddyState, isBuddyFeatureEnabled } from './state.js';
 import { getRainbowColor } from '../utils/thinking.js';
 
 // Local date, not UTC — 24h rolling wave across timezones. Sustained Twitter
@@ -50,11 +50,8 @@ export function useBuddyNotification() {
   let t1;
   if ($[0] !== addNotification || $[1] !== removeNotification) {
     t0 = () => {
-      if (!feature("BUDDY")) {
-        return;
-      }
-      const config = getGlobalConfig();
-      if (config.companion || !isBuddyTeaserWindow()) {
+      const { featureEnabled, hatched } = getBuddyState();
+      if (!featureEnabled || hatched || !isBuddyTeaserWindow()) {
         return;
       }
       addNotification({
@@ -80,7 +77,7 @@ export function findBuddyTriggerPositions(text: string): Array<{
   start: number;
   end: number;
 }> {
-  if (!feature('BUDDY')) return [];
+  if (!isBuddyFeatureEnabled()) return [];
   const triggers: Array<{
     start: number;
     end: number;

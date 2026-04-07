@@ -4658,12 +4658,7 @@ export async function executeStatusLineCommand(
 
     // For successful hooks (exit code 0), use stdout
     if (result.status === 0) {
-      // Trim and split output into lines, then join with newlines
-      const output = result.stdout
-        .trim()
-        .split('\n')
-        .flatMap(line => line.trim() || [])
-        .join('\n')
+      const output = normalizeStatusLineOutput(result.stdout)
 
       if (output) {
         if (logResult) {
@@ -4685,6 +4680,16 @@ export async function executeStatusLineCommand(
     logForDebugging(`Status hook failed: ${error}`, { level: 'error' })
     return undefined
   }
+}
+
+export function normalizeStatusLineOutput(stdout: string): string {
+  return stdout
+    .replace(/\r\n?/g, '\n')
+    .replace(/[\u0000-\u0008\u000B-\u001A\u001C-\u001F\u007F]/g, '')
+    .trim()
+    .split('\n')
+    .flatMap(line => line.trim() || [])
+    .join(' · ')
 }
 
 /**

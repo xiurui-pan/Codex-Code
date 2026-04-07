@@ -7,7 +7,7 @@ import type { PermissionMode } from 'src/utils/permissions/PermissionMode.js';
 import { getIsRemoteMode, getKairosActive, getMainThreadAgentType, getOriginalCwd, getSdkBetas, getSessionId } from '../bootstrap/state.js';
 import { DEFAULT_OUTPUT_STYLE_NAME } from '../constants/outputStyles.js';
 import { useNotifications } from '../context/notifications.js';
-import { getTotalAPIDuration, getTotalCost, getTotalDuration, getTotalInputTokens, getTotalLinesAdded, getTotalLinesRemoved, getTotalOutputTokens } from '../cost-tracker.js';
+import { getTodayCost, getTotalAPIDuration, getTotalCacheCreationInputTokens, getTotalCacheReadInputTokens, getTotalCost, getTotalDuration, getTotalInputTokens, getTotalLinesAdded, getTotalLinesRemoved, getTotalOutputTokens } from '../cost-tracker.js';
 import { useMainLoopModel } from '../hooks/useMainLoopModel.js';
 import { type ReadonlySettings, useSettings } from '../hooks/useSettings.js';
 import { Ansi, Box, Text } from '../ink.js';
@@ -15,7 +15,7 @@ import type { Message } from '../types/message.js';
 import type { StatusLineCommandInput } from '../types/statusLine.js';
 import type { VimMode } from '../types/textInputTypes.js';
 import { checkHasTrustDialogAccepted } from '../utils/config.js';
-import { calculateContextPercentages, getContextWindowForModel } from '../utils/context.js';
+import { calculateContextPercentages, calculateContextPercentagesFromTokenCount, getContextWindowForModel } from '../utils/context.js';
 import { createRequire } from 'node:module';
 import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js';
 import { getCwd } from '../utils/cwd.js';
@@ -25,7 +25,7 @@ import { createBaseHookInput, executeStatusLineCommand } from '../utils/hooks.js
 import { getLastAssistantMessage } from '../utils/messages.js';
 import { getRuntimeMainLoopModel, type ModelName, renderModelName } from '../utils/model/model.js';
 import { getCurrentSessionTitle } from '../utils/sessionStorage.js';
-import { doesEstimatedContextExceed200k, getDisplayContextTokenCount, getEstimatedCurrentUsage } from '../utils/tokens.js';
+import { doesEstimatedContextExceed200k, getDisplayContextTokenCount, getDisplayContextUsageBreakdown, getEstimatedCurrentUsage } from '../utils/tokens.js';
 import { getCurrentWorktreeSession } from '../utils/worktree.js';
 import { isVimModeEnabled } from './PromptInput/utils.js';
 /* eslint-disable @typescript-eslint/no-require-imports */
@@ -36,7 +36,7 @@ export function statusLineShouldDisplay(settings: ReadonlySettings): boolean {
   // Assistant mode: statusline fields (model, permission mode, cwd) reflect the
   // REPL/daemon process, not what the agent child is actually running. Hide it.
   if (feature('KAIROS') && getKairosActive()) return false;
-  return settings?.statusLine !== undefined;
+  return settings?.disableAllHooks !== true;
 }
 function buildStatusLineCommandInput(permissionMode: PermissionMode, exceeds200kTokens: boolean, settings: ReadonlySettings, messages: Message[], addedDirs: string[], mainLoopModel: ModelName, vimMode?: VimMode): StatusLineCommandInput {
   const agentType = getMainThreadAgentType();
@@ -51,7 +51,16 @@ function buildStatusLineCommandInput(permissionMode: PermissionMode, exceeds200k
     includeRestoredTotals: false
   });
   const contextWindowSize = getContextWindowForModel(runtimeModel, getSdkBetas());
-  const contextPercentages = calculateContextPercentages(currentUsage, contextWindowSize);
+  const displayContextTokens = getDisplayContextTokenCount(messages, {
+    includeRestoredTotals: false
+  });
+  const contextPercentages = displayContextTokens > 0 ? calculateContextPercentagesFromTokenCount(displayContextTokens, contextWindowSize) : calculateContextPercentages(currentUsage, contextWindowSize);
+  const sessionTokenUsage = getDisplayContextUsageBreakdown({
+    input_tokens: getTotalInputTokens(),
+    output_tokens: getTotalOutputTokens(),
+    cache_creation_input_tokens: getTotalCacheCreationInputTokens(),
+    cache_read_input_tokens: getTotalCacheReadInputTokens()
+  });
   const sessionId = getSessionId();
   const sessionName = getCurrentSessionTitle(sessionId);
   const rawUtil = getRawUtilization();
@@ -88,7 +97,9 @@ function buildStatusLineCommandInput(permissionMode: PermissionMode, exceeds200k
       name: outputStyleName
     },
     cost: {
+      billing_available: !isCurrentPhaseCustomCodexProvider(),
       total_cost_usd: getTotalCost(),
+      today_cost_usd: getTodayCost(),
       total_duration_ms: getTotalDuration(),
       total_api_duration_ms: getTotalAPIDuration(),
       total_lines_added: getTotalLinesAdded(),
@@ -98,9 +109,17 @@ function buildStatusLineCommandInput(permissionMode: PermissionMode, exceeds200k
       total_input_tokens: getTotalInputTokens(),
       total_output_tokens: getTotalOutputTokens(),
       context_window_size: contextWindowSize,
+      current_tokens: displayContextTokens,
       current_usage: currentUsage,
       used_percentage: contextPercentages.used,
       remaining_percentage: contextPercentages.remaining
+    },
+    token_usage: {
+      used_tokens: sessionTokenUsage.displayTokens,
+      total_input_tokens: sessionTokenUsage.totalInputTokens,
+      total_output_tokens: sessionTokenUsage.outputTokens,
+      cached_input_tokens: sessionTokenUsage.cachedInputTokens,
+      uncached_input_tokens: sessionTokenUsage.uncachedInputTokens
     },
     exceeds_200k_tokens: exceeds200kTokens,
     ...((rateLimits.five_hour || rateLimits.seven_day) && {
@@ -134,9 +153,10 @@ function buildStatusLineCommandInput(permissionMode: PermissionMode, exceeds200k
 }
 type Props = {
   // messages stays behind a ref (read only in the debounced callback);
-  // lastAssistantStatusSignature is the actual re-render trigger.
+  // these lightweight props are the actual re-render triggers.
   messagesRef: React.RefObject<Message[]>;
   lastAssistantStatusSignature: string | null;
+  transcriptTrigger: string;
   vimMode?: VimMode;
 };
 export function getLastAssistantStatusSignature(messages: Message[]): string | null {
@@ -152,6 +172,10 @@ export function getLastAssistantStatusSignature(messages: Message[]): string | n
     cacheCreation: usage?.cache_creation_input_tokens ?? null,
     cacheRead: usage?.cache_read_input_tokens ?? null,
   });
+}
+export function getStatusLineTranscriptTrigger(messages: Message[]): string {
+  const lastMessage = messages.at(-1);
+  return `${messages.length}:${lastMessage?.uuid ?? ''}`;
 }
 
 function formatTokenCountForStatusLine(tokenCount: number): string {
@@ -171,21 +195,17 @@ function formatUsedTokensForStatusLine(tokenCount: number): string {
 }
 
 function buildContextWindowSummary(messages: Message[], runtimeModel: ModelName): string | null {
-  const usage = getEstimatedCurrentUsage(messages, {
-    includeRestoredTotals: false
-  });
   const totalTokens = getDisplayContextTokenCount(messages, {
     includeRestoredTotals: false
   });
   const contextWindowSize = getContextWindowForModel(runtimeModel, getSdkBetas());
-  if (totalTokens <= 0 || contextWindowSize <= 0) return null;
+  if (contextWindowSize <= 0) return null;
+  if (totalTokens <= 0) {
+    return `🧠 ${formatTokenCountForStatusLine(contextWindowSize)} window`;
+  }
+  const usedPercentage = calculateContextPercentagesFromTokenCount(totalTokens, contextWindowSize).used;
 
-  const usedPercentage = usage
-    ? calculateContextPercentages(usage, contextWindowSize).used
-    : Math.round((totalTokens / contextWindowSize) * 100);
-  if (usedPercentage === null) return null;
-
-  return `🧠 ${formatUsedTokensForStatusLine(totalTokens)} / ${formatTokenCountForStatusLine(contextWindowSize)} (${usedPercentage}%)`;
+  return `🧠 ${formatUsedTokensForStatusLine(totalTokens)} / ${formatTokenCountForStatusLine(contextWindowSize)} (${usedPercentage ?? 0}%)`;
 }
 
 function mergeStatusLineContext(text: string | undefined, contextSummary: string | null): string | undefined {
@@ -207,6 +227,7 @@ function mergeStatusLineContext(text: string | undefined, contextSummary: string
 function StatusLineInner({
   messagesRef,
   lastAssistantStatusSignature,
+  transcriptTrigger,
   vimMode
 }: Props): React.ReactNode {
   const abortControllerRef = useRef<AbortController | undefined>(undefined);
@@ -238,12 +259,14 @@ function StatusLineInner({
   // Track previous state to detect changes and cache expensive calculations
   const previousStateRef = useRef<{
     messageId: string | null;
+    transcriptTrigger: string;
     exceeds200kTokens: boolean;
     permissionMode: PermissionMode;
     vimMode: VimMode | undefined;
     mainLoopModel: ModelName;
   }>({
     messageId: null,
+    transcriptTrigger,
     exceeds200kTokens: false,
     permissionMode,
     vimMode,
@@ -268,11 +291,13 @@ function StatusLineInner({
     try {
       let exceeds200kTokens = previousStateRef.current.exceeds200kTokens;
 
-      // Only recalculate 200k check if messages changed
+      // Only recalculate 200k check if the transcript or assistant usage changed.
       const currentStatusSignature = getLastAssistantStatusSignature(msgs);
-      if (currentStatusSignature !== previousStateRef.current.messageId) {
+      const currentTranscriptTrigger = getStatusLineTranscriptTrigger(msgs);
+      if (currentStatusSignature !== previousStateRef.current.messageId || currentTranscriptTrigger !== previousStateRef.current.transcriptTrigger) {
         exceeds200kTokens = doesEstimatedContextExceed200k(msgs);
         previousStateRef.current.messageId = currentStatusSignature;
+        previousStateRef.current.transcriptTrigger = currentTranscriptTrigger;
         previousStateRef.current.exceeds200kTokens = exceeds200kTokens;
       }
       const statusInput = buildStatusLineCommandInput(permissionModeRef.current, exceeds200kTokens, settingsRef.current, msgs, Array.from(addedDirsRef.current.keys()), mainLoopModelRef.current, vimModeRef.current);
@@ -302,20 +327,20 @@ function StatusLineInner({
     }, 300, debounceTimerRef, doUpdate);
   }, [doUpdate]);
 
-  // Only trigger update when assistant usage signature, permission mode, vim mode, or model actually changes
+  // Trigger update when transcript growth, assistant usage signature, permission mode, vim mode, or model changes.
   useEffect(() => {
-    if (lastAssistantStatusSignature !== previousStateRef.current.messageId || permissionMode !== previousStateRef.current.permissionMode || vimMode !== previousStateRef.current.vimMode || mainLoopModel !== previousStateRef.current.mainLoopModel) {
-      // Don't update messageId here — let doUpdate handle it so
-      // exceeds200kTokens is recalculated with the latest messages
+    if (transcriptTrigger !== previousStateRef.current.transcriptTrigger || lastAssistantStatusSignature !== previousStateRef.current.messageId || permissionMode !== previousStateRef.current.permissionMode || vimMode !== previousStateRef.current.vimMode || mainLoopModel !== previousStateRef.current.mainLoopModel) {
+      // Don't update messageId/transcriptTrigger here — let doUpdate handle it so
+      // exceeds200kTokens is recalculated with the latest messages.
       previousStateRef.current.permissionMode = permissionMode;
       previousStateRef.current.vimMode = vimMode;
       previousStateRef.current.mainLoopModel = mainLoopModel;
       scheduleUpdate();
     }
-  }, [lastAssistantStatusSignature, permissionMode, vimMode, mainLoopModel, scheduleUpdate]);
+  }, [transcriptTrigger, lastAssistantStatusSignature, permissionMode, vimMode, mainLoopModel, scheduleUpdate]);
 
   // When the statusLine command changes (hot reload), log the next result
-  const statusLineCommand = settings?.statusLine?.command;
+  const statusLineCommand = settings?.statusLine?.command ?? 'builtin-default-statusline';
   const isFirstSettingsRender = useRef(true);
   useEffect(() => {
     if (isFirstSettingsRender.current) {
@@ -329,31 +354,29 @@ function StatusLineInner({
   // Separate effect for logging on mount
   useEffect(() => {
     const statusLine = settings?.statusLine;
-    if (statusLine) {
-      logEvent('tengu_status_line_mount', {
-        command_length: statusLine.command.length,
-        padding: statusLine.padding
+    logEvent('tengu_status_line_mount', {
+      command_length: statusLine?.command.length ?? 0,
+      padding: statusLine?.padding ?? 0
+    });
+    // Log if status line is configured but disabled by disableAllHooks
+    if (settings.disableAllHooks === true) {
+      logForDebugging('Status line is configured but disableAllHooks is true', {
+        level: 'warn'
       });
-      // Log if status line is configured but disabled by disableAllHooks
-      if (settings.disableAllHooks === true) {
-        logForDebugging('Status line is configured but disableAllHooks is true', {
-          level: 'warn'
-        });
-      }
-      // executeStatusLineCommand (hooks.ts) returns undefined when trust is
-      // blocked — statusLineText stays undefined forever, user sees nothing,
-      // and tengu_status_line_mount above fires anyway so telemetry looks fine.
-      if (!checkHasTrustDialogAccepted()) {
-        addNotification({
-          key: 'statusline-trust-blocked',
-          text: 'statusline skipped · restart to fix',
-          color: 'warning',
-          priority: 'low'
-        });
-        logForDebugging('Status line command skipped: workspace trust not accepted', {
-          level: 'warn'
-        });
-      }
+    }
+    // executeStatusLineCommand (hooks.ts) returns undefined when trust is
+    // blocked — statusLineText stays undefined forever, user sees nothing,
+    // and tengu_status_line_mount above fires anyway so telemetry looks fine.
+    if (!checkHasTrustDialogAccepted()) {
+      addNotification({
+        key: 'statusline-trust-blocked',
+        text: 'statusline skipped · restart to fix',
+        color: 'warning',
+        priority: 'low'
+      });
+      logForDebugging('Status line command skipped: workspace trust not accepted', {
+        level: 'warn'
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     // biome-ignore lint/correctness/useExhaustiveDependencies: intentional

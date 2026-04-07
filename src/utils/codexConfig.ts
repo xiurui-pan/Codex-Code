@@ -1,4 +1,4 @@
-import { readFile } from 'fs/promises'
+import { readFile, writeFile } from 'fs/promises'
 import { homedir } from 'os'
 import { join } from 'path'
 
@@ -382,6 +382,64 @@ export async function loadCodexConfigIfPresent(): Promise<LoadedCodexConfig | nu
   }
 }
 
+function updateTopLevelScalarLine(
+  source: string,
+  key: string,
+  value: number | string | boolean | undefined,
+): string {
+  const lines = source.split('\n')
+  const nextLines: string[] = []
+  let replaced = false
+  let inserted = false
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index] ?? ''
+    const trimmed = stripInlineComment(line)
+    const isSectionHeader = /^\[.+\]$/.test(trimmed)
+
+    if (!inserted && isSectionHeader && value !== undefined && !replaced) {
+      nextLines.push(`${key} = ${String(value)}`)
+      inserted = true
+    }
+
+    const keyValueMatch = trimmed.match(/^([A-Za-z0-9_.-]+)\s*=/)
+    if (!isSectionHeader && keyValueMatch?.[1] === key) {
+      if (!replaced) {
+        if (value !== undefined) {
+          nextLines.push(`${key} = ${String(value)}`)
+          inserted = true
+        }
+        replaced = true
+      }
+      continue
+    }
+
+    nextLines.push(line)
+  }
+
+  if (!inserted && value !== undefined) {
+    nextLines.push(`${key} = ${String(value)}`)
+  }
+
+  return nextLines.join('\n')
+}
+
+export async function writeCodexConfigModelContextWindow(
+  value: number | undefined,
+  configPath = getDefaultCodexConfigPath(),
+): Promise<void> {
+  const source = await readFile(configPath, 'utf8')
+  const updated = updateTopLevelScalarLine(
+    source,
+    'model_context_window',
+    value,
+  )
+
+  if (updated !== source) {
+    await writeFile(configPath, updated, 'utf8')
+  }
+}
+
 export function applyCodexConfigToEnv(config: LoadedCodexConfig): void {
   process.env.CODEX_CODE_USE_CODEX_PROVIDER = '1'
   process.env.CODEX_CODE_CONFIG_PATH = config.configPath
@@ -409,7 +467,7 @@ export function applyCodexConfigToEnv(config: LoadedCodexConfig): void {
   }
 
   if (config.reasoningEffort) {
-    process.env.CODEX_CODE_EFFORT_LEVEL = config.reasoningEffort
+    process.env.CODEX_CODE_DEFAULT_REASONING_EFFORT = config.reasoningEffort
   }
 
   if (typeof config.responseStorage === 'boolean') {
@@ -494,7 +552,7 @@ export function getCodexAutoCompactTokenLimit(): number {
 }
 
 export function getCodexConfiguredReasoningEffort(): string | undefined {
-  return process.env.CODEX_CODE_EFFORT_LEVEL
+  return process.env.CODEX_CODE_DEFAULT_REASONING_EFFORT
 }
 
 export function getCodexConfiguredResponseStorage(): boolean | undefined {

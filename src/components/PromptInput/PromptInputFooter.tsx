@@ -18,7 +18,7 @@ import type { AutoUpdaterResult } from '../../utils/autoUpdater.js';
 import { isFullscreenEnvEnabled } from '../../utils/fullscreen.js';
 import { isUndercover } from '../../utils/undercover.js';
 import { CoordinatorTaskPanel, useCoordinatorTaskCount } from '../CoordinatorAgentStatus.js';
-import { getLastAssistantStatusSignature, StatusLine, statusLineShouldDisplay } from '../StatusLine.js';
+import { getLastAssistantStatusSignature, getStatusLineTranscriptTrigger, StatusLine, statusLineShouldDisplay } from '../StatusLine.js';
 import { Notifications } from './Notifications.js';
 import { PromptInputFooterLeftSide } from './PromptInputFooterLeftSide.js';
 import { PromptInputFooterSuggestions, type SuggestionItem } from './PromptInputFooterSuggestions.js';
@@ -102,6 +102,7 @@ function PromptInputFooter({
   const messagesRef = useRef(messages);
   messagesRef.current = messages;
   const lastAssistantStatusSignature = useMemo(() => getLastAssistantStatusSignature(messages), [messages]);
+  const transcriptTrigger = useMemo(() => getStatusLineTranscriptTrigger(messages), [messages]);
   const isNarrow = columns < 80;
   // In fullscreen the bottom slot is flexShrink:0, so every row here is a row
   // stolen from the ScrollBox. Drop the optional StatusLine first. Non-fullscreen
@@ -138,7 +139,7 @@ function PromptInputFooter({
   return <>
       <Box flexDirection={isNarrow ? 'column' : 'row'} justifyContent={isNarrow ? 'flex-start' : 'space-between'} paddingX={2} gap={isNarrow ? 0 : 1}>
         <Box flexDirection="column" flexShrink={isNarrow ? 0 : 1}>
-          {mode === 'prompt' && !isShort && !exitMessage.show && !isPasting && statusLineShouldDisplay(settings) && <StatusLine messagesRef={messagesRef} lastAssistantStatusSignature={lastAssistantStatusSignature} vimMode={vimMode} />}
+          {mode === 'prompt' && !isShort && !exitMessage.show && !isPasting && statusLineShouldDisplay(settings) && <StatusLine messagesRef={messagesRef} lastAssistantStatusSignature={lastAssistantStatusSignature} transcriptTrigger={transcriptTrigger} vimMode={vimMode} />}
           <PromptInputFooterLeftSide exitMessage={exitMessage} vimMode={vimMode} mode={mode} toolPermissionContext={toolPermissionContext} suppressHint={suppressHint} isLoading={isLoading} tasksSelected={pillSelected} teamsSelected={teamsSelected} teammateFooterIndex={teammateFooterIndex} tmuxSelected={tmuxSelected} isPasting={isPasting} isSearching={isSearching} historyQuery={historyQuery} setHistoryQuery={setHistoryQuery} historyFailedMatch={historyFailedMatch} onOpenTasksDialog={onOpenTasksDialog} />
         </Box>
         <Box flexShrink={1} gap={1}>

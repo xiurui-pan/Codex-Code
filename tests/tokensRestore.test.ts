@@ -23,6 +23,8 @@ test('getEstimatedCurrentUsage falls back to restored aggregate totals', () => {
 
   setCostStateForRestore({
     totalCostUSD: 1.23,
+    todayCostUSD: 0,
+    todayCostDate: undefined,
     totalAPIDuration: 10,
     totalAPIDurationWithoutRetries: 10,
     totalToolDuration: 0,
@@ -51,6 +53,8 @@ test('context surfaces can opt out of restored aggregate totals', () => {
 
   setCostStateForRestore({
     totalCostUSD: 1.23,
+    todayCostUSD: 0,
+    todayCostDate: undefined,
     totalAPIDuration: 10,
     totalAPIDurationWithoutRetries: 10,
     totalToolDuration: 0,

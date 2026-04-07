@@ -602,6 +602,131 @@ async function runQueryToolForwarding() {
   }
 }
 
+async function runApiErrorPrefix() {
+  const { queryCodexResponses } = await import(
+    '../../src/services/api/codexResponses.ts'
+  )
+
+  const server = http.createServer((req, res) => {
+    if (req.method !== 'POST' || req.url !== '/responses') {
+      res.writeHead(404).end('not found')
+      return
+    }
+
+    res.writeHead(400, {
+      'content-type': 'application/json',
+    })
+    res.end(
+      JSON.stringify({
+        error: {
+          message: 'No tool call found for function call output with call_id call_test.',
+        },
+      }),
+    )
+  })
+
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('failed to bind test server')
+  }
+
+  try {
+    return await withEnv(
+      {
+        ANTHROPIC_BASE_URL: `http://127.0.0.1:${address.port}`,
+        ANTHROPIC_API_KEY: 'test-key',
+        ANTHROPIC_MODEL: 'gpt-5.1-codex-mini',
+      },
+      async () => queryCodexResponses({
+        messages: [
+          {
+            type: 'user',
+            uuid: 'user-1',
+            message: { content: 'trigger api error' },
+          },
+        ],
+        systemPrompt: [],
+        options: {},
+        signal: new AbortController().signal,
+      }),
+    )
+  } finally {
+    await new Promise(resolve => server.close(resolve))
+  }
+}
+
+async function runOrphanToolResultPairing() {
+  const { buildResponsesBody } = await import(
+    '../../src/services/api/codexResponses.ts'
+  )
+
+  return withEnv(
+    {
+      ANTHROPIC_MODEL: 'gpt-5.1-codex-mini',
+    },
+    async () => {
+      const body = await buildResponsesBody({
+        messages: [
+          {
+            type: 'assistant',
+            uuid: 'assistant-1',
+            message: {
+              content: [
+                {
+                  type: 'tool_use',
+                  id: 'tool-1',
+                  name: 'Read',
+                  input: { file_path: 'README.md' },
+                },
+              ],
+            },
+          },
+          {
+            type: 'user',
+            uuid: 'user-1',
+            message: {
+              content: [
+                {
+                  type: 'tool_result',
+                  tool_use_id: 'tool-1',
+                  content: 'ok',
+                },
+              ],
+            },
+          },
+          {
+            type: 'user',
+            uuid: 'user-2',
+            message: {
+              content: [
+                {
+                  type: 'tool_result',
+                  tool_use_id: 'tool-orphan',
+                  content: 'orphan',
+                },
+              ],
+            },
+          },
+        ],
+        systemPrompt: [],
+        options: {},
+      })
+
+      return {
+        inputTypes: body.input.map(item => item.type),
+        functionCallIds: body.input
+          .filter(item => item.type === 'function_call')
+          .map(item => item.call_id),
+        functionCallOutputIds: body.input
+          .filter(item => item.type === 'function_call_output')
+          .map(item => item.call_id),
+      }
+    },
+  )
+}
+
 const result =
   mode === 'merge'
     ? await runMerge()
@@ -619,5 +744,9 @@ const result =
             ? await runToolBody()
             : mode === 'query-tool-forwarding'
               ? await runQueryToolForwarding()
-              : await runMissingBaseUrl()
+              : mode === 'api-error-prefix'
+                ? await runApiErrorPrefix()
+                : mode === 'orphan-tool-result-pairing'
+                  ? await runOrphanToolResultPairing()
+                  : await runMissingBaseUrl()
 process.stdout.write(JSON.stringify(result))

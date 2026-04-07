@@ -11,6 +11,10 @@ import {
   getRemoteControlAtStartup,
   saveGlobalConfig,
 } from '../../utils/config.js'
+import {
+  loadCodexConfigIfPresent,
+  writeCodexConfigModelContextWindow,
+} from '../../utils/codexConfig.js'
 import { errorMessage } from '../../utils/errors.js'
 import { lazySchema } from '../../utils/lazySchema.js'
 import { logError } from '../../utils/log.js'
@@ -134,6 +138,19 @@ export const ConfigTool = buildTool({
 
     // 2. GET operation
     if (value === undefined) {
+      if (config.source === 'codex') {
+        const codexConfig = await loadCodexConfigIfPresent()
+        const currentValue =
+          setting === 'modelContextWindow'
+            ? codexConfig?.modelContextWindow
+            : undefined
+        const displayValue = config.formatOnRead
+          ? config.formatOnRead(currentValue)
+          : currentValue
+        return {
+          data: { success: true, operation: 'get', setting, value: displayValue },
+        }
+      }
       const currentValue = getValue(config.source, path)
       const displayValue = config.formatOnRead
         ? config.formatOnRead(currentValue)
@@ -181,6 +198,15 @@ export const ConfigTool = buildTool({
 
     let finalValue: unknown = value
 
+    if (
+      config.source === 'codex' &&
+      setting === 'modelContextWindow' &&
+      typeof value === 'string' &&
+      value.toLowerCase().trim() === 'default'
+    ) {
+      finalValue = undefined
+    }
+
     // Coerce and validate boolean values
     if (config.type === 'boolean') {
       if (typeof value === 'string') {
@@ -200,6 +226,27 @@ export const ConfigTool = buildTool({
       }
     }
 
+    if (config.type === 'number' && finalValue !== undefined) {
+      if (typeof finalValue === 'string') {
+        finalValue = Number.parseInt(finalValue, 10)
+      }
+      const numericValue = Number(finalValue)
+      if (
+        !Number.isFinite(numericValue) ||
+        !Number.isInteger(numericValue)
+      ) {
+        return {
+          data: {
+            success: false,
+            operation: 'set',
+            setting,
+            error: `${setting} requires a positive integer.`,
+          },
+        }
+      }
+      finalValue = numericValue
+    }
+
     // Check options
     const options = getOptionsForSetting(setting)
     if (options && !options.includes(String(finalValue))) {
@@ -214,7 +261,7 @@ export const ConfigTool = buildTool({
     }
 
     // Async validation (e.g., model API check)
-    if (config.validateOnWrite) {
+    if (config.validateOnWrite && finalValue !== undefined) {
       const result = await config.validateOnWrite(finalValue)
       if (!result.valid) {
         return {
@@ -243,7 +290,7 @@ export const ConfigTool = buildTool({
           data: {
             success: false,
             error: !isAnthropicAuthEnabled()
-              ? 'Voice mode requires a Claude.ai account. Please run /login to sign in.'
+              ? 'Voice mode requires a supported account. Please run /login to sign in.'
               : 'Voice mode is not available.',
           },
         }
@@ -273,7 +320,7 @@ export const ConfigTool = buildTool({
           data: {
             success: false,
             error:
-              'Voice mode requires a Claude.ai account. Please run /login to sign in.',
+              'Voice mode requires a supported account. Please run /login to sign in.',
           },
         }
       }
@@ -307,7 +354,12 @@ export const ConfigTool = buildTool({
       }
     }
 
-    const previousValue = getValue(config.source, path)
+    const previousValue =
+      config.source === 'codex'
+        ? setting === 'modelContextWindow'
+          ? (await loadCodexConfigIfPresent())?.modelContextWindow
+          : undefined
+        : getValue(config.source, path)
 
     // 4. Write to storage
     try {
@@ -327,7 +379,7 @@ export const ConfigTool = buildTool({
           if (prev[key as keyof GlobalConfig] === finalValue) return prev
           return { ...prev, [key]: finalValue }
         })
-      } else {
+      } else if (config.source === 'settings') {
         const update = buildNestedObject(path, finalValue)
         const result = updateSettingsForSource('userSettings', update)
         if (result.error) {
@@ -339,6 +391,13 @@ export const ConfigTool = buildTool({
               error: result.error.message,
             },
           }
+        }
+      } else if (setting === 'modelContextWindow') {
+        await writeCodexConfigModelContextWindow(finalValue as number | undefined)
+        if (finalValue === undefined) {
+          delete process.env.CODEX_CODE_MODEL_CONTEXT_WINDOW
+        } else {
+          process.env.CODEX_CODE_MODEL_CONTEXT_WINDOW = String(finalValue)
         }
       }
 
@@ -394,7 +453,9 @@ export const ConfigTool = buildTool({
           operation: 'set',
           setting,
           previousValue,
-          newValue: finalValue,
+          newValue: config.formatOnRead
+            ? config.formatOnRead(finalValue)
+            : finalValue,
         },
       }
     } catch (error) {

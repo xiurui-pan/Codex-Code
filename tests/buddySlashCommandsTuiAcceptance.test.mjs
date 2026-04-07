@@ -233,7 +233,7 @@ print(json.dumps({
   return JSON.parse(stdout)
 }
 
-test('buddy slash commands TUI hatch and pet without calling the provider', async () => {
+test('buddy slash commands TUI hatch, mute, and unmute without calling the provider', async () => {
   await withResponsesServer(async ({ port, requestBodies }) => {
     const tempHome = await mkdtemp(join(tmpdir(), 'codex-buddy-tui-'))
     const tempProject = await mkdtemp(join(CLI_CWD, '.tmp-buddy-cwd-'))
@@ -256,8 +256,18 @@ test('buddy slash commands TUI hatch and pet without calling the provider', asyn
             send: '/buddy pet\r',
           },
           {
-            name: 'exit',
+            name: 'mute-buddy',
             waitFor: ['You pet'],
+            send: '/buddy mute\r',
+          },
+          {
+            name: 'unmute-buddy',
+            waitFor: ['muted for now'],
+            send: '/buddy unmute\r',
+          },
+          {
+            name: 'exit',
+            waitFor: ['back beside the prompt'],
             send: '/exit\r',
             settleMs: 800,
           },
@@ -266,11 +276,14 @@ test('buddy slash commands TUI hatch and pet without calling the provider', asyn
 
       const globalConfig = await readGlobalConfig(tempHome)
       assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
-      assert.deepEqual(result.sent, ['hatch-buddy', 'pet-buddy', 'exit'])
+      assert.deepEqual(result.sent, ['hatch-buddy', 'pet-buddy', 'mute-buddy', 'unmute-buddy', 'exit'])
       assert.equal(requestBodies.length, 0)
       assert.match(result.normalizedTranscript, /Buddyhatched:/)
       assert.match(result.normalizedTranscript, /Youpet/)
+      assert.match(result.normalizedTranscript, /mutedfornow/)
+      assert.match(result.normalizedTranscript, /backbesidetheprompt/)
       assert.equal(typeof globalConfig.companion?.name, 'string')
+      assert.equal(globalConfig.companionMuted, false)
     } finally {
       await rm(tempProject, { recursive: true, force: true })
       await rm(tempHome, { recursive: true, force: true })

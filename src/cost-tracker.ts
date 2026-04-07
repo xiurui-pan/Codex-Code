@@ -19,6 +19,7 @@ import {
   getTotalLinesRemoved,
   getTotalOutputTokens,
   getTotalToolDuration,
+  getTodayCostUSD,
   getTotalWebSearchRequests,
   getUsageForModel,
   hasUnknownModelCost,
@@ -56,6 +57,7 @@ import type { FpsMetrics } from './utils/fpsTracker.js'
 import { getCanonicalName } from './utils/model/model.js'
 import { calculateUSDCost } from './utils/modelCost.js'
 export {
+  getTodayCostUSD as getTodayCost,
   getTotalCostUSD as getTotalCost,
   getTotalDuration,
   getTotalAPIDuration,
@@ -77,8 +79,17 @@ export {
   getUsageForModel,
 }
 
+function getLocalDateString(date: Date = new Date()): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 type StoredCostState = {
   totalCostUSD: number
+  todayCostUSD: number
+  todayCostDate: string | undefined
   totalAPIDuration: number
   totalAPIDurationWithoutRetries: number
   totalToolDuration: number
@@ -125,6 +136,8 @@ export function getStoredSessionCosts(
 
   return {
     totalCostUSD: projectConfig.lastCost ?? 0,
+    todayCostUSD: projectConfig.lastTodayCost ?? 0,
+    todayCostDate: projectConfig.lastTodayCostDate,
     totalAPIDuration: projectConfig.lastAPIDuration ?? 0,
     totalAPIDurationWithoutRetries:
       projectConfig.lastAPIDurationWithoutRetries ?? 0,
@@ -164,6 +177,8 @@ export function saveCurrentSessionCosts(fpsMetrics?: FpsMetrics): void {
   saveCurrentProjectConfig(current => ({
     ...current,
     lastCost: getTotalCostUSD(),
+    lastTodayCost: getTodayCostUSD(),
+    lastTodayCostDate: getLocalDateString(),
     lastAPIDuration: getTotalAPIDuration(),
     lastAPIDurationWithoutRetries: getTotalAPIDurationWithoutRetries(),
     lastToolDuration: getTotalToolDuration(),

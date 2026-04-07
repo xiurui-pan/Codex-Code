@@ -51,10 +51,20 @@ How to use the statusLine command:
      "output_style": {
        "name": "string",         // Output style name (e.g., "default", "Explanatory", "Learning")
      },
+     "cost": {
+       "billing_available": boolean,      // Whether USD billing is known for the current provider
+       "total_cost_usd": number,       // Total tracked cost for the current session
+       "today_cost_usd": number,       // Current session cost accumulated since local midnight
+       "total_duration_ms": number,    // Wall time spent in the current session
+       "total_api_duration_ms": number,// Time spent waiting on API responses in the current session
+       "total_lines_added": number,    // Total lines added in the current session
+       "total_lines_removed": number   // Total lines removed in the current session
+     },
      "context_window": {
        "total_input_tokens": number,       // Total input tokens used in session (cumulative)
        "total_output_tokens": number,      // Total output tokens used in session (cumulative)
        "context_window_size": number,      // Context window size for current model (e.g., 200000)
+       "current_tokens": number,           // Current context window token count
        "current_usage": {                   // Token usage from last API call (null if no messages yet)
          "input_tokens": number,           // Input tokens for current context
          "output_tokens": number,          // Output tokens generated
@@ -64,7 +74,14 @@ How to use the statusLine command:
        "used_percentage": number | null,      // Pre-calculated: % of context used (0-100), null if no messages yet
        "remaining_percentage": number | null  // Pre-calculated: % of context remaining (0-100), null if no messages yet
      },
-     "rate_limits": {             // Optional: Claude.ai subscription usage limits. Only present for subscribers after first API response.
+     "token_usage": {
+       "used_tokens": number,          // Session token total, provider-aware
+       "total_input_tokens": number,   // Session input token total
+       "total_output_tokens": number,  // Session output token total
+       "cached_input_tokens": number,  // Session cached-input token total
+       "uncached_input_tokens": number // Session uncached-input token total
+     },
+     "rate_limits": {             // Optional: usage limit data when the provider exposes it
        "five_hour": {             // Optional: 5-hour session limit (may be absent)
          "used_percentage": number,   // Percentage of limit used (0-100)
          "resets_at": number          // Unix epoch seconds when this window resets
@@ -98,17 +115,20 @@ How to use the statusLine command:
    Or store it in a variable first:
    - input=$(cat); echo "$(echo "$input" | jq -r '.model.display_name') in $(echo "$input" | jq -r '.workspace.current_dir')"
 
-   To display context remaining percentage (simplest approach using pre-calculated field):
+   To display context remaining percentage:
    - input=$(cat); remaining=$(echo "$input" | jq -r '.context_window.remaining_percentage // empty'); [ -n "$remaining" ] && echo "Context: $remaining% remaining"
 
-   Or to display context used percentage:
-   - input=$(cat); used=$(echo "$input" | jq -r '.context_window.used_percentage // empty'); [ -n "$used" ] && echo "Context: $used% used"
+   Or to display context window size:
+   - input=$(cat); window=$(echo "$input" | jq -r '.context_window.context_window_size // empty'); [ -n "$window" ] && echo "Window: $window"
 
-   To display Claude.ai subscription rate limit usage (5-hour session limit):
-   - input=$(cat); pct=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty'); [ -n "$pct" ] && printf "5h: %.0f%%" "$pct"
+   Or to display current context tokens:
+   - input=$(cat); used=$(echo "$input" | jq -r '.context_window.current_tokens // empty'); [ -n "$used" ] && echo "Context: $used tokens"
 
-   To display both 5-hour and 7-day limits when available:
-   - input=$(cat); five=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty'); week=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // empty'); out=""; [ -n "$five" ] && out="5h:$(printf '%.0f' "$five")%"; [ -n "$week" ] && out="$out 7d:$(printf '%.0f' "$week")%"; echo "$out"
+   To display current-session cost:
+   - input=$(cat); available=$(echo "$input" | jq -r '.cost.billing_available // true'); if [ "$available" = "true" ]; then cost=$(echo "$input" | jq -r '.cost.total_cost_usd // 0'); printf "Session: $%.2f" "$cost"; fi
+
+   To display current-session cost since local midnight:
+   - input=$(cat); available=$(echo "$input" | jq -r '.cost.billing_available // true'); if [ "$available" = "true" ]; then today=$(echo "$input" | jq -r '.cost.today_cost_usd // 0'); printf "Today: $%.2f" "$today"; fi
 
 2. For longer commands, you can save a new file in the user's ~/.claude directory, e.g.:
    - ~/.claude/statusline-command.sh and reference that file in the settings.
