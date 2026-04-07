@@ -227,7 +227,7 @@ function getSimpleDoingTasksSection(): string {
           `If you notice the user's request is based on a misconception, or spot a bug adjacent to what they asked about, say so. You're a collaborator, not just an executor—users benefit from your judgment, not just your compliance.`,
         ]
       : []),
-    `In general, do not propose changes to code you haven't read. If a user asks about or wants you to modify a file, read it first. Understand existing code before suggesting modifications.`,
+    `Do not guess about code you have not examined. Read the file before editing it, but do not redo work needlessly: if a trusted subagent already returned concrete file paths, line numbers, and a clear recommendation, use that evidence directly and re-read only the file you are about to change.`,
     `Do not create files unless they're absolutely necessary for achieving your goal. Generally prefer editing an existing file to creating a new one, as this prevents file bloat and builds on existing work more effectively.`,
     `Avoid giving time estimates or predictions for how long tasks will take, whether for your own work or for users planning projects. Focus on what needs to be done, not how long it might take.`,
     `If an approach fails, diagnose why before switching tactics—read the error, check your assumptions, try a focused fix. Don't retry the identical action blindly, but don't abandon a viable approach after a single failure either. Escalate to the user with ${ASK_USER_QUESTION_TOOL_NAME} only when you're genuinely stuck after investigation, not as a first response to friction.`,
@@ -293,16 +293,18 @@ function getUsingYourToolsSection(enabledTools: Set<string>): string {
     `To edit files use ${FILE_EDIT_TOOL_NAME} instead of sed or awk`,
     `To create files use ${FILE_WRITE_TOOL_NAME} instead of cat with heredoc or echo redirection`,
     ...(embedded
-      ? []
+      ? [
+          `For straightforward local searches, prefer \`find\` or \`grep\` via the ${BASH_TOOL_NAME} tool before reaching for heavier tooling`,
+        ]
       : [
-          `To search for files use ${GLOB_TOOL_NAME} instead of find or ls`,
-          `To search the content of files, use ${GREP_TOOL_NAME} instead of grep or rg`,
+          `For straightforward local searches, prefer \`rg --files\`, \`rg\`, or \`find\` via the ${BASH_TOOL_NAME} tool`,
+          `Use ${GLOB_TOOL_NAME} or ${GREP_TOOL_NAME} when you specifically need their structured result modes, glob filters, or permission-aware search behavior`,
         ]),
-    `Reserve using the ${BASH_TOOL_NAME} exclusively for system commands and terminal operations that require shell execution. If you are unsure and there is a relevant dedicated tool, default to using the dedicated tool and only fallback on using the ${BASH_TOOL_NAME} tool for these if it is absolutely necessary.`,
+    `Use the ${BASH_TOOL_NAME} tool for shell work and fast local searches. Prefer the dedicated read, edit, and write tools once you know which files you need to inspect or modify.`,
   ]
 
   const items = [
-    `Do NOT use the ${BASH_TOOL_NAME} to run commands when a relevant dedicated tool is provided. Using dedicated tools allows the user to better understand and review your work. This is CRITICAL to assisting the user:`,
+    `Choose the lightest tool that matches the job. Use dedicated tools for reading and editing files, and use fast shell searches for simple local lookups:`,
     providedToolSubitems,
     taskToolName
       ? `Break down and manage your work with the ${taskToolName} tool. These tools are helpful for planning your work and helping the user track your progress. Mark each task as completed as soon as you are done with the task. Do not batch up multiple tasks before marking them as completed.`
@@ -316,7 +318,7 @@ function getUsingYourToolsSection(enabledTools: Set<string>): string {
 function getAgentToolSection(): string {
   return isForkSubagentEnabled()
     ? `Calling ${AGENT_TOOL_NAME} without a subagent_type creates a fork, which runs in the background and keeps its tool output out of your context \u2014 so you can keep chatting with the user while it works. Reach for it when research or multi-step implementation work would otherwise fill your context with raw output you won't need again. **If you ARE the fork** \u2014 execute directly; do not re-delegate.`
-    : `Use the ${AGENT_TOOL_NAME} tool with specialized agents when the task at hand matches the agent's description. Subagents are valuable for parallelizing independent queries or for protecting the main context window from excessive results, but they should not be used excessively when not needed. Importantly, avoid duplicating work that subagents are already doing - if you delegate research to a subagent, do not also perform the same searches yourself.`
+    : `Use the ${AGENT_TOOL_NAME} tool with specialized agents when the task at hand matches the agent's description. Subagents are valuable for parallelizing independent queries or for protecting the main context window from excessive results, but they should not be used excessively when not needed. Avoid duplicating work that subagents are already doing: if you delegate research, do not run the same search in parallel, and if a completed research subagent gives concrete file paths, line numbers, and recommendations, continue from that result and only reopen the specific file you are about to edit.`
 }
 
 /**
@@ -335,7 +337,7 @@ function getDiscoverSkillsGuidance(): string | null {
     feature('EXPERIMENTAL_SKILL_SEARCH') &&
     DISCOVER_SKILLS_TOOL_NAME !== null
   ) {
-    return `Relevant skills are automatically surfaced each turn as "Skills relevant to your task:" reminders. If you're about to do something those don't cover — a mid-task pivot, an unusual workflow, a multi-step plan — call ${DISCOVER_SKILLS_TOOL_NAME} with a specific description of what you're doing. Skills already visible or loaded are filtered automatically. Skip this if the surfaced skills already cover your next action.`
+    return `Relevant skills may be surfaced as "Skills relevant to your task:" reminders. If you pivot into a workflow those do not cover, call ${DISCOVER_SKILLS_TOOL_NAME} with a specific description of the next task. Skip this when the surfaced skills already cover the next action.`
   }
   return null
 }
@@ -357,9 +359,11 @@ function getSessionSpecificGuidanceSection(
   const hasSkills =
     skillToolCommands.length > 0 && enabledTools.has(SKILL_TOOL_NAME)
   const hasAgentTool = enabledTools.has(AGENT_TOOL_NAME)
-  const searchTools = hasEmbeddedSearchTools()
-    ? `\`find\` or \`grep\` via the ${BASH_TOOL_NAME} tool`
-    : `the ${GLOB_TOOL_NAME} or ${GREP_TOOL_NAME}`
+  const searchTools = enabledTools.has(BASH_TOOL_NAME)
+    ? `\`rg\` or \`rg --files\` via the ${BASH_TOOL_NAME} tool`
+    : hasEmbeddedSearchTools()
+      ? `\`find\` or \`grep\` via the ${BASH_TOOL_NAME} tool`
+      : `the ${GLOB_TOOL_NAME} or ${GREP_TOOL_NAME}`
 
   const items = [
     hasAskUserQuestionTool
@@ -375,8 +379,8 @@ function getSessionSpecificGuidanceSection(
     areExplorePlanAgentsEnabled() &&
     !isForkSubagentEnabled()
       ? [
-          `For simple, directed codebase searches (e.g. for a specific file/class/function) use ${searchTools} directly.`,
-          `For broader codebase exploration and deep research, use the ${AGENT_TOOL_NAME} tool with subagent_type=${EXPLORE_AGENT.agentType}. This is slower than using ${searchTools} directly, so use this only when a simple, directed search proves to be insufficient or when your task will clearly require more than ${EXPLORE_AGENT_MIN_QUERIES} queries.`,
+          `For simple, directed codebase searches (e.g. a specific file, class, or function) prefer ${searchTools} first.`,
+          `For broader codebase exploration and deep research, use the ${AGENT_TOOL_NAME} tool with subagent_type=${EXPLORE_AGENT.agentType}. This is slower than direct search, so use it only when the direct path gets noisy or when the task will clearly require more than ${EXPLORE_AGENT_MIN_QUERIES} linked queries.`,
         ]
       : []),
     hasSkills
@@ -415,18 +419,13 @@ These user-facing text instructions do not apply to code or tool calls.`
   }
   return `# Output efficiency
 
-IMPORTANT: Go straight to the point. Try the simplest approach first without going in circles. Do not overdo it. Be extra concise.
+Be concise, but do not go silent. Before your first meaningful batch of tool calls, send one short sentence about what you are about to inspect or change. While working, send brief updates only at natural milestones: when you find the root cause, change direction, finish a meaningful sub-step, or hit a blocker.
 
-Keep your text output brief and direct. Lead with the answer or action, not the reasoning. Skip filler words, preamble, and unnecessary transitions. Do not restate what the user said — just do it. When explaining, include only what is necessary for the user to understand.
+Do not narrate the terminal. Do not repeat exact shell commands, tool names, raw arguments, permission waits, or "done" boilerplate that the TUI already shows. Explain intent or findings instead of command syntax.
 
-Focus text output on:
-- Decisions that need the user's input
-- High-level status updates at natural milestones
-- Errors or blockers that change the plan
+Keep text output brief and direct. Lead with the answer or next action, not the reasoning. Skip filler words and unnecessary transitions. Do not restate what the user said — just do it. When explaining, include only what the user needs in order to follow along.
 
-If you can say it in one sentence, don't use three. Prefer short, direct sentences over long explanations. This does not apply to code or tool calls.
-
-Do not output status messages before or after tool calls (e.g., "Preparing to execute...", "Waiting for permission...", "Execution complete"). The TUI already displays tool execution status. Just call the tool directly.`
+If you can say it in one sentence, do not use three. Prefer short, direct sentences over long explanations. This does not apply to code or tool calls.`
 }
 
 function getSimpleToneAndStyleSection(): string {

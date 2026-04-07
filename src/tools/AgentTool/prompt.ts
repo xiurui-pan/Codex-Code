@@ -4,8 +4,10 @@ import { hasEmbeddedSearchTools } from '../../utils/embeddedTools.js'
 import { isEnvDefinedFalsy, isEnvTruthy } from '../../utils/envUtils.js'
 import { isTeammate } from '../../utils/teammate.js'
 import { isInProcessTeammate } from '../../utils/teammateContext.js'
+import { BASH_TOOL_NAME } from '../BashTool/toolName.js'
 import { FILE_READ_TOOL_NAME } from '../FileReadTool/constants.js'
 import { FILE_WRITE_TOOL_NAME } from '../FileWriteTool/prompt.js'
+import { GREP_TOOL_NAME } from '../GrepTool/prompt.js'
 import { GLOB_TOOL_NAME } from '../GlobTool/prompt.js'
 import { SEND_MESSAGE_TOOL_NAME } from '../SendMessageTool/constants.js'
 import { AGENT_TOOL_NAME } from './constants.js'
@@ -100,7 +102,7 @@ Forks are cheap because they share your prompt cache. Don't set \`model\` on a f
 
 ## Writing the prompt
 
-${forkEnabled ? 'When spawning a fresh agent (with a `subagent_type`), it starts with zero context. ' : ''}Brief the agent like a smart colleague who just walked into the room — it hasn't seen this conversation, doesn't know what you've tried, doesn't understand why this task matters.
+${forkEnabled ? 'When spawning a fresh agent (with a `subagent_type`), it starts with zero context. ' : ''}Brief the agent like a smart colleague who just walked into the room — it has not seen this conversation, does not know what you have tried, and does not know why the task matters.
 - Explain what you're trying to accomplish and why.
 - Describe what you've already learned or ruled out.
 - Give enough context about the surrounding problem that the agent can make judgment calls rather than just following a narrow instruction.
@@ -109,7 +111,7 @@ ${forkEnabled ? 'When spawning a fresh agent (with a `subagent_type`), it starts
 
 ${forkEnabled ? 'For fresh agents, terse' : 'Terse'} command-style prompts produce shallow, generic work.
 
-**Never delegate understanding.** Don't write "based on your findings, fix the bug" or "based on the research, implement it." Those phrases push synthesis onto the agent instead of doing it yourself. Write prompts that prove you understood: include file paths, line numbers, what specifically to change.
+**Delegate the digging, keep the final decision.** It is fine to ask an agent to map a code path, read files, or summarize likely fixes. Once a research agent returns concrete file paths, line numbers, and reasoning, use that evidence directly instead of repeating the same repo-wide search yourself. Re-open the specific file you are about to edit, or re-check the evidence only when the result is stale, vague, or conflicts with what you now see.
 `
 
   const forkExamples = `Example usage:
@@ -221,14 +223,11 @@ ${
   // dedicated Glob/Grep tools, so point at find via Bash instead.
   const embedded = hasEmbeddedSearchTools()
   const fileSearchHint = embedded
-    ? '`find` via the Bash tool'
-    : `the ${GLOB_TOOL_NAME} tool`
-  // The "class Foo" example is about content search. Non-embedded stays Glob
-  // (original intent: find-the-file-containing). Embedded gets grep because
-  // find -name doesn't look at file contents.
+    ? `\`find\` or \`rg --files\` via the ${BASH_TOOL_NAME} tool`
+    : `\`rg --files\` via the ${BASH_TOOL_NAME} tool or the ${GLOB_TOOL_NAME} tool`
   const contentSearchHint = embedded
-    ? '`grep` via the Bash tool'
-    : `the ${GLOB_TOOL_NAME} tool`
+    ? `\`grep\` or \`rg\` via the ${BASH_TOOL_NAME} tool`
+    : `\`rg\` via the ${BASH_TOOL_NAME} tool or the ${GREP_TOOL_NAME} tool`
   const whenNotToUseSection = forkEnabled
     ? ''
     : `
@@ -265,7 +264,7 @@ Usage notes:
       : ''
   }
 - To continue a previously spawned agent, use ${SEND_MESSAGE_TOOL_NAME} with the agent's ID or name as the \`to\` field. The agent resumes with its full context preserved. ${forkEnabled ? 'Each fresh Agent invocation with a subagent_type starts without context — provide a complete task description.' : 'Each Agent invocation starts fresh — provide a complete task description.'}
-- The agent's outputs should generally be trusted
+- Trust completed research results by default. If an agent returns concrete file paths, line numbers, and reasoning, continue from that evidence instead of rerunning the same search. Re-read only the target file before you edit it, or re-check the evidence if it looks stale or contradictory.
 - Clearly tell the agent whether you expect it to write code or just to do research (search, file reads, web fetches, etc.)${forkEnabled ? '' : ", since it is not aware of the user's intent"}
 - If the agent description mentions that it should be used proactively, then you should try your best to use it without the user having to ask for it first. Use your judgement.
 - If the user specifies that they want you to run agents "in parallel", you MUST send a single message with multiple ${AGENT_TOOL_NAME} tool use content blocks. For example, if you need to launch both a build-validator agent and a test-runner agent in parallel, send a single message with both tool calls.

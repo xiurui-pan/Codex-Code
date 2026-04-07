@@ -36,6 +36,7 @@ import { QueryGuard } from '../utils/QueryGuard.js';
 import { isEnvTruthy } from '../utils/envUtils.js';
 import { formatTokens, truncateToWidth } from '../utils/format.js';
 import { consumeEarlyInput } from '../utils/earlyInput.js';
+import { getVisibleStreamingText } from '../utils/streamingText.js';
 import { setMemberActive } from '../utils/swarm/teamHelpers.js';
 import { isSwarmWorker, generateSandboxRequestId, sendSandboxPermissionRequestViaMailbox, sendSandboxPermissionResponseViaMailbox } from '../utils/swarm/permissionSync.js';
 import { registerSandboxPermissionCallback } from '../hooks/useSwarmPermissionPoller.js';
@@ -1545,11 +1546,9 @@ export function REPL({
     }
   }, []);
 
-  // Hide the in-progress source line so text streams line-by-line, not
-  // char-by-char. lastIndexOf returns -1 when no newline, giving '' → null.
-  // Guard on showStreamingText so toggling reducedMotion mid-stream
-  // immediately hides the streaming preview.
-  const visibleStreamingText = streamingText && showStreamingText ? streamingText.substring(0, streamingText.lastIndexOf('\n') + 1) || null : null;
+  // Prefer complete lines, but still surface short commentary updates even if
+  // the model has not emitted a newline yet.
+  const visibleStreamingText = getVisibleStreamingText(streamingText, showStreamingText);
   const [lastQueryCompletionTime, setLastQueryCompletionTime] = useState(0);
   const [spinnerMessage, setSpinnerMessage] = useState<string | null>(null);
   const [spinnerColor, setSpinnerColor] = useState<keyof Theme | null>(null);

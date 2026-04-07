@@ -63,7 +63,6 @@ import {
   isValidImagePaste,
 } from 'src/types/textInputTypes.js'
 import { randomUUID, type UUID } from 'crypto'
-import { getSettings_DEPRECATED } from './settings/settings.js'
 import { getSnippetForTwoFileDiff } from 'src/tools/FileEditTool/utils.js'
 import type {
   ContentBlockParam,
@@ -941,9 +940,6 @@ export async function getAttachments(
         maybe('ide_opened_file', async () =>
           getOpenedFileFromIDE(ideSelection, toolUseContext),
         ),
-        maybe('output_style', async () =>
-          Promise.resolve(getOutputStyleAttachment()),
-        ),
         maybe('diagnostics', async () =>
           getDiagnosticAttachments(toolUseContext),
         ),
@@ -1584,23 +1580,6 @@ function getCriticalSystemReminderAttachment(
     return []
   }
   return [{ type: 'critical_system_reminder', content: reminder }]
-}
-
-function getOutputStyleAttachment(): Attachment[] {
-  const settings = getSettings_DEPRECATED()
-  const outputStyle = settings?.outputStyle || 'default'
-
-  // Only show for non-default styles
-  if (outputStyle === 'default') {
-    return []
-  }
-
-  return [
-    {
-      type: 'output_style',
-      style: outputStyle,
-    },
-  ]
 }
 
 async function getSelectedLinesFromIDE(
@@ -2655,6 +2634,18 @@ async function getSkillListingAttachments(
   toolUseContext: ToolUseContext,
 ): Promise<Attachment[]> {
   if (process.env.NODE_ENV === 'test') {
+    return []
+  }
+
+  // When skill discovery is active, the main thread already gets focused
+  // skill hints from discovery. Skip the broad initial listing there to keep
+  // the default prompt lighter; subagents still keep their listing because
+  // they start cold and do not receive the same turn-0 discovery.
+  if (
+    !toolUseContext.agentId &&
+    feature('EXPERIMENTAL_SKILL_SEARCH') &&
+    skillSearchModules?.featureCheck.isSkillSearchEnabled()
+  ) {
     return []
   }
 
