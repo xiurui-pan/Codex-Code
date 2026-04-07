@@ -20,6 +20,8 @@ export type CodexModelCapability = {
 
 export const DEFAULT_CODEX_MODEL = 'gpt-5.4'
 export const DEFAULT_CODEX_REASONING_EFFORT: EffortLevel = 'medium'
+export const CODEX_PLAN_MODE_ALIAS = 'xhighplan'
+const LEGACY_CODEX_PLAN_MODE_ALIASES = ['opusplan'] as const
 
 const CODEX_MODEL_CAPABILITIES = [
   {
@@ -36,7 +38,12 @@ const CODEX_MODEL_CAPABILITIES = [
     description: 'Latest frontier agentic coding model.',
     defaultEffort: 'medium',
     supportedEffortLevels: ['low', 'medium', 'high', 'xhigh'],
-    aliases: ['codex', 'sonnet'],
+    aliases: [
+      'codex',
+      'sonnet',
+      CODEX_PLAN_MODE_ALIAS,
+      ...LEGACY_CODEX_PLAN_MODE_ALIASES,
+    ],
   },
   {
     value: 'gpt-5.3-codex',
@@ -44,7 +51,7 @@ const CODEX_MODEL_CAPABILITIES = [
     description: 'Frontier agentic coding model.',
     defaultEffort: 'medium',
     supportedEffortLevels: ['low', 'medium', 'high', 'xhigh'],
-    aliases: ['best', 'max', 'opus', 'opusplan'],
+    aliases: ['best', 'max', 'opus'],
   },
   {
     value: 'gpt-5.2-codex',
@@ -91,6 +98,22 @@ export function getCodexModelCapabilities(): readonly CodexModelCapability[] {
 export function resolveCodexModelInput(model: string): string {
   const normalized = model.trim().toLowerCase()
   return CODEX_MODEL_ALIAS_MAP.get(normalized) ?? model.trim()
+}
+
+export function isCodexPlanModeAlias(
+  model: string | null | undefined,
+): boolean {
+  if (!model) {
+    return false
+  }
+
+  const normalized = model.trim().toLowerCase()
+  return (
+    normalized === CODEX_PLAN_MODE_ALIAS ||
+    LEGACY_CODEX_PLAN_MODE_ALIASES.includes(
+      normalized as (typeof LEGACY_CODEX_PLAN_MODE_ALIASES)[number],
+    )
+  )
 }
 
 export function findCodexModelCapability(

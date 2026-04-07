@@ -11,6 +11,7 @@ import {
   getDisplayedEffortLevel,
   modelSupportsEffort,
 } from '../utils/effort.js'
+import type { PermissionMode } from '../utils/permissions/PermissionMode.js'
 
 /**
  * Build the text for the effort-changed notification, e.g. "◐ medium · /effort".
@@ -19,9 +20,10 @@ import {
 export function getEffortNotificationText(
   effortValue: EffortValue | undefined,
   model: string,
+  permissionMode?: PermissionMode,
 ): string | undefined {
   if (!modelSupportsEffort(model)) return undefined
-  const level = getDisplayedEffortLevel(model, effortValue)
+  const level = getDisplayedEffortLevel(model, effortValue, permissionMode)
   return `${effortLevelToSymbol(level)} ${level} · /effort`
 }
 

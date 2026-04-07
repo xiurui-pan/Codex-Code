@@ -6,8 +6,16 @@ import { getAPIProvider } from './model/providers.js'
 import { get3PModelCapabilityOverride } from './model/modelSupportOverrides.js'
 import { isEnvTruthy } from './envUtils.js'
 import { isCurrentPhaseCustomCodexProvider } from './currentPhase.js'
-import { codexModelSupportsEffort, codexModelSupportsMaxEffort, getCodexDefaultEffortForModel } from './model/codexModels.js'
+import {
+  codexModelSupportsEffort,
+  codexModelSupportsMaxEffort,
+  getCodexDefaultEffortForModel,
+  getCodexSupportedEffortLevels,
+  isCodexPlanModeAlias,
+} from './model/codexModels.js'
+import { getUserSpecifiedModelSetting } from './model/model.js'
 import type { EffortLevel } from 'src/entrypoints/sdk/runtimeTypes.js'
+import type { PermissionMode } from './permissions/PermissionMode.js'
 
 const require = createRequire(import.meta.url)
 const currentPhaseDisableLegacyEffortGates = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1'
@@ -198,7 +206,7 @@ export type EffortApplicationState = {
   envOverride: EffortValue | null | undefined
   configDefault: EffortValue | undefined
   modelDefault: EffortValue | undefined
-  source: 'env' | 'session' | 'config' | 'model'
+  source: 'plan_mode' | 'env' | 'session' | 'config' | 'model'
   isEnvOverridden: boolean
 }
 
@@ -209,13 +217,17 @@ export function getConfiguredDefaultEffort(): EffortValue | undefined {
 export function getEffortApplicationState(
   model: string,
   requestedEffortValue: EffortValue | undefined,
+  permissionMode?: PermissionMode,
 ): EffortApplicationState {
   const envOverride = getEffortEnvOverride()
   const configDefault = getConfiguredDefaultEffort()
   const modelDefault = getDefaultEffortForModel(model)
-  const applied = resolveAppliedEffort(model, requestedEffortValue)
+  const planModeOverride = getCodexPlanModeEffortOverride(model, permissionMode)
+  const applied = resolveAppliedEffort(model, requestedEffortValue, permissionMode)
   const source =
-    envOverride !== undefined
+    planModeOverride !== undefined
+      ? 'plan_mode'
+      : envOverride !== undefined
       ? 'env'
       : requestedEffortValue !== undefined
         ? 'session'
@@ -254,7 +266,8 @@ export function formatEffortOverrideMessage(
 /**
  * Resolve the effort value that will actually be sent to the API for a given
  * model, following the full precedence chain:
- *   env CODEX_CODE_EFFORT_LEVEL → appState.effortValue → config default → model default
+ *   XhighPlan mode → env CODEX_CODE_EFFORT_LEVEL → appState.effortValue
+ *   → config default → model default
  *
  * Returns undefined when no effort parameter should be sent (env set to
  * 'unset', or no default exists for the model).
@@ -262,7 +275,13 @@ export function formatEffortOverrideMessage(
 export function resolveAppliedEffort(
   model: string,
   appStateEffortValue: EffortValue | undefined,
+  permissionMode?: PermissionMode,
 ): EffortValue | undefined {
+  const planModeOverride = getCodexPlanModeEffortOverride(model, permissionMode)
+  if (planModeOverride !== undefined) {
+    return planModeOverride
+  }
+
   const envOverride = getEffortEnvOverride()
   if (envOverride === null) {
     return undefined
@@ -285,8 +304,9 @@ export function resolveAppliedEffort(
 export function getDisplayedEffortLevel(
   model: string,
   appStateEffort: EffortValue | undefined,
+  permissionMode?: PermissionMode,
 ): EffortLevel {
-  const resolved = resolveAppliedEffort(model, appStateEffort) ?? 'high'
+  const resolved = resolveAppliedEffort(model, appStateEffort, permissionMode) ?? 'high'
   return convertEffortValueToLevel(resolved)
 }
 
@@ -299,11 +319,32 @@ export function getDisplayedEffortLevel(
 export function getEffortSuffix(
   model: string,
   effortValue: EffortValue | undefined,
+  permissionMode?: PermissionMode,
 ): string {
   if (effortValue === undefined) return ''
-  const resolved = resolveAppliedEffort(model, effortValue)
+  const resolved = resolveAppliedEffort(model, effortValue, permissionMode)
   if (resolved === undefined) return ''
   return ` with ${convertEffortValueToLevel(resolved)} effort`
+}
+
+function getCodexPlanModeEffortOverride(
+  model: string,
+  permissionMode: PermissionMode | undefined,
+): EffortLevel | undefined {
+  if (!isCurrentPhaseCustomCodexProvider()) {
+    return undefined
+  }
+
+  if (!isCodexPlanModeAlias(getUserSpecifiedModelSetting())) {
+    return undefined
+  }
+
+  const supportedLevels = getCodexSupportedEffortLevels(model)
+  if (permissionMode === 'plan') {
+    return supportedLevels.includes('xhigh') ? 'xhigh' : undefined
+  }
+
+  return supportedLevels.includes('medium') ? 'medium' : undefined
 }
 
 export function isValidNumericEffort(value: number): boolean {

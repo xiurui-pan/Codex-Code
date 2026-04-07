@@ -6,6 +6,7 @@ import type {
 import type { Tool, Tools } from '../../Tool.js'
 import type { AgentDefinition } from '../../tools/AgentTool/loadAgentsDir.js'
 import type { Message } from '../../types/message.js'
+import type { PermissionMode } from '../../utils/permissions/PermissionMode.js'
 import {
   getCodexConfiguredApiKey,
   getCodexConfiguredWebSearchAllowedDomains,
@@ -55,6 +56,7 @@ type CodexRequestOptions = {
   model?: string
   effortValue?: string | number | null
   resolvedEffortValue?: string | number | null
+  permissionMode?: PermissionMode
   getToolPermissionContext?: () => Promise<unknown>
   tools?: Tools
   fastMode?: boolean
@@ -610,6 +612,7 @@ export async function buildResponsesBody({
   const resolvedEffortValue = resolveAppliedEffort(
     resolvedModel,
     options.resolvedEffortValue ?? options.effortValue ?? undefined,
+    options.permissionMode,
   )
   const effort = toResponsesReasoningEffort(
     resolvedModel,

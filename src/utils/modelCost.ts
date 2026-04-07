@@ -22,6 +22,7 @@ import {
   getDefaultMainLoopModelSetting,
   type ModelShortName,
 } from './model/model.js'
+import { resolveCodexModelInput } from './model/codexModels.js'
 
 // @see https://platform.claude.com/docs/en/about-claude/pricing
 export type ModelCosts = {
@@ -86,6 +87,61 @@ export const COST_HAIKU_45 = {
   webSearchRequests: 0.01,
 } as const satisfies ModelCosts
 
+// Pricing for GPT-5.4: $2.50 input / $15 output per Mtok
+export const COST_GPT_5_4 = {
+  inputTokens: 2.5,
+  outputTokens: 15,
+  promptCacheWriteTokens: 2.5,
+  promptCacheReadTokens: 0.25,
+  webSearchRequests: 0.01,
+} as const satisfies ModelCosts
+
+// Pricing for GPT-5.4 mini: $0.75 input / $4.50 output per Mtok
+export const COST_GPT_5_4_MINI = {
+  inputTokens: 0.75,
+  outputTokens: 4.5,
+  promptCacheWriteTokens: 0.75,
+  promptCacheReadTokens: 0.075,
+  webSearchRequests: 0.01,
+} as const satisfies ModelCosts
+
+// Pricing for GPT-5.2 / GPT-5.3-Codex: $1.75 input / $14 output per Mtok
+export const COST_GPT_5_2 = {
+  inputTokens: 1.75,
+  outputTokens: 14,
+  promptCacheWriteTokens: 1.75,
+  promptCacheReadTokens: 0.175,
+  webSearchRequests: 0.01,
+} as const satisfies ModelCosts
+
+// Pricing for GPT-5.1 / GPT-5.1-Codex: $1.25 input / $10 output per Mtok
+export const COST_GPT_5_1 = {
+  inputTokens: 1.25,
+  outputTokens: 10,
+  promptCacheWriteTokens: 1.25,
+  promptCacheReadTokens: 0.125,
+  webSearchRequests: 0.01,
+} as const satisfies ModelCosts
+
+// Pricing for GPT-5.1-Codex-mini: $0.25 input / $2 output per Mtok
+export const COST_GPT_5_1_MINI = {
+  inputTokens: 0.25,
+  outputTokens: 2,
+  promptCacheWriteTokens: 0.25,
+  promptCacheReadTokens: 0.025,
+  webSearchRequests: 0.01,
+} as const satisfies ModelCosts
+
+const CODEX_MODEL_COST_ALIASES: Record<string, ModelShortName> = {
+  'gpt-5.4': 'gpt-5.4',
+  'gpt-5.4-mini': 'gpt-5.4-mini',
+  'gpt-5.3-codex': 'gpt-5.3-codex',
+  'gpt-5.2-codex': 'gpt-5.2-codex',
+  'gpt-5.1-codex-mini': 'gpt-5.1-codex-mini',
+  'gpt-5.1-codex': 'gpt-5.1-codex',
+  'gpt-5.1-codex-max': 'gpt-5.1-codex-max',
+}
+
 const DEFAULT_UNKNOWN_MODEL_COST = COST_TIER_5_25
 
 /**
@@ -123,6 +179,13 @@ export const MODEL_COSTS: Record<ModelShortName, ModelCosts> = {
     COST_TIER_5_25,
   [firstPartyNameToCanonical(CLAUDE_OPUS_4_6_CONFIG.firstParty)]:
     COST_TIER_5_25,
+  'gpt-5.4': COST_GPT_5_4,
+  'gpt-5.4-mini': COST_GPT_5_4_MINI,
+  'gpt-5.3-codex': COST_GPT_5_2,
+  'gpt-5.2-codex': COST_GPT_5_2,
+  'gpt-5.1-codex-mini': COST_GPT_5_1_MINI,
+  'gpt-5.1-codex': COST_GPT_5_1,
+  'gpt-5.1-codex-max': COST_GPT_5_1,
 }
 
 /**
@@ -141,8 +204,27 @@ function tokensToUSDCost(modelCosts: ModelCosts, usage: Usage): number {
   )
 }
 
-export function getModelCosts(model: string, usage: Usage): ModelCosts {
+export function getCanonicalModelCostKey(model: string): ModelShortName {
   const shortName = getCanonicalName(model)
+  if (shortName in MODEL_COSTS) {
+    return shortName
+  }
+
+  const codexModel = resolveCodexModelInput(model)
+  const codexCostAlias = CODEX_MODEL_COST_ALIASES[codexModel.toLowerCase()]
+  if (codexCostAlias) {
+    return codexCostAlias
+  }
+
+  return shortName
+}
+
+export function hasKnownModelCost(model: string): boolean {
+  return getCanonicalModelCostKey(model) in MODEL_COSTS
+}
+
+export function getModelCosts(model: string, usage: Usage): ModelCosts {
+  const shortName = getCanonicalModelCostKey(model)
 
   // Check if this is an Opus 4.6 model with fast mode active.
   if (
@@ -156,7 +238,7 @@ export function getModelCosts(model: string, usage: Usage): ModelCosts {
   if (!costs) {
     trackUnknownModelCost(model, shortName)
     return (
-      MODEL_COSTS[getCanonicalName(getDefaultMainLoopModelSetting())] ??
+      MODEL_COSTS[getCanonicalModelCostKey(getDefaultMainLoopModelSetting())] ??
       DEFAULT_UNKNOWN_MODEL_COST
     )
   }
@@ -224,7 +306,7 @@ export function formatModelPricing(costs: ModelCosts): string {
  * Returns undefined if model is not found
  */
 export function getModelPricingString(model: string): string | undefined {
-  const shortName = getCanonicalName(model)
+  const shortName = getCanonicalModelCostKey(model)
   const costs = MODEL_COSTS[shortName]
   if (!costs) return undefined
   return formatModelPricing(costs)

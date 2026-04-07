@@ -21,6 +21,7 @@ import {
 } from 'src/utils/fastMode.js'
 import { shouldUseAnthropicFirstPartyApiFeatures } from 'src/utils/model/providers.js'
 import { jsonStringify } from 'src/utils/slowOperations.js'
+import type { PermissionMode } from 'src/utils/permissions/PermissionMode.js'
 import {
   isBetaTracingEnabled,
   type LLMRequestNewContext,
@@ -44,6 +45,7 @@ type QueryOptionsLike = {
   agentId?: string
   fastMode?: boolean
   effortValue?: Parameters<typeof resolveAppliedEffort>[1]
+  permissionMode?: PermissionMode
 }
 
 type AutoModeStateModuleLike = {
@@ -134,6 +136,7 @@ export function buildRequestPreflightState(
   const effort = resolveAppliedEffort(
     context.options.model,
     context.options.effortValue,
+    context.options.permissionMode,
   )
 
   if (feature('PROMPT_CACHE_BREAK_DETECTION')) {

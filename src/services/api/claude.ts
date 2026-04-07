@@ -315,6 +315,7 @@ export type Options = {
   skipCacheWrite?: boolean
   temperatureOverride?: number
   effortValue?: EffortValue
+  permissionMode?: ToolPermissionContext['mode']
   mcpTools: Tools
   hasPendingMcpServers?: boolean
   queryTracking?: QueryChainTracking

@@ -1951,7 +1951,7 @@ function PromptInput({
   // Show effort notification on startup and when effort changes.
   // Suppressed in brief/assistant mode — the value reflects the local
   // client's effort, not the connected agent's.
-  const effortNotificationText = briefOwnsGap ? undefined : getEffortNotificationText(effortValue, mainLoopModel);
+  const effortNotificationText = briefOwnsGap ? undefined : getEffortNotificationText(effortValue, mainLoopModel, toolPermissionContext.mode);
   useEffect(() => {
     if (!effortNotificationText) {
       removeNotification('effort-level');
@@ -2001,7 +2001,7 @@ function PromptInput({
   // Memoized callbacks for model picker to prevent re-renders when unrelated
   // state (like notifications) changes. This prevents the inline model picker
   // from visually "jumping" when notifications arrive.
-  const handleModelSelect = useCallback((model: string | null, _effort: EffortLevel | undefined) => {
+  const handleModelSelect = useCallback((model: string | null, effort: EffortLevel | undefined) => {
     let wasFastModeDisabled = false;
     setAppState(prev => {
       wasFastModeDisabled = isFastModeEnabled() && !isFastModeSupportedByModel(model) && !!prev.fastMode;
@@ -2009,6 +2009,9 @@ function PromptInput({
         ...prev,
         mainLoopModel: model,
         mainLoopModelForSession: null,
+        ...(effort !== undefined && {
+          effortValue: effort
+        }),
         // Turn off fast mode if switching to a model that doesn't support it
         ...(wasFastModeDisabled && {
           fastMode: false
@@ -2043,7 +2046,7 @@ function PromptInput({
   const modelPickerElement = useMemo(() => {
     if (!showModelPicker) return null;
     return <Box flexDirection="column" marginTop={1}>
-        <ModelPicker initial={mainLoopModel_} sessionModel={mainLoopModelForSession} onSelect={handleModelSelect} onCancel={handleModelCancel} isStandaloneCommand showFastModeNotice={isFastModeEnabled() && isFastMode && isFastModeSupportedByModel(mainLoopModel_) && isFastModeAvailable()} />
+        <ModelPicker initial={mainLoopModel_} sessionModel={mainLoopModelForSession} onSelect={handleModelSelect} onCancel={handleModelCancel} isStandaloneCommand skipSettingsWrite headerText="Switch Codex model. Model changes persist, but reasoning changes here apply only to this session." showFastModeNotice={isFastModeEnabled() && isFastMode && isFastModeSupportedByModel(mainLoopModel_) && isFastModeAvailable()} />
       </Box>;
   }, [showModelPicker, mainLoopModel_, mainLoopModelForSession, handleModelSelect, handleModelCancel]);
   const handleFastModeSelect = useCallback((result?: string) => {

@@ -561,3 +561,130 @@ test('model and effort TUI: /fast keeps the Codex model, and later model switche
     }
   })
 })
+
+test('model and effort TUI: XhighPlan keeps gpt-5.4 and only raises effort inside plan mode', SERIAL_TEST, async () => {
+  await withResponsesServer(async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-xhighplan-mode-'))
+    try {
+      await writeCodexConfig(tempHome, port, [], { model: 'xhighplan' })
+      const result = await runTuiFlow({
+        tempHome,
+        envOverrides: {
+          CODEX_CODE_USE_CODEX_PROVIDER: '1',
+          CODEX_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        },
+        actions: [
+          { name: 'check-model-status', waitFor: ['❯'], send: '/model status\r' },
+          {
+            name: 'ask-default',
+            waitFor: ['Current model: XhighPlan (gpt-5.4)', 'reasoning: medium'],
+            waitForFresh: true,
+            send: '默认模式回答一次\r',
+          },
+          {
+            name: 'enter-plan',
+            waitFor: ['UNEXPECTED_PROVIDER_REPLY'],
+            waitForFresh: true,
+            send: '/plan\r',
+          },
+          {
+            name: 'ask-plan',
+            waitFor: ['Enabled plan mode'],
+            waitForFresh: true,
+            preDelayMs: 300,
+            send: '计划模式回答一次\r',
+          },
+          {
+            name: 'exit',
+            waitFor: ['UNEXPECTED_PROVIDER_REPLY'],
+            waitForFresh: true,
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(
+        result.sent,
+        [
+          'check-model-status',
+          'ask-default',
+          'enter-plan',
+          'ask-plan',
+          'exit',
+        ],
+        JSON.stringify(result),
+      )
+      assert.match(
+        result.normalizedTranscript,
+        /Currentmodel:XhighPlan\(gpt-5\.4\)·reasoning:medium/,
+      )
+      assert.equal(requestBodies.length, 2)
+      assert.equal(requestBodies[0]?.model, 'gpt-5.4')
+      assert.equal(requestBodies[0]?.reasoning?.effort, 'medium')
+      assert.equal(requestBodies[1]?.model, 'gpt-5.4')
+      assert.equal(requestBodies[1]?.reasoning?.effort, 'xhigh')
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('model and effort TUI: session effort changes do not leak into the next session', SERIAL_TEST, async () => {
+  await withResponsesServer(async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-effort-session-scope-'))
+    try {
+      await writeCodexConfig(tempHome, port)
+
+      const firstSession = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'set-effort-high', waitFor: ['❯'], send: '/effort high\r' },
+          {
+            name: 'exit',
+            waitFor: ['Set effort level to high'],
+            waitForFresh: true,
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      const secondSession = await runTuiFlow({
+        tempHome,
+        actions: [
+          { name: 'check-effort-status', waitFor: ['❯'], send: '/effort status\r' },
+          {
+            name: 'exit',
+            waitFor: ['Effort level: auto (currently medium from model default)'],
+            waitForFresh: true,
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(
+        firstSession.code === 0 || firstSession.code === -15,
+        JSON.stringify(firstSession),
+      )
+      assert.ok(
+        secondSession.code === 0 || secondSession.code === -15,
+        JSON.stringify(secondSession),
+      )
+      assert.match(firstSession.normalizedTranscript, /Seteffortleveltohigh/)
+      assert.match(
+        secondSession.normalizedTranscript,
+        /Effortlevel:auto\(currentlymediumfrommodeldefault\)/,
+      )
+      assert.doesNotMatch(
+        secondSession.normalizedTranscript,
+        /Currenteffortlevel:high/,
+      )
+      assert.equal(requestBodies.length, 0)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})

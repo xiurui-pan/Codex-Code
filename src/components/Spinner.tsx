@@ -179,8 +179,9 @@ function SpinnerWithVerbInner({
     };
   }, [mode]);
   const effortValue = useAppState(s_4 => s_4.effortValue);
+  const permissionMode = useAppState(s_5 => s_5.toolPermissionContext.mode);
   const mainLoopModel = useMainLoopModel();
-  const effortSuffix = getEffortSuffix(mainLoopModel, effortValue);
+  const effortSuffix = getEffortSuffix(mainLoopModel, effortValue, permissionMode);
 
   // Check if any running in-process teammates exist (needed for both modes)
   const runningTeammates = getAllInProcessTeammateTasks(tasks).filter(t => t.status === 'running');

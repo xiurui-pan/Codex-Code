@@ -35,6 +35,7 @@ import {
   getMainLoopModel,
   getUserSpecifiedModelSetting,
 } from '../../utils/model/model.js'
+import { isCodexPlanModeAlias } from '../../utils/model/codexModels.js'
 import { getPlatform } from '../../utils/platform.js'
 import { isPluginInstalled } from '../../utils/plugins/installedPluginsManager.js'
 import { loadKnownMarketplacesConfigSafe } from '../../utils/plugins/marketplaceManager.js'
@@ -481,13 +482,15 @@ const externalTips: Tip[] = [
   {
     id: 'opusplan-mode-reminder',
     content: async () =>
-      `Your default model setting is Opus Plan Mode. Press ${getShortcutDisplay('chat:cycleMode', 'Chat', 'shift+tab')} twice to activate Plan Mode and plan with Codex Code Opus.`,
+      isCurrentPhaseCustomCodexProvider()
+        ? `Your default model setting is XhighPlan. Press ${getShortcutDisplay('chat:cycleMode', 'Chat', 'shift+tab')} twice to activate Plan Mode and switch reasoning to xhigh.`
+        : `Your default model setting is XhighPlan. Press ${getShortcutDisplay('chat:cycleMode', 'Chat', 'shift+tab')} twice to activate Plan Mode and plan with Codex Code Opus.`,
     cooldownSessions: 2,
     async isRelevant() {
       if (process.env.USER_TYPE === 'ant') return false
       const config = getGlobalConfig()
       const modelSetting = getUserSpecifiedModelSetting()
-      const hasOpusPlanMode = modelSetting === 'opusplan'
+      const hasOpusPlanMode = isCodexPlanModeAlias(modelSetting)
       // Show reminder if they have Opus Plan Mode and haven't used plan mode recently (3+ days)
       const daysSinceLastUse = config.lastPlanModeUse
         ? (Date.now() - config.lastPlanModeUse) / (1000 * 60 * 60 * 24)

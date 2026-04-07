@@ -35,6 +35,7 @@ function ModelPickerWrapper({
   const mainLoopModel = useAppState(state => state.mainLoopModel)
   const mainLoopModelForSession = useAppState(state => state.mainLoopModelForSession)
   const effortValue = useAppState(state => state.effortValue)
+  const permissionMode = useAppState(state => state.toolPermissionContext.mode)
   const setAppState = useSetAppState()
 
   function handleSelect(model: string | null, effort: EffortLevel | undefined): void {
@@ -48,7 +49,7 @@ function ModelPickerWrapper({
     const appliedModel = model ?? mainLoopModel ?? mainLoopModelForSession
     const effortState =
       effort !== undefined && appliedModel
-        ? getEffortApplicationState(appliedModel, effort)
+        ? getEffortApplicationState(appliedModel, effort, permissionMode)
         : null
     const effortSuffix = effort !== undefined ? ` with ${effort} reasoning` : ''
     const baseMessage = `Set model to ${modelDisplayString(model)}${effortSuffix}`
@@ -68,6 +69,7 @@ function ModelPickerWrapper({
     const appliedEffort = getEffortApplicationState(
       mainLoopModel ?? getDefaultMainLoopModel(),
       effortValue,
+      permissionMode,
     ).applied
     const effortSuffix =
       appliedEffort !== undefined ? ` (reasoning: ${appliedEffort})` : ''
@@ -83,6 +85,8 @@ function ModelPickerWrapper({
       onSelect={handleSelect}
       onCancel={handleCancel}
       isStandaloneCommand
+      skipSettingsWrite
+      headerText="Switch Codex model. Model changes persist, but reasoning changes here apply only to this session."
     />
   )
 }
@@ -141,6 +145,7 @@ function ShowModelAndClose({
   const mainLoopModel = useAppState(state => state.mainLoopModel)
   const mainLoopModelForSession = useAppState(state => state.mainLoopModelForSession)
   const effortValue = useAppState(state => state.effortValue)
+  const permissionMode = useAppState(state => state.toolPermissionContext.mode)
 
   const modelText = mainLoopModelForSession
     ? `${modelDisplayString(mainLoopModelForSession)} (session override)`
@@ -148,6 +153,7 @@ function ShowModelAndClose({
   const appliedEffort = getEffortApplicationState(
     mainLoopModelForSession ?? mainLoopModel ?? getDefaultMainLoopModel(),
     effortValue,
+    permissionMode,
   ).applied
   const effortText =
     appliedEffort !== undefined ? ` · reasoning: ${appliedEffort}` : ''

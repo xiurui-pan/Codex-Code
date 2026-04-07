@@ -1,9 +1,11 @@
 import { getGlobalConfig } from '../config.js'
 import { getCodexConfiguredModel } from '../codexConfig.js'
 import {
+  CODEX_PLAN_MODE_ALIAS,
   DEFAULT_CODEX_MODEL,
   createCodexPublicModelInfo,
   getCodexModelCapabilities,
+  isCodexPlanModeAlias,
   resolveCodexModelInput,
   type CodexPublicModelInfo,
 } from './codexModels.js'
@@ -30,6 +32,16 @@ export function getDefaultOptionForUser(): ModelOption {
 }
 
 function createKnownModelOption(model: string): ModelOption {
+  if (isCodexPlanModeAlias(model)) {
+    return {
+      value: CODEX_PLAN_MODE_ALIAS,
+      label: 'XhighPlan',
+      description: 'Keep gpt-5.4 and switch reasoning between medium and xhigh based on plan mode.',
+      descriptionForModel:
+        'XhighPlan (gpt-5.4, medium by default, xhigh in plan mode)',
+    }
+  }
+
   const normalizedModel = resolveCodexModelInput(model)
   const capability = getCodexModelCapabilities().find(
     item => item.value === normalizedModel,
@@ -64,6 +76,7 @@ export function getModelOptions(params?: {
 }): ModelOption[] {
   const options: ModelOption[] = [
     getDefaultOptionForUser(),
+    createKnownModelOption(CODEX_PLAN_MODE_ALIAS),
     ...getCodexModelCapabilities().map(capability => ({
       value: capability.value,
       label: capability.displayName,
@@ -75,7 +88,11 @@ export function getModelOptions(params?: {
   const additional = getGlobalConfig().additionalModelOptionsCache ?? []
   for (const option of additional) {
     const normalized =
-      option.value === null ? null : resolveCodexModelInput(String(option.value))
+      option.value === null
+        ? null
+        : isCodexPlanModeAlias(String(option.value))
+          ? CODEX_PLAN_MODE_ALIAS
+          : resolveCodexModelInput(String(option.value))
     if (normalized === null) {
       continue
     }
@@ -104,7 +121,9 @@ export function findSelectableModelOption(
   modelInput: string,
   params?: { extraModels?: Array<ModelSetting | undefined> },
 ): ModelOption | undefined {
-  const normalized = resolveCodexModelInput(modelInput)
+  const normalized = isCodexPlanModeAlias(modelInput)
+    ? CODEX_PLAN_MODE_ALIAS
+    : resolveCodexModelInput(modelInput)
   return getModelOptions(params).find(option => option.value === normalized)
 }
 

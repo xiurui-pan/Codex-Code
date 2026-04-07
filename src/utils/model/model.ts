@@ -23,7 +23,13 @@ import { isModelAllowed } from './modelAllowlist.js'
 import { type ModelAlias, isModelAlias } from './aliases.js'
 import { capitalize } from '../stringUtils.js'
 import { isCurrentPhaseCustomCodexProvider } from '../currentPhase.js'
-import { DEFAULT_CODEX_MODEL, findCodexModelCapability, resolveCodexModelInput } from './codexModels.js'
+import {
+  CODEX_PLAN_MODE_ALIAS,
+  DEFAULT_CODEX_MODEL,
+  findCodexModelCapability,
+  isCodexPlanModeAlias,
+  resolveCodexModelInput,
+} from './codexModels.js'
 import { getCodexConfiguredSmallFastModel } from '../codexConfig.js'
 
 const require = createRequire(import.meta.url)
@@ -182,9 +188,13 @@ export function getRuntimeMainLoopModel(params: {
 }): ModelName {
   const { permissionMode, mainLoopModel, exceeds200kTokens = false } = params
 
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return parseUserSpecifiedModel(mainLoopModel)
+  }
+
   // opusplan uses Opus in plan mode without [1m] suffix.
   if (
-    getUserSpecifiedModelSetting() === 'opusplan' &&
+    isCodexPlanModeAlias(getUserSpecifiedModelSetting()) &&
     permissionMode === 'plan' &&
     !exceeds200kTokens
   ) {
@@ -335,11 +345,17 @@ export function getClaudeAiUserDefaultModelDescription(
 export function renderDefaultModelSetting(
   setting: ModelName | ModelAlias,
 ): string {
+  if (
+    isCurrentPhaseCustomCodexProvider() &&
+    isCodexPlanModeAlias(setting)
+  ) {
+    return 'XhighPlan (gpt-5.4, xhigh in plan mode, medium otherwise)'
+  }
   if (isCurrentPhaseCustomCodexProvider()) {
     return renderModelName(parseUserSpecifiedModel(setting))
   }
-  if (setting === 'opusplan') {
-    return 'Opus 4.6 in plan mode, else Sonnet 4.6'
+  if (isCodexPlanModeAlias(setting)) {
+    return 'XhighPlan (Opus 4.6 in plan mode, else Sonnet 4.6)'
   }
   return renderModelName(parseUserSpecifiedModel(setting))
 }
@@ -372,8 +388,8 @@ export function isOpus1mMergeEnabled(): boolean {
 }
 
 export function renderModelSetting(setting: ModelName | ModelAlias): string {
-  if (setting === 'opusplan') {
-    return 'Opus Plan'
+  if (isCodexPlanModeAlias(setting)) {
+    return 'XhighPlan'
   }
   if (isModelAlias(setting)) {
     return capitalize(setting)
@@ -503,6 +519,7 @@ export function parseUserSpecifiedModel(
 
   if (isModelAlias(modelString)) {
     switch (modelString) {
+      case CODEX_PLAN_MODE_ALIAS:
       case 'opusplan':
         return getDefaultSonnetModel() + (has1mTag ? '[1m]' : '') // Sonnet is default, Opus in plan mode
       case 'sonnet':
@@ -614,7 +631,10 @@ export function modelDisplayString(model: ModelSetting): string {
     return `Default (${getDefaultMainLoopModel()})`
   }
   const resolvedModel = parseUserSpecifiedModel(model)
-  return model === resolvedModel ? resolvedModel : `${model} (${resolvedModel})`
+  const displaySetting = renderModelSetting(model)
+  return displaySetting === resolvedModel
+    ? resolvedModel
+    : `${displaySetting} (${resolvedModel})`
 }
 
 // @[MODEL LAUNCH]: Add a marketing name mapping for the new model below.

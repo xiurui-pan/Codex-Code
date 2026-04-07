@@ -183,7 +183,8 @@ test('codex model capability table resolves aliases and supported reasoning leve
   assert.equal(resolveCodexModelInput('haiku'), 'gpt-5.4-mini')
   assert.equal(resolveCodexModelInput('sonnet'), 'gpt-5.4')
   assert.equal(resolveCodexModelInput('opus'), 'gpt-5.3-codex')
-  assert.equal(resolveCodexModelInput('opusplan'), 'gpt-5.3-codex')
+  assert.equal(resolveCodexModelInput('xhighplan'), 'gpt-5.4')
+  assert.equal(resolveCodexModelInput('opusplan'), 'gpt-5.4')
   assert.deepEqual(getCodexSupportedEffortLevels('gpt-5.4-mini'), [
     'low',
     'medium',
