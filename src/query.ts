@@ -101,6 +101,7 @@ import { convertResponsesUsageToAnthropicAndTrack } from './services/api/codexRe
 import {
   createPreferredAssistantResponsePayloadFromTurnItems,
   createSystemMessageFromModelTurnItem,
+  type ModelTurnItem,
   preferredAssistantResponsePayloadHasContent,
 } from './services/api/modelTurnItems.js'
 import { createAssistantMessageFromPreferredAssistantResponsePayload } from './services/api/assistantEnvelope.js'
@@ -177,6 +178,14 @@ function assistantMessageHasRenderableContent(
     block =>
       (block.type === 'text' && typeof block.text === 'string') ||
       (options.includeToolUseOnly === true && block.type === 'tool_use'),
+  )
+}
+
+function isCodexRetrySafeTurnItem(item: ModelTurnItem): boolean {
+  return (
+    item.kind === 'raw_model_output' ||
+    item.kind === 'final_answer' ||
+    item.kind === 'ui_message'
   )
 }
 
@@ -588,6 +597,7 @@ async function* queryLoop(
 
     const assistantMessages: AssistantMessage[] = []
     const toolResults: (UserMessage | AttachmentMessage)[] = []
+    const codexRetryCleanupMessages: Message[] = []
     // @see https://docs.claude.com/en/docs/build-with-claude/tool-use
     // Note: stop_reason === 'tool_use' is unreliable -- it's not always set correctly.
     // Set during streaming whenever a tool_use block arrives — the sole
@@ -748,6 +758,23 @@ async function* queryLoop(
             let internalAssistantMessage: AssistantMessage | null = null
 
             if ((chunk as CodexResponseChunk).kind === 'retry') {
+              for (const cleanupMessage of codexRetryCleanupMessages) {
+                yield { type: 'tombstone' as const, message: cleanupMessage }
+              }
+              codexRetryCleanupMessages.length = 0
+              assistantMessages.length = 0
+              toolResults.length = 0
+              toolUseBlocks.length = 0
+              needsFollowUp = false
+              if (streamingToolExecutor) {
+                streamingToolExecutor.discard()
+                streamingToolExecutor = new StreamingToolExecutor(
+                  toolUseContext.options.tools,
+                  canUseTool,
+                  toolUseContext,
+                )
+              }
+              yield { type: 'stream_request_start' }
               const retryChunk = chunk as Extract<
                 CodexResponseChunk,
                 { kind: 'retry' }
@@ -768,12 +795,18 @@ async function* queryLoop(
                 CodexResponseChunk,
                 { kind: 'turn_items' }
               >
+              const retrySafeTurnItems = turnChunk.turnItems.every(
+                isCodexRetrySafeTurnItem,
+              )
               const systemMessages = turnChunk.turnItems
                 .map(item => createSystemMessageFromModelTurnItem(item))
                 .filter(_ => _ !== null)
 
               for (const systemMessage of systemMessages) {
                 yield systemMessage
+                if (retrySafeTurnItems) {
+                  codexRetryCleanupMessages.push(systemMessage)
+                }
               }
 
               const assistantPayload =
@@ -967,6 +1000,14 @@ async function* queryLoop(
             }
             if (message && !withheld) {
               yield yieldMessage
+              if (
+                yieldMessage.type !== 'assistant' ||
+                yieldMessage.message.content.every(
+                  block => block.type !== 'tool_use',
+                )
+              ) {
+                codexRetryCleanupMessages.push(yieldMessage)
+              }
             }
             if (internalAssistantMessage) {
               assistantMessages.push(internalAssistantMessage)

@@ -184,3 +184,13 @@ test('custom codex provider retries an incomplete SSE stream and emits reconnect
   assert.equal(result.errorMessage, null)
   assert.equal(result.finalText, 'retried stream ok')
 })
+
+test('custom codex provider retries stream_read_error after partial text output', async () => {
+  const result = await runBehavior('stream-retry-after-partial-text')
+
+  assert.equal(result.requestCount, 2)
+  assert.deepEqual(result.retryMessages, ['Reconnecting... 1/1'])
+  assert.equal(result.errorMessage, null)
+  assert.equal(result.finalText, 'retried after partial text')
+  assert.deepEqual(result.deltaTexts, ['partial text', 'retried after partial text'])
+})

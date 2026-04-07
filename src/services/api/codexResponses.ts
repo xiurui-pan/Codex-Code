@@ -114,6 +114,14 @@ export type CodexResponseResult = {
   errorMessage?: string
 }
 
+function isRetryUnsafeTurnItem(item: ModelTurnItem): boolean {
+  return (
+    item.kind !== 'raw_model_output' &&
+    item.kind !== 'final_answer' &&
+    item.kind !== 'ui_message'
+  )
+}
+
 type ResponsesOutputText = {
   type: 'output_text'
   text?: string
@@ -1056,7 +1064,7 @@ export async function* queryCodexResponsesStream({
   while (true) {
     const startedTextBlocks = new Set<string>()
     const startedThinkingBlocks = new Set<string>()
-    let yieldedVisibleOutput = false
+    let yieldedRetryUnsafeOutput = false
 
     try {
       const response = await fetchWithRequestRetries(
@@ -1100,7 +1108,6 @@ export async function* queryCodexResponsesStream({
               continue
             }
             startedTextBlocks.add(blockKey)
-            yieldedVisibleOutput = true
             yield {
               kind: 'stream_event',
               event: {
@@ -1125,7 +1132,6 @@ export async function* queryCodexResponsesStream({
           const blockKey = `thinking:${outputIndex}:${summaryIndex}`
           if (!startedThinkingBlocks.has(blockKey)) {
             startedThinkingBlocks.add(blockKey)
-            yieldedVisibleOutput = true
             yield {
               kind: 'stream_event',
               event: {
@@ -1148,7 +1154,6 @@ export async function* queryCodexResponsesStream({
             const blockKey = `thinking:${outputIndex}:${summaryIndex}`
             if (!startedThinkingBlocks.has(blockKey)) {
               startedThinkingBlocks.add(blockKey)
-              yieldedVisibleOutput = true
               yield {
                 kind: 'stream_event',
                 event: {
@@ -1159,7 +1164,6 @@ export async function* queryCodexResponsesStream({
                 },
               }
             }
-            yieldedVisibleOutput = true
             yield {
               kind: 'stream_event',
               event: {
@@ -1181,7 +1185,6 @@ export async function* queryCodexResponsesStream({
             const blockKey = `${outputIndex}:${contentIndex}`
             if (!startedTextBlocks.has(blockKey)) {
               startedTextBlocks.add(blockKey)
-              yieldedVisibleOutput = true
               yield {
                 kind: 'stream_event',
                 event: {
@@ -1195,7 +1198,6 @@ export async function* queryCodexResponsesStream({
                 },
               }
             }
-            yieldedVisibleOutput = true
             yield {
               kind: 'stream_event',
               event: {
@@ -1217,7 +1219,9 @@ export async function* queryCodexResponsesStream({
               ? normalizeResponsesOutputToTurnItems([event.item])
               : []
           if (turnItems.length > 0) {
-            yieldedVisibleOutput = true
+            if (turnItems.some(isRetryUnsafeTurnItem)) {
+              yieldedRetryUnsafeOutput = true
+            }
             yield {
               kind: 'turn_items',
               turnItems,
@@ -1233,7 +1237,9 @@ export async function* queryCodexResponsesStream({
               : event.item
           const turnItems = normalizeResponsesOutputToTurnItems([normalizedItem])
           if (turnItems.length > 0) {
-            yieldedVisibleOutput = true
+            if (turnItems.some(isRetryUnsafeTurnItem)) {
+              yieldedRetryUnsafeOutput = true
+            }
             yield {
               kind: 'turn_items',
               turnItems,
@@ -1268,7 +1274,7 @@ export async function* queryCodexResponsesStream({
           const failure = classifyResponsesFailureEvent(event)
           if (
             failure.retryable &&
-            !yieldedVisibleOutput &&
+            !yieldedRetryUnsafeOutput &&
             streamRetryCount < streamMaxRetries
           ) {
             throw new RetryableResponsesStreamError(
@@ -1292,7 +1298,7 @@ export async function* queryCodexResponsesStream({
 
       if (
         error instanceof RetryableResponsesStreamError &&
-        !yieldedVisibleOutput &&
+        !yieldedRetryUnsafeOutput &&
         streamRetryCount < streamMaxRetries
       ) {
         streamRetryCount += 1

@@ -901,6 +901,124 @@ async function runStreamRetryIncomplete() {
   }
 }
 
+async function runStreamRetryAfterPartialText() {
+  const { queryCodexResponsesStream } = await import(
+    '../../src/services/api/codexResponses.ts'
+  )
+
+  let requestCount = 0
+  const server = http.createServer((req, res) => {
+    if (req.method !== 'POST' || req.url !== '/responses') {
+      res.writeHead(404).end('not found')
+      return
+    }
+
+    requestCount += 1
+    res.writeHead(200, {
+      'content-type': 'text/event-stream',
+      connection: 'keep-alive',
+      'cache-control': 'no-cache',
+    })
+
+    if (requestCount === 1) {
+      res.write(
+        'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"partial text"}\n\n',
+      )
+      res.write(
+        'event: response.failed\ndata: {"type":"response.failed","response":{"error":{"code":"stream_read_error","message":"stream_read_error"}}}\n\n',
+      )
+      res.end('data: [DONE]\n\n')
+      return
+    }
+
+    res.write(
+      'event: response.output_text.delta\ndata: {"type":"response.output_text.delta","delta":"retried after partial text"}\n\n',
+    )
+    res.write(
+      'event: response.output_item.done\ndata: {"type":"response.output_item.done","item":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"retried after partial text"}]}}\n\n',
+    )
+    res.write(
+      'event: response.completed\ndata: {"type":"response.completed","response":{"id":"resp-stream-read-retry"}}\n\n',
+    )
+    res.end('data: [DONE]\n\n')
+  })
+
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('failed to bind test server')
+  }
+
+  try {
+    return await withEnv(
+      {
+        ANTHROPIC_BASE_URL: `http://127.0.0.1:${address.port}`,
+        ANTHROPIC_API_KEY: 'test-key',
+        ANTHROPIC_MODEL: 'gpt-5.1-codex-mini',
+        CODEX_CODE_REQUEST_MAX_RETRIES: '0',
+        CODEX_CODE_STREAM_MAX_RETRIES: '1',
+      },
+      async () => {
+        const retryMessages = []
+        const turnItems = []
+        const deltaTexts = []
+        let errorMessage = null
+
+        for await (const chunk of queryCodexResponsesStream({
+          messages: [
+            {
+              type: 'user',
+              uuid: 'user-1',
+              message: { content: 'retry after partial text' },
+            },
+          ],
+          systemPrompt: [],
+          options: {},
+          signal: new AbortController().signal,
+        })) {
+          if (chunk.kind === 'retry') {
+            retryMessages.push(chunk.message)
+            continue
+          }
+
+          if (chunk.kind === 'api_error') {
+            errorMessage = chunk.errorMessage
+            continue
+          }
+
+          if (chunk.kind === 'stream_event' && chunk.event.type === 'content_block_delta') {
+            if (
+              chunk.event.delta &&
+              typeof chunk.event.delta === 'object' &&
+              'text' in chunk.event.delta &&
+              typeof chunk.event.delta.text === 'string'
+            ) {
+              deltaTexts.push(chunk.event.delta.text)
+            }
+            continue
+          }
+
+          if (chunk.kind === 'turn_items') {
+            turnItems.push(...chunk.turnItems)
+          }
+        }
+
+        return {
+          requestCount,
+          retryMessages,
+          errorMessage,
+          deltaTexts,
+          finalText:
+            turnItems.find(item => item.kind === 'final_answer')?.text ?? null,
+        }
+      },
+    )
+  } finally {
+    await new Promise(resolve => server.close(resolve))
+  }
+}
+
 const result =
   mode === 'merge'
     ? await runMerge()
@@ -926,5 +1044,7 @@ const result =
                     ? await runRequestRetry()
                     : mode === 'stream-retry-incomplete'
                       ? await runStreamRetryIncomplete()
+                      : mode === 'stream-retry-after-partial-text'
+                        ? await runStreamRetryAfterPartialText()
                   : await runMissingBaseUrl()
 process.stdout.write(JSON.stringify(result))

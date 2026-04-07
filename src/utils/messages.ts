@@ -3012,6 +3012,9 @@ export function handleMessageFromStream(
   }
 
   if (message.type === 'stream_request_start') {
+    onStreamingText?.(() => null)
+    onStreamingToolUses(() => [])
+    onStreamingThinking?.(() => null)
     onSetStreamMode('requesting')
     return
   }
