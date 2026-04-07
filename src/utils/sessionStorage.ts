@@ -4413,7 +4413,9 @@ function transformMessagesForExternalTranscript(
             b => !(b.type === 'tool_use' && b.name === REPL_TOOL_NAME),
           )
         : content
-      if (filtered.length === 0) return []
+      if (filtered.length === 0) {
+        return m.modelTurnItems?.length ? [m] : []
+      }
       if (m.isVirtual) {
         const { isVirtual: _omit, ...rest } = m
         return [{ ...rest, message: { ...m.message, content: filtered } }]
@@ -4433,7 +4435,9 @@ function transformMessagesForExternalTranscript(
             b => !(b.type === 'tool_result' && replIds.has(b.tool_use_id)),
           )
         : content
-      if (filtered.length === 0) return []
+      if (filtered.length === 0) {
+        return m.modelTurnItems?.length ? [m] : []
+      }
       if (m.isVirtual) {
         const { isVirtual: _omit, ...rest } = m
         return [{ ...rest, message: { ...m.message, content: filtered } }]

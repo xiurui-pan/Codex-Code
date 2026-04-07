@@ -10,7 +10,11 @@ export function getRenderableModelTurnItems(
   items: ModelTurnItem[],
 ): ModelTurnItem[] {
   return items.filter(
-    item => item.kind !== 'raw_model_output' && item.kind !== 'ui_message',
+    item =>
+      item.kind !== 'raw_model_output' &&
+      item.kind !== 'ui_message' &&
+      item.kind !== 'opaque_reasoning' &&
+      item.kind !== 'opaque_compaction',
   )
 }
 
@@ -73,6 +77,9 @@ export function createSystemMessageFromModelTurnItem(
     subtype: 'informational',
     level,
     content,
+    isMeta: false,
+    timestamp: new Date().toISOString(),
+    uuid: randomUUID(),
     modelTurnItem: item,
   } as SystemMessage
 }
@@ -208,6 +215,20 @@ export type ModelUiMessageItem = {
   source: string
 }
 
+export type ModelOpaqueReasoningItem = {
+  kind: 'opaque_reasoning'
+  provider: string
+  itemType: string
+  payload: unknown
+}
+
+export type ModelOpaqueCompactionItem = {
+  kind: 'opaque_compaction'
+  provider: string
+  itemType: string
+  payload: unknown
+}
+
 export type PreferredAssistantTurnContent = {
   kind: 'empty' | 'text' | 'tool_use_message'
   renderableItems: ModelTurnItem[]
@@ -243,6 +264,8 @@ export type ModelTurnItem =
   | ModelExecutionResultItem
   | ModelFinalAnswerItem
   | ModelUiMessageItem
+  | ModelOpaqueReasoningItem
+  | ModelOpaqueCompactionItem
 
 export function extractFinalAnswerTextFromTurnItems(
   items: readonly ModelTurnItem[],

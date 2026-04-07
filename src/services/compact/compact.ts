@@ -38,13 +38,18 @@ import {
   getDeferredToolsDeltaAttachment,
   getMcpInstructionsDeltaAttachment,
 } from '../../utils/attachments.js'
-import { getMemoryPath } from '../../utils/config.js'
+import {
+  getGlobalConfig,
+  getMemoryPath,
+  type CompactionMode,
+} from '../../utils/config.js'
 import { COMPACT_MAX_OUTPUT_TOKENS } from '../../utils/context.js'
 import {
   analyzeContext,
   tokenStatsToStatsigMetrics,
 } from '../../utils/contextAnalysis.js'
 import { logForDebugging } from '../../utils/debug.js'
+import { getCurrentPhaseProviderError } from '../../utils/currentPhase.js'
 import { hasExactErrorMessage } from '../../utils/errors.js'
 import { cacheToObject } from '../../utils/fileStateCache.js'
 import {
@@ -101,6 +106,9 @@ import {
   callModelPreferredWithStreaming,
   getModelMaxOutputTokens,
 } from '../api/model.js'
+import { queryCodexResponsesCompact } from '../api/codexResponses.js'
+import type { ModelTurnItem } from '../api/modelTurnItems.js'
+import type { ResponsesOutputItem } from '../api/codexTurnItems.js'
 import {
   accumulatePreferredStreamingEvent,
   finalizePreferredStreamingAggregationPayload,
@@ -312,7 +320,6 @@ export const ERROR_MESSAGE_PROMPT_TOO_LONG =
 export const ERROR_MESSAGE_USER_ABORT = 'API Error: Request was aborted.'
 export const ERROR_MESSAGE_INCOMPLETE_RESPONSE =
   'Compaction interrupted · This may be due to network issues — please try again.'
-
 export interface CompactionResult {
   boundaryMarker: SystemMessage
   summaryMessages: UserMessage[]
@@ -324,6 +331,101 @@ export interface CompactionResult {
   postCompactTokenCount?: number
   truePostCompactTokenCount?: number
   compactionUsage?: ReturnType<typeof getTokenUsage>
+}
+
+function getConfiguredCompactionMode(): CompactionMode {
+  return getGlobalConfig().compactionMode ?? 'summary'
+}
+
+function assertResponsesCompactionAvailable(): void {
+  const providerError = getCurrentPhaseProviderError()
+  if (providerError) {
+    throw new Error(providerError)
+  }
+}
+
+function createResponsesCompactionReplayMessage(
+  turnItems: ModelTurnItem[],
+): UserMessage {
+  return createUserMessage({
+    content: [],
+    isMeta: true,
+    modelTurnItems: turnItems,
+  })
+}
+
+function prepareMessagesForResponsesCompaction(messages: Message[]): Message[] {
+  return stripImagesFromMessages(stripReinjectedAttachments(messages))
+}
+
+function extractResponsesCompactionMessageText(
+  item: ResponsesOutputItem,
+): string | null {
+  if (item.type !== 'message' || !Array.isArray(item.content)) {
+    return null
+  }
+
+  const text = item.content
+    .map(part => {
+      if (
+        typeof part === 'object' &&
+        part !== null &&
+        'text' in part &&
+        typeof part.text === 'string'
+      ) {
+        return part.text
+      }
+
+      return ''
+    })
+    .filter(Boolean)
+    .join('')
+    .trim()
+
+  return text.length > 0 ? text : null
+}
+
+export function summarizeResponsesCompactionOutput(
+  outputItems: readonly ResponsesOutputItem[],
+): string {
+  const lines: string[] = []
+  let opaqueReasoningCount = 0
+  let opaqueCompactionCount = 0
+
+  for (const item of outputItems) {
+    if (item.type === 'reasoning') {
+      opaqueReasoningCount++
+      continue
+    }
+
+    if (item.type === 'compaction' || item.type === 'compaction_summary') {
+      opaqueCompactionCount++
+      continue
+    }
+
+    const text = extractResponsesCompactionMessageText(item)
+    if (!text) {
+      continue
+    }
+
+    const speaker =
+      item.type === 'message' && item.role === 'assistant' ? 'Assistant' : 'User'
+    lines.push(`${speaker}: ${text}`)
+  }
+
+  if (opaqueCompactionCount > 0) {
+    lines.push(
+      `[Preserved ${opaqueCompactionCount} opaque compaction item${opaqueCompactionCount === 1 ? '' : 's'}]`,
+    )
+  }
+
+  if (opaqueReasoningCount > 0) {
+    lines.push(
+      `[Preserved ${opaqueReasoningCount} opaque reasoning item${opaqueReasoningCount === 1 ? '' : 's'}]`,
+    )
+  }
+
+  return lines.join('\n\n').trim() || 'Conversation compacted.'
 }
 
 /**
@@ -415,6 +517,12 @@ export async function compactConversation(
       throw new Error(ERROR_MESSAGE_NOT_ENOUGH_MESSAGES)
     }
 
+    const compactionMode = getConfiguredCompactionMode()
+    const usingResponsesCompaction = compactionMode === 'responses'
+    if (usingResponsesCompaction) {
+      assertResponsesCompactionAvailable()
+    }
+
     const preCompactTokenCount = tokenCountWithEstimation(messages)
 
     const appState = context.getAppState()
@@ -449,86 +557,122 @@ export async function compactConversation(
     // Experiment (Jan 2026) confirmed: false path is 98% cache miss, costs ~0.76% of
     // fleet cache_creation (~38B tok/day), concentrated in ephemeral envs (CCR/GHA/SDK)
     // with cold GB cache and 3P providers where GB is disabled. GB gate kept as kill-switch.
-    const promptCacheSharingEnabled = getFeatureValue_CACHED_MAY_BE_STALE(
-      'tengu_compact_cache_prefix',
-      true,
-    )
+    const promptCacheSharingEnabled = usingResponsesCompaction
+      ? false
+      : getFeatureValue_CACHED_MAY_BE_STALE(
+          'tengu_compact_cache_prefix',
+          true,
+        )
 
-    const compactPrompt = getCompactPrompt(customInstructions)
-    const summaryRequest = createUserMessage({
-      content: compactPrompt,
-    })
+    let summaryResponse: AssistantMessage | undefined
+    let summary: string | null = null
+    let compactedTurnItems: ModelTurnItem[] = []
+    let compactedHistoryTokenCount = 0
 
-    let messagesToSummarize = messages
-    let retryCacheSafeParams = cacheSafeParams
-    let summaryResponse: AssistantMessage
-    let summary: string | null
-    let ptlAttempts = 0
-    for (;;) {
-      summaryResponse = await streamCompactSummary({
-        messages: messagesToSummarize,
-        summaryRequest,
-        appState,
-        context,
-        preCompactTokenCount,
-        cacheSafeParams: retryCacheSafeParams,
+    if (usingResponsesCompaction) {
+      const compactedHistory = await queryCodexResponsesCompact({
+        messages: prepareMessagesForResponsesCompaction(
+          getMessagesAfterCompactBoundary(messages),
+        ),
+        systemPrompt: context.renderedSystemPrompt ?? asSystemPrompt([]),
+        tools: context.options.tools,
+        options: {
+          async getToolPermissionContext() {
+            const latestAppState = context.getAppState()
+            return latestAppState.toolPermissionContext
+          },
+          model: context.options.mainLoopModel,
+          tools: context.options.tools,
+          extraToolSchemas: context.options.extraToolSchemas,
+          agents: context.options.agentDefinitions.activeAgents,
+          allowedAgentTypes: context.options.agentDefinitions.allowedAgentTypes,
+          effortValue: appState.effortValue,
+        },
+        signal: context.abortController.signal,
       })
-      summary = getCompactSummaryTextForMessage(summaryResponse)
-      if (!summary?.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE)) break
+      compactedTurnItems = compactedHistory.turnItems
+      compactedHistoryTokenCount = roughTokenCountEstimation(
+        jsonStringify(compactedHistory.outputItems),
+      )
+      if (compactedTurnItems.length === 0) {
+        throw new Error('Native responses compaction returned an empty replacement history.')
+      }
+      summary = summarizeResponsesCompactionOutput(compactedHistory.outputItems)
+    } else {
+      const compactPrompt = getCompactPrompt(customInstructions)
+      const summaryRequest = createUserMessage({
+        content: compactPrompt,
+      })
 
-      // CC-1180: compact request itself hit prompt-too-long. Truncate the
-      // oldest API-round groups and retry rather than leaving the user stuck.
-      ptlAttempts++
-      const truncated =
-        ptlAttempts <= MAX_PTL_RETRIES
-          ? truncateHeadForPTLRetry(messagesToSummarize, summaryResponse)
-          : null
-      if (!truncated) {
+      let messagesToSummarize = messages
+      let retryCacheSafeParams = cacheSafeParams
+      let ptlAttempts = 0
+      for (;;) {
+        summaryResponse = await streamCompactSummary({
+          messages: messagesToSummarize,
+          summaryRequest,
+          appState,
+          context,
+          preCompactTokenCount,
+          cacheSafeParams: retryCacheSafeParams,
+        })
+        summary = getCompactSummaryTextForMessage(summaryResponse)
+        if (!summary?.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE)) break
+
+        // CC-1180: compact request itself hit prompt-too-long. Truncate the
+        // oldest API-round groups and retry rather than leaving the user stuck.
+        ptlAttempts++
+        const truncated =
+          ptlAttempts <= MAX_PTL_RETRIES
+            ? truncateHeadForPTLRetry(messagesToSummarize, summaryResponse)
+            : null
+        if (!truncated) {
+          logEvent('tengu_compact_failed', {
+            reason:
+              'prompt_too_long' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+            preCompactTokenCount,
+            promptCacheSharingEnabled,
+            ptlAttempts,
+          })
+          throw new Error(ERROR_MESSAGE_PROMPT_TOO_LONG)
+        }
+        logEvent('tengu_compact_ptl_retry', {
+          attempt: ptlAttempts,
+          droppedMessages: messagesToSummarize.length - truncated.length,
+          remainingMessages: truncated.length,
+        })
+        messagesToSummarize = truncated
+        // The forked-agent path reads from cacheSafeParams.forkContextMessages,
+        // not the messages param — thread the truncated set through both paths.
+        retryCacheSafeParams = {
+          ...retryCacheSafeParams,
+          forkContextMessages: truncated,
+        }
+      }
+
+      if (!summary) {
+        logForDebugging(
+          `Compact failed: no summary text in response. Response: ${jsonStringify(summaryResponse)}`,
+          { level: 'error' },
+        )
         logEvent('tengu_compact_failed', {
           reason:
-            'prompt_too_long' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+            'no_summary' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
           preCompactTokenCount,
           promptCacheSharingEnabled,
-          ptlAttempts,
         })
-        throw new Error(ERROR_MESSAGE_PROMPT_TOO_LONG)
+        throw new Error(
+          `Failed to generate conversation summary - response did not contain valid text content`,
+        )
+      } else if (startsWithApiErrorPrefix(summary)) {
+        logEvent('tengu_compact_failed', {
+          reason:
+            'api_error' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+          preCompactTokenCount,
+          promptCacheSharingEnabled,
+        })
+        throw new Error(summary)
       }
-      logEvent('tengu_compact_ptl_retry', {
-        attempt: ptlAttempts,
-        droppedMessages: messagesToSummarize.length - truncated.length,
-        remainingMessages: truncated.length,
-      })
-      messagesToSummarize = truncated
-      // The forked-agent path reads from cacheSafeParams.forkContextMessages,
-      // not the messages param — thread the truncated set through both paths.
-      retryCacheSafeParams = {
-        ...retryCacheSafeParams,
-        forkContextMessages: truncated,
-      }
-    }
-
-    if (!summary) {
-      logForDebugging(
-        `Compact failed: no summary text in response. Response: ${jsonStringify(summaryResponse)}`,
-        { level: 'error' },
-      )
-      logEvent('tengu_compact_failed', {
-        reason:
-          'no_summary' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-        preCompactTokenCount,
-        promptCacheSharingEnabled,
-      })
-      throw new Error(
-        `Failed to generate conversation summary - response did not contain valid text content`,
-      )
-    } else if (startsWithApiErrorPrefix(summary)) {
-      logEvent('tengu_compact_failed', {
-        reason:
-          'api_error' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-        preCompactTokenCount,
-        promptCacheSharingEnabled,
-      })
-      throw new Error(summary)
     }
 
     // Store the current file state before clearing
@@ -628,38 +772,49 @@ export async function compactConversation(
     }
 
     const transcriptPath = getTranscriptPath()
-    const summaryMessages: UserMessage[] = [
-      createUserMessage({
-        content: getCompactUserSummaryMessage(
-          summary,
-          suppressFollowUpQuestions,
-          transcriptPath,
-        ),
-        isCompactSummary: true,
-        isVisibleInTranscriptOnly: true,
-      }),
-    ]
+    const summaryMessages: UserMessage[] = usingResponsesCompaction
+      ? [createResponsesCompactionReplayMessage(compactedTurnItems)]
+      : [
+          createUserMessage({
+            content: getCompactUserSummaryMessage(
+              summary,
+              suppressFollowUpQuestions,
+              transcriptPath,
+            ),
+            isCompactSummary: true,
+            isVisibleInTranscriptOnly: true,
+          }),
+        ]
 
     // Previously "postCompactTokenCount" — renamed because this is the
     // compact API call's total usage (input_tokens ≈ preCompactTokenCount),
     // NOT the size of the resulting context. Kept for event-field continuity.
-    const compactionCallTotalTokens = tokenCountFromLastAPIResponse([
-      summaryResponse,
-    ])
+    const compactionCallTotalTokens = usingResponsesCompaction
+      ? compactedHistoryTokenCount
+      : tokenCountFromLastAPIResponse(summaryResponse ? [summaryResponse] : [])
 
     // Message-payload estimate of the resulting context. The next iteration's
     // shouldAutoCompact will see this PLUS ~20-40K for system prompt + tools +
     // userContext (via API usage.input_tokens). So `willRetriggerNextTurn: true`
     // is a strong signal; `false` may still retrigger when this is close to threshold.
-    const truePostCompactTokenCount = roughTokenCountEstimationForMessages([
-      boundaryMarker,
-      ...summaryMessages,
-      ...postCompactFileAttachments,
-      ...hookMessages,
-    ])
+    const truePostCompactTokenCount = usingResponsesCompaction
+      ? compactedHistoryTokenCount +
+        roughTokenCountEstimationForMessages([
+          boundaryMarker,
+          ...postCompactFileAttachments,
+          ...hookMessages,
+        ])
+      : roughTokenCountEstimationForMessages([
+          boundaryMarker,
+          ...summaryMessages,
+          ...postCompactFileAttachments,
+          ...hookMessages,
+        ])
 
     // Extract compaction API usage metrics
-    const compactionUsage = getTokenUsage(summaryResponse)
+    const compactionUsage = summaryResponse
+      ? getTokenUsage(summaryResponse)
+      : undefined
 
     const querySourceForEvent =
       recompactionInfo?.querySource ?? context.options.querySource ?? 'unknown'
@@ -824,6 +979,12 @@ export async function partialCompactConversation(
       )
     }
 
+    const compactionMode = getConfiguredCompactionMode()
+    const usingResponsesCompaction = compactionMode === 'responses'
+    if (usingResponsesCompaction) {
+      assertResponsesCompactionAvailable()
+    }
+
     const preCompactTokenCount = tokenCountWithEstimation(allMessages)
 
     context.onCompactProgress?.({
@@ -854,11 +1015,6 @@ export async function partialCompactConversation(
     context.setResponseLength?.(() => 0)
     context.onCompactProgress?.({ type: 'compact_start' })
 
-    const compactPrompt = getPartialCompactPrompt(customInstructions, direction)
-    const summaryRequest = createUserMessage({
-      content: compactPrompt,
-    })
-
     const failureMetadata = {
       preCompactTokenCount,
       direction:
@@ -866,70 +1022,107 @@ export async function partialCompactConversation(
       messagesSummarized: messagesToSummarize.length,
     }
 
-    // 'up_to' prefix hits cache directly; 'from' sends all (tail wouldn't cache).
-    // PTL retry breaks the cache prefix but unblocks the user (CC-1180).
-    let apiMessages = direction === 'up_to' ? messagesToSummarize : allMessages
-    let retryCacheSafeParams =
-      direction === 'up_to'
-        ? { ...cacheSafeParams, forkContextMessages: messagesToSummarize }
-        : cacheSafeParams
-    let summaryResponse: AssistantMessage
-    let summary: string | null
-    let ptlAttempts = 0
-    for (;;) {
-      summaryResponse = await streamCompactSummary({
-        messages: apiMessages,
-        summaryRequest,
-        appState: context.getAppState(),
-        context,
-        preCompactTokenCount,
-        cacheSafeParams: retryCacheSafeParams,
-      })
-      summary = getCompactSummaryTextForMessage(summaryResponse)
-      if (!summary?.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE)) break
+    let summaryResponse: AssistantMessage | undefined
+    let summary: string | null = null
+    let compactedTurnItems: ModelTurnItem[] = []
+    let compactedHistoryTokenCount = 0
 
-      ptlAttempts++
-      const truncated =
-        ptlAttempts <= MAX_PTL_RETRIES
-          ? truncateHeadForPTLRetry(apiMessages, summaryResponse)
-          : null
-      if (!truncated) {
+    if (usingResponsesCompaction) {
+      const compactedHistory = await queryCodexResponsesCompact({
+        messages: prepareMessagesForResponsesCompaction(messagesToSummarize),
+        systemPrompt: context.renderedSystemPrompt ?? asSystemPrompt([]),
+        tools: context.options.tools,
+        options: {
+          async getToolPermissionContext() {
+            const appState = context.getAppState()
+            return appState.toolPermissionContext
+          },
+          model: context.options.mainLoopModel,
+          tools: context.options.tools,
+          extraToolSchemas: context.options.extraToolSchemas,
+          agents: context.options.agentDefinitions.activeAgents,
+          allowedAgentTypes: context.options.agentDefinitions.allowedAgentTypes,
+          effortValue: context.getAppState().effortValue,
+        },
+        signal: context.abortController.signal,
+      })
+      compactedTurnItems = compactedHistory.turnItems
+      compactedHistoryTokenCount = roughTokenCountEstimation(
+        jsonStringify(compactedHistory.outputItems),
+      )
+      if (compactedTurnItems.length === 0) {
+        throw new Error('Native responses compaction returned an empty replacement history.')
+      }
+      summary = summarizeResponsesCompactionOutput(compactedHistory.outputItems)
+    } else {
+      const compactPrompt = getPartialCompactPrompt(customInstructions, direction)
+      const summaryRequest = createUserMessage({
+        content: compactPrompt,
+      })
+
+      // 'up_to' prefix hits cache directly; 'from' sends all (tail wouldn't cache).
+      // PTL retry breaks the cache prefix but unblocks the user (CC-1180).
+      let apiMessages = direction === 'up_to' ? messagesToSummarize : allMessages
+      let retryCacheSafeParams =
+        direction === 'up_to'
+          ? { ...cacheSafeParams, forkContextMessages: messagesToSummarize }
+          : cacheSafeParams
+      let ptlAttempts = 0
+      for (;;) {
+        summaryResponse = await streamCompactSummary({
+          messages: apiMessages,
+          summaryRequest,
+          appState: context.getAppState(),
+          context,
+          preCompactTokenCount,
+          cacheSafeParams: retryCacheSafeParams,
+        })
+        summary = getCompactSummaryTextForMessage(summaryResponse)
+        if (!summary?.startsWith(PROMPT_TOO_LONG_ERROR_MESSAGE)) break
+
+        ptlAttempts++
+        const truncated =
+          ptlAttempts <= MAX_PTL_RETRIES
+            ? truncateHeadForPTLRetry(apiMessages, summaryResponse)
+            : null
+        if (!truncated) {
+          logEvent('tengu_partial_compact_failed', {
+            reason:
+              'prompt_too_long' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+            ...failureMetadata,
+            ptlAttempts,
+          })
+          throw new Error(ERROR_MESSAGE_PROMPT_TOO_LONG)
+        }
+        logEvent('tengu_compact_ptl_retry', {
+          attempt: ptlAttempts,
+          droppedMessages: apiMessages.length - truncated.length,
+          remainingMessages: truncated.length,
+          path: 'partial' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+        })
+        apiMessages = truncated
+        retryCacheSafeParams = {
+          ...retryCacheSafeParams,
+          forkContextMessages: truncated,
+        }
+      }
+      if (!summary) {
         logEvent('tengu_partial_compact_failed', {
           reason:
-            'prompt_too_long' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+            'no_summary' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
           ...failureMetadata,
-          ptlAttempts,
         })
-        throw new Error(ERROR_MESSAGE_PROMPT_TOO_LONG)
+        throw new Error(
+          'Failed to generate conversation summary - response did not contain valid text content',
+        )
+      } else if (startsWithApiErrorPrefix(summary)) {
+        logEvent('tengu_partial_compact_failed', {
+          reason:
+            'api_error' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+          ...failureMetadata,
+        })
+        throw new Error(summary)
       }
-      logEvent('tengu_compact_ptl_retry', {
-        attempt: ptlAttempts,
-        droppedMessages: apiMessages.length - truncated.length,
-        remainingMessages: truncated.length,
-        path: 'partial' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-      })
-      apiMessages = truncated
-      retryCacheSafeParams = {
-        ...retryCacheSafeParams,
-        forkContextMessages: truncated,
-      }
-    }
-    if (!summary) {
-      logEvent('tengu_partial_compact_failed', {
-        reason:
-          'no_summary' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-        ...failureMetadata,
-      })
-      throw new Error(
-        'Failed to generate conversation summary - response did not contain valid text content',
-      )
-    } else if (startsWithApiErrorPrefix(summary)) {
-      logEvent('tengu_partial_compact_failed', {
-        reason:
-          'api_error' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-        ...failureMetadata,
-      })
-      throw new Error(summary)
     }
 
     // Store the current file state before clearing
@@ -999,10 +1192,12 @@ export async function partialCompactConversation(
       model: context.options.mainLoopModel,
     })
 
-    const postCompactTokenCount = tokenCountFromLastAPIResponse([
-      summaryResponse,
-    ])
-    const compactionUsage = getTokenUsage(summaryResponse)
+    const postCompactTokenCount = usingResponsesCompaction
+      ? compactedHistoryTokenCount
+      : tokenCountFromLastAPIResponse(summaryResponse ? [summaryResponse] : [])
+    const compactionUsage = summaryResponse
+      ? getTokenUsage(summaryResponse)
+      : undefined
 
     logEvent('tengu_partial_compact', {
       preCompactTokenCount,
@@ -1045,21 +1240,23 @@ export async function partialCompactConversation(
     }
 
     const transcriptPath = getTranscriptPath()
-    const summaryMessages: UserMessage[] = [
-      createUserMessage({
-        content: getCompactUserSummaryMessage(summary, false, transcriptPath),
-        isCompactSummary: true,
-        ...(messagesToKeep.length > 0
-          ? {
-              summarizeMetadata: {
-                messagesSummarized: messagesToSummarize.length,
-                userContext: userFeedback,
-                direction,
-              },
-            }
-          : { isVisibleInTranscriptOnly: true as const }),
-      }),
-    ]
+    const summaryMessages: UserMessage[] = usingResponsesCompaction
+      ? [createResponsesCompactionReplayMessage(compactedTurnItems)]
+      : [
+          createUserMessage({
+            content: getCompactUserSummaryMessage(summary, false, transcriptPath),
+            isCompactSummary: true,
+            ...(messagesToKeep.length > 0
+              ? {
+                  summarizeMetadata: {
+                    messagesSummarized: messagesToSummarize.length,
+                    userContext: userFeedback,
+                    direction,
+                  },
+                }
+              : { isVisibleInTranscriptOnly: true as const }),
+          }),
+        ]
 
     if (feature('PROMPT_CACHE_BREAK_DETECTION')) {
       notifyCompaction(

@@ -262,3 +262,14 @@ test('web search call emits a visible progress message', () => {
     true,
   )
 })
+
+test('compaction summary alias is preserved as an opaque compaction item', () => {
+  const items = normalizeResponsesOutputToTurnItems([
+    {
+      type: 'compaction_summary',
+      encrypted_content: 'ENCRYPTED_COMPACTION_SUMMARY',
+    },
+  ] as Parameters<typeof normalizeResponsesOutputToTurnItems>[0])
+
+  assert.equal(items.some(item => item.kind === 'opaque_compaction'), true)
+})

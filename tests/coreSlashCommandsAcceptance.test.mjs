@@ -101,6 +101,87 @@ async function withResponsesServer(responseBatches, fn) {
   }
 }
 
+async function withResponsesAndCompactServer(
+  { responseBatches, compactResponses },
+  fn,
+) {
+  const requestBodies = []
+  const compactRequestBodies = []
+  const sockets = new Set()
+  const server = http.createServer((req, res) => {
+    if (req.method !== 'POST') {
+      res.statusCode = 404
+      res.end('not found')
+      return
+    }
+
+    let body = ''
+    req.on('data', chunk => {
+      body += chunk.toString()
+    })
+    req.on('end', async () => {
+      const parsedBody = JSON.parse(body)
+      if (req.url === '/responses') {
+        requestBodies.push(parsedBody)
+        const batch =
+          responseBatches[requestBodies.length - 1] ??
+          responseBatches.at(-1) ??
+          []
+        res.writeHead(200, {
+          'content-type': 'text/event-stream',
+          connection: 'keep-alive',
+          'cache-control': 'no-cache',
+        })
+        for (const step of batch) {
+          res.write(step)
+        }
+        res.end()
+        return
+      }
+
+      if (req.url === '/responses/compact') {
+        compactRequestBodies.push(parsedBody)
+        const payload =
+          compactResponses[compactRequestBodies.length - 1] ??
+          compactResponses.at(-1) ?? { output: [] }
+        res.writeHead(200, {
+          'content-type': 'application/json',
+        })
+        res.end(JSON.stringify(payload))
+        return
+      }
+
+      res.statusCode = 404
+      res.end('not found')
+    })
+  })
+
+  server.on('connection', socket => {
+    sockets.add(socket)
+    socket.on('close', () => sockets.delete(socket))
+  })
+
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('failed to bind slash command acceptance server')
+  }
+
+  try {
+    return await fn({
+      port: address.port,
+      requestBodies,
+      compactRequestBodies,
+    })
+  } finally {
+    for (const socket of sockets) {
+      socket.destroy()
+    }
+    await new Promise(resolve => server.close(resolve))
+  }
+}
+
 async function writeCodexConfig(homeDir, port) {
   const codexDir = join(homeDir, '.codex')
   await mkdir(codexDir, { recursive: true })
@@ -114,6 +195,14 @@ async function writeCodexConfig(homeDir, port) {
       'env_key = "ANTHROPIC_API_KEY"',
       '',
     ].join('\n'),
+    'utf8',
+  )
+}
+
+async function writeGlobalConfig(homeDir, config) {
+  await writeFile(
+    join(homeDir, '.claude.json'),
+    JSON.stringify(config, null, 2),
     'utf8',
   )
 }
@@ -1520,6 +1609,117 @@ test('/compact TUI: resume compacts locally, returns to input, and the next prom
         const requestBodyText = JSON.stringify(requestBodies[0])
         assert.match(requestBodyText, /Prefer the resumed worktree summary/)
         assert.doesNotMatch(requestBodyText, /Wrong current cwd project summary/)
+
+      } finally {
+        await rm(tempHome, { recursive: true, force: true })
+      }
+    },
+  )
+})
+
+test('/compact TUI: responses mode uses /responses/compact, hides full-summary hint, and replays compact history on the next prompt', SERIAL_TEST, async () => {
+  await withResponsesAndCompactServer(
+    {
+      responseBatches: [[
+        responseDoneItem({
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'output_text', text: 'after responses compact answer' }],
+        }),
+        responseCompleted('resp-after-responses-compact'),
+        responseDone(),
+      ]],
+      compactResponses: [
+        {
+          output: [
+            {
+              type: 'message',
+              role: 'user',
+              content: [
+                { type: 'input_text', text: 'kept compacted user turn' },
+              ],
+            },
+            {
+              type: 'compaction',
+              encrypted_content: 'ENCRYPTED_COMPACTION_SUMMARY',
+            },
+          ],
+        },
+      ],
+    },
+    async ({ port, requestBodies, compactRequestBodies }) => {
+      const tempHome = await mkdtemp(
+        join(tmpdir(), 'codex-compact-tui-responses-'),
+      )
+      const resumedCwd = join(CLI_CWD, '..')
+      try {
+        await writeCodexConfig(tempHome, port)
+        await writeGlobalConfig(tempHome, {
+          compactionMode: 'responses',
+        })
+        const { transcriptPath } = await seedResumedSession({
+          homeDir: tempHome,
+          resumedCwd,
+          currentCwd: CLI_CWD,
+        })
+
+        const result = await runTuiFlow({
+          tempHome,
+          extraArgs: ['--resume', transcriptPath],
+          actions: [
+            { name: 'run-compact', waitFor: ['❯'], send: '/compact\r' },
+            {
+              name: 'ask-after-compact',
+              waitFor: ['Compacted'],
+              send: 'what compact history is loaded?\r',
+            },
+            {
+              name: 'exit',
+              waitFor: ['responsescompactanswer'],
+              send: '/exit\r',
+              settleMs: 800,
+            },
+          ],
+        })
+
+        assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+        assert.deepEqual(
+          result.sent,
+          ['run-compact', 'ask-after-compact', 'exit'],
+          JSON.stringify(result),
+        )
+        assert.match(result.normalizedTranscript, /Compacted/)
+        assert.doesNotMatch(result.cleanedTranscript, /see full summary/i)
+        assert.match(result.normalizedTranscript, /afterresponsescompactanswer/)
+
+        assert.equal(compactRequestBodies.length, 1)
+        assert.equal(requestBodies.length, 1)
+
+        const compactBody = compactRequestBodies[0]
+        assert.equal(compactBody.stream, undefined)
+        assert.equal(compactBody.tools, undefined)
+
+        const nextRequestBody = requestBodies[0]
+        const nextRequestText = JSON.stringify(nextRequestBody)
+        assert.equal(
+          nextRequestBody.input.some(item => item.type === 'compaction'),
+          true,
+        )
+        assert.equal(
+          nextRequestBody.input.some(
+            item =>
+              item.type === 'message' &&
+              item.role === 'user' &&
+              item.content?.some(
+                part =>
+                  part.type === 'input_text' &&
+                  part.text === 'kept compacted user turn',
+              ),
+          ),
+          true,
+        )
+        assert.match(nextRequestText, /what compact history is loaded\?/)
+
       } finally {
         await rm(tempHome, { recursive: true, force: true })
       }

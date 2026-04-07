@@ -186,6 +186,7 @@ export type EditorMode = 'emacs' | (typeof EDITOR_MODES)[number]
 export type DiffTool = 'terminal' | 'auto'
 
 export type OutputStyle = string
+export type CompactionMode = 'summary' | 'responses'
 
 export type GlobalConfig = {
   /**
@@ -239,6 +240,7 @@ export type GlobalConfig = {
   bypassPermissionsModeAccepted?: boolean
   hasUsedBackslashReturn?: boolean
   autoCompactEnabled: boolean // Controls whether auto-compact is enabled
+  compactionMode: CompactionMode // Controls which compaction strategy is used
   showTurnDuration: boolean // Controls whether to show turn duration message (e.g., "Cooked for 1m 6s")
   /**
    * @deprecated Use settings.env instead.
@@ -599,6 +601,7 @@ function createDefaultGlobalConfig(): GlobalConfig {
     verbose: false,
     editorMode: 'normal',
     autoCompactEnabled: true,
+    compactionMode: 'summary',
     showTurnDuration: true,
     hasSeenTasksHint: false,
     hasUsedStash: false,
@@ -643,6 +646,7 @@ export const GLOBAL_CONFIG_KEYS = [
   'editorMode',
   'hasUsedBackslashReturn',
   'autoCompactEnabled',
+  'compactionMode',
   'showTurnDuration',
   'diffTool',
   'env',

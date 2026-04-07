@@ -80,6 +80,7 @@ ${modelSection}
 - Change model: { "setting": "model", "value": "gpt-5.1-codex" }
 - Change context window: { "setting": "modelContextWindow", "value": 400000 }
 - Change permission mode: { "setting": "permissions.defaultMode", "value": "plan" }
+- Change compaction mode: { "setting": "compactionMode", "value": "summary" }
 `
 }
 

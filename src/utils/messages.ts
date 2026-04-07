@@ -2216,7 +2216,11 @@ export function normalizeMessagesForAPI(
 
           // If the last message is also a user message, merge them
           const lastMessage = last(result)
-          if (lastMessage?.type === 'user') {
+          if (
+            lastMessage?.type === 'user' &&
+            !lastMessage.modelTurnItems?.length &&
+            !normalizedMessage.modelTurnItems?.length
+          ) {
             result[result.length - 1] = mergeUserMessages(
               lastMessage,
               normalizedMessage,
@@ -2484,7 +2488,12 @@ function mergeAdjacentUserMessages(
   const out: (UserMessage | AssistantMessage)[] = []
   for (const m of msgs) {
     const prev = out.at(-1)
-    if (m.type === 'user' && prev?.type === 'user') {
+    if (
+      m.type === 'user' &&
+      prev?.type === 'user' &&
+      !prev.modelTurnItems?.length &&
+      !m.modelTurnItems?.length
+    ) {
       out[out.length - 1] = mergeUserMessages(prev, m) // lvalue — can't use .at()
     } else {
       out.push(m)

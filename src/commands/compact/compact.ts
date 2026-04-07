@@ -25,6 +25,7 @@ import { hasExactErrorMessage } from '../../utils/errors.js'
 import { executePreCompactHooks } from '../../utils/hooks.js'
 import { logError } from '../../utils/log.js'
 import { getMessagesAfterCompactBoundary } from '../../utils/messages.js'
+import { getGlobalConfig } from '../../utils/config.js'
 import { getUpgradeMessage } from '../../utils/model/contextWindowUpgradeCheck.js'
 import {
   buildEffectiveSystemPrompt,
@@ -52,18 +53,21 @@ export const call: LocalCommandCall = async (args, context) => {
   const customInstructions = args.trim()
 
   try {
-    // Try session memory compaction first if no custom instructions
-    // (session memory compaction doesn't support custom instructions)
-    if (!customInstructions) {
+    // Summary mode keeps the existing local session-memory compact path.
+    // Responses mode must skip it and use the native replacement-history flow.
+    if (
+      !customInstructions &&
+      (getGlobalConfig().compactionMode ?? 'summary') === 'summary'
+    ) {
       const sessionMemoryResult = await trySessionMemoryCompaction(
         messages,
         context.agentId,
+        undefined,
+        'manual',
       )
       if (sessionMemoryResult) {
         getUserContext.cache.clear?.()
         runPostCompactCleanup()
-        // Reset cache read baseline so the post-compact drop isn't flagged
-        // as a break. compactConversation does this internally; SM-compact doesn't.
         if (feature('PROMPT_CACHE_BREAK_DETECTION')) {
           notifyCompaction(
             context.options.querySource ?? 'compact',
@@ -71,19 +75,21 @@ export const call: LocalCommandCall = async (args, context) => {
           )
         }
         markPostCompaction()
-        // Suppress warning immediately after successful compaction
         suppressCompactWarning()
 
         return {
           type: 'compact',
           compactionResult: sessionMemoryResult,
-          displayText: buildDisplayText(context),
+          displayText: buildDisplayText(
+            context,
+            undefined,
+            hasReadableCompactSummary(sessionMemoryResult),
+          ),
         }
       }
     }
 
     // Reactive-only mode: route /compact through the reactive path.
-    // Checked after session-memory (that path is cheap and orthogonal).
     if (reactiveCompact?.isReactiveOnlyMode()) {
       return await compactViaReactive(
         messages,
@@ -120,7 +126,11 @@ export const call: LocalCommandCall = async (args, context) => {
     return {
       type: 'compact',
       compactionResult: result,
-      displayText: buildDisplayText(context, result.userDisplayMessage),
+      displayText: buildDisplayText(
+        context,
+        result.userDisplayMessage,
+        hasReadableCompactSummary(result),
+      ),
     }
   } catch (error) {
     if (abortController.signal.aborted) {
@@ -217,7 +227,11 @@ async function compactViaReactive(
         ...outcome.result,
         userDisplayMessage: combinedMessage,
       },
-      displayText: buildDisplayText(context, combinedMessage),
+      displayText: buildDisplayText(
+        context,
+        combinedMessage,
+        hasReadableCompactSummary(outcome.result),
+      ),
     }
   } finally {
     context.setStreamMode?.('requesting')
@@ -227,9 +241,26 @@ async function compactViaReactive(
   }
 }
 
-function buildDisplayText(
+function hasReadableCompactSummary(result: CompactionResult): boolean {
+  return result.summaryMessages.some(message => message.isCompactSummary === true)
+}
+
+export function getCompactDisplayHint(
+  verbose: boolean,
+  hasReadableSummary: boolean,
+  expandShortcut: string,
+): string | null {
+  if (verbose || !hasReadableSummary) {
+    return null
+  }
+
+  return `(${expandShortcut} to see full summary)`
+}
+
+export function buildDisplayText(
   context: ToolUseContext,
   userDisplayMessage?: string,
+  hasReadableSummary: boolean = true,
 ): string {
   const upgradeMessage = getUpgradeMessage('tip')
   const expandShortcut = getShortcutDisplay(
@@ -238,13 +269,17 @@ function buildDisplayText(
     'ctrl+o',
   )
   const dimmed = [
-    ...(context.options.verbose
-      ? []
-      : [`(${expandShortcut} to see full summary)`]),
+    getCompactDisplayHint(
+      context.options.verbose,
+      hasReadableSummary,
+      expandShortcut,
+    ),
     ...(userDisplayMessage ? [userDisplayMessage] : []),
     ...(upgradeMessage ? [upgradeMessage] : []),
-  ]
-  return chalk.dim('Compacted ' + dimmed.join('\n'))
+  ].filter(Boolean)
+  return chalk.dim(
+    dimmed.length > 0 ? `Compacted ${dimmed.join('\n')}` : 'Compacted',
+  )
 }
 
 async function getCacheSharingParams(

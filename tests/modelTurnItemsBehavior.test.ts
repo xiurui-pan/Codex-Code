@@ -175,6 +175,19 @@ test('commentary info ui messages are emitted into SDK execution item stream', (
   )
 })
 
+test('commentary info ui messages that render in the transcript get their own uuid', () => {
+  const message = createSystemMessageFromModelTurnItem({
+    kind: 'ui_message',
+    provider: 'custom',
+    level: 'info',
+    text: 'I am checking the project structure before editing.',
+    source: 'commentary',
+  })
+
+  assert.equal(typeof message?.uuid, 'string')
+  assert.equal(typeof message?.timestamp, 'string')
+})
+
 test('buildAssistantMessageFromTurnItems follows the same direct preferred path for plain text turn items', () => {
   const message = buildAssistantMessageFromTurnItems([
     {

@@ -200,9 +200,6 @@ export async function shouldAutoCompact(
   // Reactive-only mode: suppress proactive autocompact, let reactive compact
   // catch the API's prompt-too-long. feature() wrapper keeps the flag string
   // out of external builds (REACTIVE_COMPACT is ant-only).
-  // Note: returning false here also means autoCompactIfNeeded never reaches
-  // trySessionMemoryCompaction in the query loop — the /compact call site
-  // still tries session memory first. Revisit if reactive-only graduates.
   if (feature('REACTIVE_COMPACT')) {
     if (getFeatureValue_CACHED_MAY_BE_STALE('tengu_cobalt_raccoon', false)) {
       return false
@@ -295,28 +292,24 @@ export async function autoCompactIfNeeded(
     querySource,
   }
 
-  // EXPERIMENT: Try session memory compaction first
-  const sessionMemoryResult = await trySessionMemoryCompaction(
-    messages,
-    toolUseContext.agentId,
-    recompactionInfo.autoCompactThreshold,
-  )
-  if (sessionMemoryResult) {
-    // Reset lastSummarizedMessageId since session memory compaction prunes messages
-    // and the old message UUID will no longer exist after the REPL replaces messages
-    setLastSummarizedMessageId(undefined)
-    runPostCompactCleanup(querySource)
-    // Reset cache read baseline so the post-compact drop isn't flagged as a
-    // break. compactConversation does this internally; SM-compact doesn't.
-    // BQ 2026-03-01: missing this made 20% of tengu_prompt_cache_break events
-    // false positives (systemPromptChanged=true, timeSinceLastAssistantMsg=-1).
-    if (feature('PROMPT_CACHE_BREAK_DETECTION')) {
-      notifyCompaction(querySource ?? 'compact', toolUseContext.agentId)
-    }
-    markPostCompaction()
-    return {
-      wasCompacted: true,
-      compactionResult: sessionMemoryResult,
+  if ((getGlobalConfig().compactionMode ?? 'summary') === 'summary') {
+    const sessionMemoryResult = await trySessionMemoryCompaction(
+      messages,
+      toolUseContext.agentId,
+      recompactionInfo.autoCompactThreshold,
+      'auto',
+    )
+    if (sessionMemoryResult) {
+      setLastSummarizedMessageId(undefined)
+      runPostCompactCleanup(querySource)
+      if (feature('PROMPT_CACHE_BREAK_DETECTION')) {
+        notifyCompaction(querySource ?? 'compact', toolUseContext.agentId)
+      }
+      markPostCompaction()
+      return {
+        wasCompacted: true,
+        compactionResult: sessionMemoryResult,
+      }
     }
   }
 

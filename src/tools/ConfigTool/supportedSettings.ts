@@ -56,6 +56,12 @@ export const SUPPORTED_SETTINGS: Record<string, SettingConfig> = {
     type: 'boolean',
     description: 'Auto-compact when context is full',
   },
+  compactionMode: {
+    source: 'global',
+    type: 'string',
+    description: 'Compaction strategy to use for /compact and auto-compact',
+    options: ['summary', 'responses'],
+  },
   autoMemoryEnabled: {
     source: 'settings',
     type: 'boolean',

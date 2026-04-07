@@ -282,6 +282,28 @@ export function Config({
       });
     }
   }, {
+    id: 'compactionMode',
+    label: 'Compaction mode',
+    value: globalConfig.compactionMode,
+    options: ['summary', 'responses'],
+    type: 'enum' as const,
+    onChange(compactionMode: string) {
+      if (compactionMode !== 'summary' && compactionMode !== 'responses') {
+        return;
+      }
+      saveGlobalConfig(current_0 => ({
+        ...current_0,
+        compactionMode
+      }));
+      setGlobalConfig({
+        ...getGlobalConfig(),
+        compactionMode
+      });
+      logEvent('tengu_compaction_mode_setting_changed', {
+        mode: compactionMode as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+      });
+    }
+  }, {
     id: 'spinnerTipsEnabled',
     label: 'Show tips',
     value: settingsData?.spinnerTipsEnabled ?? true,
@@ -1135,6 +1157,9 @@ export function Config({
     }
     if (globalConfig.autoCompactEnabled !== initialConfig.current.autoCompactEnabled) {
       formattedChanges.push(`${globalConfig.autoCompactEnabled ? 'Enabled' : 'Disabled'} auto-compact`);
+    }
+    if (globalConfig.compactionMode !== initialConfig.current.compactionMode) {
+      formattedChanges.push(`Set compaction mode to ${chalk.bold(globalConfig.compactionMode)}`);
     }
     if (globalConfig.respectGitignore !== initialConfig.current.respectGitignore) {
       formattedChanges.push(`${globalConfig.respectGitignore ? 'Enabled' : 'Disabled'} respect .gitignore in file picker`);

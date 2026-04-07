@@ -19,7 +19,7 @@ import { getSessionMemoryPath } from '../../utils/permissions/filesystem.js'
 import { getFsImplementation } from '../../utils/fsOperations.js'
 import { processSessionStartHooks } from '../../utils/sessionStart.js'
 import { getTranscriptPath } from '../../utils/sessionStorage.js'
-import { tokenCountFromLastAPIResponse } from '../../utils/tokens.js'
+import { tokenCountWithEstimation } from '../../utils/tokens.js'
 import { extractDiscoveredToolNames } from '../../utils/toolSearch.js'
 import {
   getDynamicConfig_BLOCKS_ON_INIT,
@@ -448,12 +448,13 @@ function createCompactionResultFromSessionMemory(
   messagesToKeep: Message[],
   hookResults: HookResultMessage[],
   transcriptPath: string,
+  trigger: 'manual' | 'auto',
   agentId?: AgentId,
 ): CompactionResult {
-  const preCompactTokenCount = tokenCountFromLastAPIResponse(messages)
+  const preCompactTokenCount = tokenCountWithEstimation(messages)
 
   const boundaryMarker = createCompactBoundaryMessage(
-    'auto',
+    trigger,
     preCompactTokenCount ?? 0,
     messages[messages.length - 1]?.uuid,
   )
@@ -523,6 +524,7 @@ export async function trySessionMemoryCompaction(
   messages: Message[],
   agentId?: AgentId,
   autoCompactThreshold?: number,
+  trigger: 'manual' | 'auto' = 'auto',
 ): Promise<CompactionResult | null> {
   if (!shouldUseSessionMemoryCompaction()) {
     return null
@@ -602,6 +604,7 @@ export async function trySessionMemoryCompaction(
       messagesToKeep,
       hookResults,
       transcriptPath,
+      trigger,
       agentId,
     )
 

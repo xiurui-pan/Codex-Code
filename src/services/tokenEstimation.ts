@@ -5,8 +5,10 @@ import type { BetaMessageParam as MessageParam } from '@anthropic-ai/sdk/resourc
 import type { CountTokensCommandInput } from '@aws-sdk/client-bedrock-runtime'
 import { getAPIProvider } from 'src/utils/model/providers.js'
 import { VERTEX_COUNT_TOKENS_ALLOWED_BETAS } from '../constants/betas.js'
+import type { ModelTurnItem } from './api/modelTurnItems.js'
 import type { Attachment } from '../utils/attachments.js'
 import { getModelBetas } from '../utils/betas.js'
+import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js'
 import { getVertexRegionForModel, isEnvTruthy } from '../utils/envUtils.js'
 import { logError } from '../utils/log.js'
 import { normalizeAttachmentForAPI } from '../utils/messages.js'
@@ -332,6 +334,7 @@ export function roughTokenCountEstimationForMessages(
     type: string
     message?: { content?: unknown }
     attachment?: Attachment
+    modelTurnItems?: ModelTurnItem[]
   }[],
 ): number {
   let totalTokens = 0
@@ -345,7 +348,21 @@ export function roughTokenCountEstimationForMessage(message: {
   type: string
   message?: { content?: unknown }
   attachment?: Attachment
+  modelTurnItems?: ModelTurnItem[]
 }): number {
+  if (
+    isCurrentPhaseCustomCodexProvider() &&
+    Array.isArray(message.modelTurnItems) &&
+    message.modelTurnItems.length > 0
+  ) {
+    const turnItemTokens = roughTokenCountEstimationForModelTurnItems(
+      message.modelTurnItems,
+    )
+    if (turnItemTokens > 0) {
+      return turnItemTokens
+    }
+  }
+
   if (
     (message.type === 'assistant' || message.type === 'user') &&
     message.message?.content
@@ -369,6 +386,62 @@ export function roughTokenCountEstimationForMessage(message: {
   }
 
   return 0
+}
+
+function getReplayPayloadType(payload: unknown): string | null {
+  return payload &&
+    typeof payload === 'object' &&
+    'type' in payload &&
+    typeof (payload as { type?: unknown }).type === 'string'
+    ? (payload as { type: string }).type
+    : null
+}
+
+function isReplayCompactionPayloadType(type: string | null): boolean {
+  return type === 'compaction' || type === 'compaction_summary'
+}
+
+function roughTokenCountEstimationForModelTurnItems(
+  turnItems: readonly ModelTurnItem[],
+): number {
+  const replayPayloads: unknown[] = []
+  const hasOpaqueReasoning = turnItems.some(
+    item => item.kind === 'opaque_reasoning',
+  )
+  const hasOpaqueCompaction = turnItems.some(
+    item => item.kind === 'opaque_compaction',
+  )
+
+  for (const item of turnItems) {
+    if (item.kind === 'raw_model_output') {
+      const payloadType = getReplayPayloadType(item.payload)
+      if (
+        (payloadType === 'reasoning' && hasOpaqueReasoning) ||
+        (isReplayCompactionPayloadType(payloadType) && hasOpaqueCompaction)
+      ) {
+        continue
+      }
+      if (payloadType) {
+        replayPayloads.push(item.payload)
+      }
+      continue
+    }
+
+    if (
+      item.kind === 'opaque_reasoning' ||
+      item.kind === 'opaque_compaction'
+    ) {
+      if (getReplayPayloadType(item.payload)) {
+        replayPayloads.push(item.payload)
+      }
+    }
+  }
+
+  if (replayPayloads.length === 0) {
+    return 0
+  }
+
+  return roughTokenCountEstimation(jsonStringify(replayPayloads))
 }
 
 function roughTokenCountEstimationForContent(

@@ -12,6 +12,35 @@ import { getCodexEffectiveContextWindow } from './codexConfig.js'
 import { SYNTHETIC_MESSAGES, SYNTHETIC_MODEL } from './messages.js'
 import { jsonStringify } from './slowOperations.js'
 
+function hasMeaningfulUsage(usage: Usage): boolean {
+  const totalUsageTokens =
+    usage.input_tokens +
+    usage.output_tokens +
+    (usage.cache_creation_input_tokens ?? 0) +
+    (usage.cache_read_input_tokens ?? 0)
+
+  if (totalUsageTokens > 0) {
+    return true
+  }
+
+  const iterations = (
+    usage as Usage & {
+      iterations?: Array<{
+        input_tokens?: number | null
+        output_tokens?: number | null
+      }> | null
+    }
+  ).iterations
+
+  return (
+    Array.isArray(iterations) &&
+    iterations.some(
+      iteration =>
+        (iteration.input_tokens ?? 0) + (iteration.output_tokens ?? 0) > 0,
+    )
+  )
+}
+
 export function getTokenUsage(message: Message): Usage | undefined {
   if (
     message?.type === 'assistant' &&
@@ -20,7 +49,8 @@ export function getTokenUsage(message: Message): Usage | undefined {
       message.message.content[0]?.type === 'text' &&
       SYNTHETIC_MESSAGES.has(message.message.content[0].text)
     ) &&
-    message.message.model !== SYNTHETIC_MODEL
+    message.message.model !== SYNTHETIC_MODEL &&
+    hasMeaningfulUsage(message.message.usage)
   ) {
     return message.message.usage
   }

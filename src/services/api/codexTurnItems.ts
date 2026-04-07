@@ -6,16 +6,21 @@ import { BASH_TOOL_NAME } from '../../tools/BashTool/toolName.js'
 import { getFsImplementation } from '../../utils/fsOperations.js'
 import { buildToolCallItemsForLocalExecution } from './localExecutionItems.js'
 
-type ResponsesOutputText = {
-  type: 'output_text'
+type ResponsesMessageText = {
+  type: 'input_text' | 'output_text'
   text?: string
+}
+
+type ResponsesEncryptedContentItem = {
+  type: string
+  encrypted_content?: string
 }
 
 type ResponsesMessageItem = {
   type: 'message'
   role?: string
   phase?: 'commentary' | 'final_answer'
-  content?: ResponsesOutputText[]
+  content?: ResponsesMessageText[]
 }
 
 type ResponsesFunctionCallItem = {
@@ -54,11 +59,21 @@ type ResponsesWebSearchCallItem = {
   action?: ResponsesWebSearchAction
 }
 
+type ResponsesReasoningItem = ResponsesEncryptedContentItem & {
+  type: 'reasoning'
+}
+
+type ResponsesCompactionItem = ResponsesEncryptedContentItem & {
+  type: 'compaction' | 'compaction_summary'
+}
+
 export type ResponsesOutputItem =
   | ResponsesMessageItem
   | ResponsesFunctionCallItem
   | ResponsesFunctionCallOutputItem
   | ResponsesWebSearchCallItem
+  | ResponsesReasoningItem
+  | ResponsesCompactionItem
 
 type NormalizeResponsesOutputOptions = {
   allowTextFallbackToolCall?: boolean
@@ -494,6 +509,29 @@ export function normalizeResponsesOutputToTurnItems(
           item.status === 'completed'
             ? 'web_search_call_completed'
             : 'web_search_call',
+      })
+      continue
+    }
+
+    if (item.type === 'reasoning') {
+      turnItems.push({
+        kind: 'opaque_reasoning',
+        provider: 'custom',
+        itemType: item.type,
+        payload: item,
+      })
+      continue
+    }
+
+    if (
+      item.type === 'compaction' ||
+      item.type === 'compaction_summary'
+    ) {
+      turnItems.push({
+        kind: 'opaque_compaction',
+        provider: 'custom',
+        itemType: item.type,
+        payload: item,
       })
       continue
     }

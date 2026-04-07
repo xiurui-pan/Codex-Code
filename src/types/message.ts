@@ -39,6 +39,16 @@ export type CompactMetadata = {
   boundaryUuid?: UUID | string
   direction?: PartialCompactDirection
   summary?: string
+  trigger?: 'manual' | 'auto'
+  preTokens?: number
+  userContext?: string
+  messagesSummarized?: number
+  preCompactDiscoveredTools?: string[]
+  preservedSegment?: {
+    headUuid: UUID | string
+    anchorUuid: UUID | string
+    tailUuid: UUID | string
+  }
 }
 
 export type AttachmentPayload = {
@@ -157,6 +167,8 @@ export type SystemMessage = BaseEnvelope & {
   content?: string
   message?: string
   modelTurnItem?: ModelTurnItem
+  compactMetadata?: CompactMetadata
+  logicalParentUuid?: UUID | string
 }
 
 export type SystemInformationalMessage = SystemMessage

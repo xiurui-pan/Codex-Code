@@ -24,7 +24,7 @@ import { formatDuration } from '../../utils/format.js';
 import { setEnvHookNotifier } from '../../utils/hooks/fileChangedWatcher.js';
 import { toIDEDisplayName } from '../../utils/ide.js';
 import { getMessagesAfterCompactBoundary } from '../../utils/messages.js';
-import { tokenCountFromLastAPIResponse } from '../../utils/tokens.js';
+import { getDisplayContextTokenCount } from '../../utils/tokens.js';
 import { AutoUpdaterWrapper } from '../AutoUpdaterWrapper.js';
 import { ConfigurableShortcutHint } from '../ConfigurableShortcutHint.js';
 import { IdeStatusIndicator } from '../IdeStatusIndicator.js';
@@ -75,7 +75,9 @@ export function Notifications(t0) {
   let t3;
   if ($[0] !== messages) {
     const messagesForTokenCount = getMessagesAfterCompactBoundary(messages);
-    t3 = tokenCountFromLastAPIResponse(messagesForTokenCount);
+    t3 = getDisplayContextTokenCount(messagesForTokenCount, {
+      includeRestoredTotals: false
+    });
     $[0] = messages;
     $[1] = t3;
   } else {

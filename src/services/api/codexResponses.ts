@@ -116,6 +116,11 @@ export type CodexResponseResult = {
   errorMessage?: string
 }
 
+export type CodexCompactResponseResult = {
+  outputItems: ResponsesOutputItem[]
+  turnItems: ModelTurnItem[]
+}
+
 function isRetryUnsafeTurnItem(item: ModelTurnItem): boolean {
   return (
     item.kind !== 'raw_model_output' &&
@@ -235,6 +240,11 @@ type ResponsesStreamEvent =
   | ResponsesReasoningSummaryTextDeltaEvent
   | { type?: string }
 
+type ResponsesEncryptedInputItem = {
+  type: 'reasoning' | 'compaction' | 'compaction_summary'
+  encrypted_content: string
+}
+
 type ResponsesInputItem =
   | {
       type: 'message'
@@ -257,6 +267,7 @@ type ResponsesInputItem =
       call_id: string
       output: string
     }
+  | ResponsesEncryptedInputItem
 
 type ResponsesFunctionTool = {
   type: 'function'
@@ -290,6 +301,16 @@ function getResponsesBaseUrl(): string {
     )
   }
   return `${baseUrl.replace(/\/$/, '')}/responses`
+}
+
+function getResponsesCompactBaseUrl(): string {
+  const baseUrl = getCodexConfiguredBaseUrl()
+  if (!baseUrl) {
+    throw new Error(
+      'Codex Responses adapter missing configured base URL (.codex model_providers.<id>.base_url / ANTHROPIC_BASE_URL)',
+    )
+  }
+  return `${baseUrl.replace(/\/$/, '')}/responses/compact`
 }
 
 function getResponsesApiKey(): string | null {
@@ -371,6 +392,60 @@ function formatCodexProviderApiError(message: string): string {
   return `${API_ERROR_MESSAGE_PREFIX}: ${trimmedMessage}`
 }
 
+function getResponsesPayloadType(payload: unknown): string | null {
+  return payload &&
+    typeof payload === 'object' &&
+    'type' in payload &&
+    typeof (payload as { type?: unknown }).type === 'string'
+    ? (payload as { type: string }).type
+    : null
+}
+
+function isResponsesCompactionType(type: string | null): boolean {
+  return type === 'compaction' || type === 'compaction_summary'
+}
+
+function buildResponsesInputFromTurnItems(
+  turnItems: readonly ModelTurnItem[],
+): ResponsesInputItem[] {
+  const items: ResponsesInputItem[] = []
+  const hasOpaqueReasoning = turnItems.some(
+    item => item.kind === 'opaque_reasoning',
+  )
+  const hasOpaqueCompaction = turnItems.some(
+    item => item.kind === 'opaque_compaction',
+  )
+
+  for (const item of turnItems) {
+    if (item.kind === 'raw_model_output') {
+      const payload = item.payload
+      const payloadType = getResponsesPayloadType(payload)
+      if (
+        (payloadType === 'reasoning' && hasOpaqueReasoning) ||
+        (isResponsesCompactionType(payloadType) && hasOpaqueCompaction)
+      ) {
+        continue
+      }
+      if (payloadType) {
+        items.push(payload as ResponsesInputItem)
+      }
+      continue
+    }
+
+    if (
+      item.kind === 'opaque_reasoning' ||
+      item.kind === 'opaque_compaction'
+    ) {
+      const payload = item.payload
+      if (getResponsesPayloadType(payload)) {
+        items.push(payload as ResponsesInputItem)
+      }
+    }
+  }
+
+  return items
+}
+
 function buildResponsesInput(
   messages: Message[],
   tools: Tools = [],
@@ -383,6 +458,13 @@ function buildResponsesInput(
   )
 
   for (const message of normalizedMessages) {
+    const replayItems = buildResponsesInputFromTurnItems(
+      message.modelTurnItems ?? [],
+    )
+    if (replayItems.length > 0) {
+      items.push(...replayItems)
+      continue
+    }
     if (typeof message.message.content === 'string') {
       pushMessageInput(items, message.type, message.message.content)
       continue
@@ -586,21 +668,23 @@ function toResponsesReasoningEffort(
   return supportedLevels.includes(effortValue) ? effortValue : undefined
 }
 
-export async function buildResponsesBody({
-  messages,
+function applyResponsesBodyDefaults({
+  body,
   systemPrompt,
   tools,
   options,
-}: Omit<CodexStreamingArgs, 'signal'>) {
+  requestIdentity,
+  resolvedModel,
+}: {
+  body: Record<string, unknown>
+  systemPrompt: SystemPrompt
+  tools: Tools
+  options: CodexRequestOptions
+  requestIdentity: ReturnType<typeof buildCodexRequestIdentity>
+  resolvedModel: string
+}): Record<string, unknown> {
   const profile = getCodexProviderProfile()
-  const requestIdentity = buildCodexRequestIdentity()
-  const resolvedTools = options.tools ?? tools ?? []
-  const resolvedModel = options.model ?? getCodexConfiguredModel() ?? DEFAULT_CODEX_MODEL
-  const body: Record<string, unknown> = {
-    model: resolvedModel,
-    stream: true,
-    input: buildResponsesInput(messages, resolvedTools),
-  }
+
   if (requestIdentity.metadata) {
     body.metadata = requestIdentity.metadata
   }
@@ -623,12 +707,80 @@ export async function buildResponsesBody({
       effort,
       summary: 'auto',
     }
+    body.include = ['reasoning.encrypted_content']
   }
 
   if (profile.instructionsField && systemPrompt.length > 0) {
     body.instructions = systemPrompt.join('\n\n')
   }
 
+  body.prompt_cache_key = getSessionId()
+
+  if (options.fastMode) {
+    body.service_tier = 'priority'
+  }
+
+  return body
+}
+
+export async function buildResponsesCompactBody({
+  messages,
+  systemPrompt,
+  tools: _tools,
+  options,
+}: Omit<CodexStreamingArgs, 'signal'>) {
+  const resolvedModel =
+    options.model ?? getCodexConfiguredModel() ?? DEFAULT_CODEX_MODEL
+
+  const body: Record<string, unknown> = {
+    model: resolvedModel,
+    input: buildResponsesInput(messages, []),
+    instructions: systemPrompt.join('\n\n'),
+  }
+
+  const profile = getCodexProviderProfile()
+  const resolvedEffortValue = resolveAppliedEffort(
+    resolvedModel,
+    options.resolvedEffortValue ?? options.effortValue ?? undefined,
+    options.permissionMode,
+  )
+  const effort = toResponsesReasoningEffort(
+    resolvedModel,
+    resolvedEffortValue,
+  )
+  if (profile.reasoningEffort && effort) {
+    body.reasoning = {
+      effort,
+      summary: 'auto',
+    }
+    body.include = ['reasoning.encrypted_content']
+  }
+
+  return body
+}
+
+export async function buildResponsesBody({
+  messages,
+  systemPrompt,
+  tools,
+  options,
+}: Omit<CodexStreamingArgs, 'signal'>) {
+  const profile = getCodexProviderProfile()
+  const requestIdentity = buildCodexRequestIdentity()
+  const resolvedTools = options.tools ?? tools ?? []
+  const resolvedModel = options.model ?? getCodexConfiguredModel() ?? DEFAULT_CODEX_MODEL
+  const body: Record<string, unknown> = applyResponsesBodyDefaults({
+    body: {
+      model: resolvedModel,
+      stream: true,
+      input: buildResponsesInput(messages, resolvedTools),
+    },
+    systemPrompt,
+    tools: resolvedTools,
+    options,
+    requestIdentity,
+    resolvedModel,
+  })
   const responseTools = [
     ...(() => {
       const nativeWebSearchTool = buildNativeWebSearchTool(
@@ -1325,6 +1477,88 @@ export async function* queryCodexResponsesStream({
       }
       return
     }
+  }
+}
+
+export async function queryCodexResponsesCompact({
+  messages,
+  systemPrompt,
+  tools,
+  options,
+  signal,
+}: CodexStreamingArgs): Promise<CodexCompactResponseResult> {
+  const requestIdentity = buildCodexRequestIdentity()
+  const requestTimeoutMs = getRequestTimeoutMs(tools)
+  const requestBody = JSON.stringify(
+    await buildResponsesCompactBody({
+      messages,
+      systemPrompt,
+      tools,
+      options,
+    }),
+  )
+
+  try {
+    const response = await fetchWithRequestRetries(
+      getResponsesCompactBaseUrl(),
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(getResponsesApiKey()
+            ? { authorization: `Bearer ${getResponsesApiKey()}` }
+            : {}),
+          'x-app': 'cli',
+          ...requestIdentity.headers,
+        },
+        body: requestBody,
+      },
+      requestTimeoutMs,
+      signal,
+    )
+
+    if (!response.ok) {
+      const errorText = await response.text()
+      throw new Error(
+        formatCodexProviderApiError(
+          `Custom Codex provider compact request failed: ${response.status} ${errorText}`,
+        ),
+      )
+    }
+
+    const payload = (await response.json()) as {
+      output?: ResponsesOutputItem[]
+    }
+    if (!Array.isArray(payload.output)) {
+      throw new Error(
+        formatCodexProviderApiError(
+          'Custom Codex provider compact response did not include an output array',
+        ),
+      )
+    }
+
+    const turnItems = normalizeResponsesOutputToTurnItems(payload.output)
+    if (
+      turnItems.some(
+        item => item.kind === 'tool_call' || item.kind === 'tool_output',
+      )
+    ) {
+      throw new Error(
+        formatCodexProviderApiError(
+          'Custom Codex provider compact response unexpectedly requested tool execution',
+        ),
+      )
+    }
+
+    return {
+      outputItems: payload.output,
+      turnItems,
+    }
+  } catch (error) {
+    if (signal.aborted) {
+      throw new Error(formatCodexProviderApiError('Request was aborted.'))
+    }
+    throw error
   }
 }
 
