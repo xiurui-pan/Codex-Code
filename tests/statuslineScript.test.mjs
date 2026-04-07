@@ -15,7 +15,7 @@ function runStatusline(input) {
   }).trim()
 }
 
-test('repo-local statusline script renders session and today billing when both are provided', () => {
+test('repo-local statusline script renders only the model label even when billing data is present', () => {
   const output = runStatusline({
     model: {
       id: 'gpt-5',
@@ -28,47 +28,14 @@ test('repo-local statusline script renders session and today billing when both a
     },
   })
 
-  assert.match(output, /^🤖 GPT-5 \| 💰 \$1\.50 session \/ \$0\.75 today \/ \$3\.00\/hr$/)
+  assert.equal(output, '🤖 GPT-5')
 })
 
-test('repo-local statusline script omits today billing when the payload does not provide it', () => {
+test('repo-local statusline script ignores billing blocks for unknown pricing too', () => {
   const output = runStatusline({
     model: {
-      id: 'gpt-5',
-      display_name: 'GPT-5',
-    },
-    cost: {
-      total_cost_usd: 1.5,
-      total_duration_ms: 1_800_000,
-    },
-  })
-
-  assert.match(output, /^🤖 GPT-5 \| 💰 \$1\.50 session \/ \$3\.00\/hr$/)
-  assert.doesNotMatch(output, /today/)
-})
-
-test('repo-local statusline script omits today billing when today cost is zero', () => {
-  const output = runStatusline({
-    model: {
-      id: 'gpt-5',
-      display_name: 'GPT-5',
-    },
-    cost: {
-      total_cost_usd: 1.5,
-      today_cost_usd: 0,
-      total_duration_ms: 1_800_000,
-    },
-  })
-
-  assert.match(output, /^🤖 GPT-5 \| 💰 \$1\.50 session \/ \$3\.00\/hr$/)
-  assert.doesNotMatch(output, /today/)
-})
-
-test('repo-local statusline script omits billing when provider pricing is unavailable', () => {
-  const output = runStatusline({
-    model: {
-      id: 'gpt-5',
-      display_name: 'GPT-5',
+      id: 'unknown-model',
+      display_name: 'Unknown Model',
     },
     cost: {
       billing_available: false,
@@ -78,11 +45,11 @@ test('repo-local statusline script omits billing when provider pricing is unavai
     },
   })
 
-  assert.equal(output, '🤖 GPT-5')
+  assert.equal(output, '🤖 Unknown Model')
   assert.doesNotMatch(output, /\$/)
 })
 
-test('repo-local statusline script never renders remaining hours text', () => {
+test('repo-local statusline script never renders remaining time or billing text', () => {
   const output = runStatusline({
     model: {
       id: 'gpt-5',
@@ -100,5 +67,6 @@ test('repo-local statusline script never renders remaining hours text', () => {
     },
   })
 
-  assert.doesNotMatch(output, /remaining|left|5h|7d/i)
+  assert.equal(output, '🤖 GPT-5')
+  assert.doesNotMatch(output, /remaining|left|5h|7d|today|session|\/hr|\$/i)
 })

@@ -41,7 +41,8 @@ test('StatusLine context summary uses the shared display token count helper', ()
 test('StatusLine statusline payload includes session and today billing data', () => {
   const source = readSource('src/components/StatusLine.tsx')
 
-  assert.match(source, /billing_available: !isCurrentPhaseCustomCodexProvider\(\)/)
+  assert.match(source, /billing_available: hasKnownModelCost\(runtimeModel\)/)
+  assert.match(source, /import \{ hasKnownModelCost \} from '..\/utils\/modelCost\.js';/)
   assert.match(source, /today_cost_usd: getTodayCost\(\)/)
   assert.match(source, /total_cost_usd: getTotalCost\(\)/)
   assert.match(source, /total_duration_ms: getTotalDuration\(\)/)

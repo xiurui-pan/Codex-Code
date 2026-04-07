@@ -19,6 +19,7 @@ import { calculateContextPercentages, calculateContextPercentagesFromTokenCount,
 import { createRequire } from 'node:module';
 import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js';
 import { getCwd } from '../utils/cwd.js';
+import { hasKnownModelCost } from '../utils/modelCost.js';
 import { logForDebugging } from '../utils/debug.js';
 import { isFullscreenEnvEnabled } from '../utils/fullscreen.js';
 import { createBaseHookInput, executeStatusLineCommand } from '../utils/hooks.js';
@@ -97,7 +98,7 @@ function buildStatusLineCommandInput(permissionMode: PermissionMode, exceeds200k
       name: outputStyleName
     },
     cost: {
-      billing_available: !isCurrentPhaseCustomCodexProvider(),
+      billing_available: hasKnownModelCost(runtimeModel),
       total_cost_usd: getTotalCost(),
       today_cost_usd: getTodayCost(),
       total_duration_ms: getTotalDuration(),
