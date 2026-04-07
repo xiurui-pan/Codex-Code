@@ -1582,7 +1582,7 @@ async function* queryLoop(
 
           const continuationMessage = createUserMessage({
             content:
-              `You have ${incompleteCount} incomplete task(s). Continue with the next tool call immediately — do not summarize progress or explain what you will do, just do it.`,
+              `You have ${incompleteCount} incomplete task(s). If you need input or a decision from the user, do not ask in plain text; call the AskUserQuestion tool instead. Otherwise, continue with the next tool call immediately — do not summarize progress or explain what you will do, just do it.`,
             isMeta: true,
           })
           const next: State = {
