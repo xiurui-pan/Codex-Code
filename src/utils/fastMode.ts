@@ -21,6 +21,7 @@ import { getGlobalConfig, saveGlobalConfig } from './config.js'
 import { logForDebugging } from './debug.js'
 import { isEnvTruthy } from './envUtils.js'
 import {
+  getDefaultMainLoopModel,
   getDefaultMainLoopModelSetting,
   isOpus1mMergeEnabled,
   type ModelSetting,
@@ -83,6 +84,13 @@ export function getFastModeUnavailableReason(): string | null {
 export const FAST_MODE_MODEL_DISPLAY = 'the priority tier'
 
 export function getFastModeModel(): string {
+  if (
+    process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1' &&
+    getAPIProvider() === 'custom'
+  ) {
+    return getDefaultMainLoopModel()
+  }
+
   return 'opus' + (isOpus1mMergeEnabled() ? '[1m]' : '')
 }
 
@@ -110,6 +118,16 @@ export function isFastModeSupportedByModel(
   if (!isFastModeEnabled()) {
     return false
   }
+
+  // Codex provider fast mode maps to service_tier=priority instead of a
+  // provider-specific model swap, so every selected model can stay in fast mode.
+  if (
+    process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1' &&
+    getAPIProvider() === 'custom'
+  ) {
+    return true
+  }
+
   const model = modelSetting ?? getDefaultMainLoopModelSetting()
   const parsedModel = parseUserSpecifiedModel(model)
   return parsedModel.toLowerCase().includes('opus-4-6')

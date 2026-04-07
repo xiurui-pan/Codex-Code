@@ -146,11 +146,18 @@ export function ModelPicker({
       : undefined
 
     if (!skipSettingsWrite) {
+      const priorPersisted = getSettingsForSource('userSettings')?.effortLevel
+      const supportedLevels = getEffortLevelsForModel(resolvedModel)
+      const priorEffort =
+        !hasToggledEffort && priorPersisted !== undefined
+          ? clampEffortLevel(priorPersisted, supportedLevels)
+          : undefined
       const effortToPersist = resolvePickerEffortPersistence(
-        selectedEffort,
+        selectedEffort ?? priorEffort,
         getDefaultEffortLevelForOption(value),
-        getSettingsForSource('userSettings')?.effortLevel,
+        priorPersisted,
         hasToggledEffort,
+        modelSupportsEffort(resolvedModel),
       )
       const persistable = toPersistableEffort(effortToPersist)
       updateSettingsForSource('userSettings', {

@@ -11,11 +11,6 @@ import { projectRoot } from './helpers/projectRoot.mjs'
 const CLI_CWD = projectRoot
 const CLI_PATH = join(CLI_CWD, 'dist/cli.js')
 const SERIAL_TEST = { concurrency: false }
-const DEFAULT_CONFIG_LINES = [
-  'model_provider = "test-provider"',
-  'model = "gpt-5.1-codex-mini"',
-  'response_storage = false',
-]
 
 async function withResponsesServer(fn) {
   const requestBodies = []
@@ -81,13 +76,20 @@ async function withResponsesServer(fn) {
   }
 }
 
-async function writeCodexConfig(homeDir, port, extraLines = []) {
+async function writeCodexConfig(
+  homeDir,
+  port,
+  extraLines = [],
+  { model = 'gpt-5.1-codex-mini' } = {},
+) {
   const codexDir = join(homeDir, '.codex')
   await mkdir(codexDir, { recursive: true })
   await writeFile(
     join(codexDir, 'config.toml'),
     [
-      ...DEFAULT_CONFIG_LINES,
+      'model_provider = "test-provider"',
+      `model = "${model}"`,
+      'response_storage = false',
       ...extraLines,
       '',
       '[model_providers.test-provider]',
@@ -99,7 +101,7 @@ async function writeCodexConfig(homeDir, port, extraLines = []) {
   )
 }
 
-async function runTuiFlow({ tempHome, actions }) {
+async function runTuiFlow({ tempHome, actions, envOverrides = {} }) {
   const pythonScript = String.raw`
 import json
 import os
@@ -111,8 +113,9 @@ import subprocess
 import sys
 import time
 
-cli_path, cwd, temp_home, actions_json = sys.argv[1:5]
+cli_path, cwd, temp_home, actions_json, env_overrides_json = sys.argv[1:6]
 actions = json.loads(actions_json)
+env_overrides = json.loads(env_overrides_json)
 master, slave = pty.openpty()
 env = os.environ.copy()
 env["HOME"] = temp_home
@@ -121,6 +124,8 @@ env["TERM"] = "xterm-256color"
 env["CODEX_CODE_DISABLE_TERMINAL_TITLE"] = "1"
 env["FORCE_COLOR"] = "0"
 env["DISABLE_AUTOUPDATER"] = "1"
+for k, v in env_overrides.items():
+    env[str(k)] = str(v)
 proc = subprocess.Popen(
     ["node", cli_path, "--bare"],
     cwd=cwd,
@@ -195,7 +200,15 @@ print(json.dumps({
 
   const child = spawn(
     'python3',
-    ['-c', pythonScript, CLI_PATH, CLI_CWD, tempHome, JSON.stringify(actions)],
+    [
+      '-c',
+      pythonScript,
+      CLI_PATH,
+      CLI_CWD,
+      tempHome,
+      JSON.stringify(actions),
+      JSON.stringify(envOverrides),
+    ],
     {
       cwd: CLI_CWD,
       env: process.env,
@@ -433,6 +446,116 @@ test('model and effort TUI: config default yields to the session-selected reason
       )
       assert.equal(requestBodies.length, 1)
       assert.equal(requestBodies[0]?.reasoning?.effort, 'high')
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
+test('model and effort TUI: /fast keeps the Codex model, and later model switches keep explicit medium reasoning', SERIAL_TEST, async () => {
+  await withResponsesServer(async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-fast-model-effort-'))
+    try {
+      await writeCodexConfig(
+        tempHome,
+        port,
+        ['model_reasoning_effort = "xhigh"'],
+        { model: 'gpt-5.4-mini' },
+      )
+      const result = await runTuiFlow({
+        tempHome,
+        envOverrides: {
+          CODEX_CODE_USE_CODEX_PROVIDER: '1',
+          CODEX_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        },
+        actions: [
+          { name: 'set-effort-medium', waitFor: ['❯'], send: '/effort medium\r' },
+          {
+            name: 'fast-on',
+            waitFor: ['Set effort level to medium'],
+            waitForFresh: true,
+            send: '/fast on\r',
+          },
+          {
+            name: 'check-fast-kept-model',
+            waitFor: ['Fast mode ON'],
+            waitForFresh: true,
+            send: '/model status\r',
+          },
+          {
+            name: 'open-model',
+            waitFor: ['Current model: gpt-5.4-mini', 'reasoning: medium'],
+            waitForFresh: true,
+            send: '/model\r',
+          },
+          {
+            name: 'choose-gpt54',
+            waitFor: ['gpt-5.4-mini', 'Enter to confirm'],
+            sendParts: ['\u001b[B', '\r'],
+            preDelayMs: 250,
+            delayMs: 120,
+            settleMs: 500,
+          },
+          {
+            name: 'check-model-status',
+            waitFor: ['Set model to gpt-5.4'],
+            waitForFresh: true,
+            send: '/model status\r',
+          },
+          {
+            name: 'check-effort-status',
+            waitFor: ['Current model: gpt-5.4', 'reasoning: medium'],
+            waitForFresh: true,
+            send: '/effort status\r',
+          },
+          {
+            name: 'ask-provider',
+            waitFor: ['Current effort level: medium'],
+            waitForFresh: true,
+            send: '用当前配置回答一次\r',
+          },
+          {
+            name: 'exit',
+            waitFor: ['UNEXPECTED_PROVIDER_REPLY'],
+            waitForFresh: true,
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(
+        result.sent,
+        [
+          'set-effort-medium',
+          'fast-on',
+          'check-fast-kept-model',
+          'open-model',
+          'choose-gpt54',
+          'check-model-status',
+          'check-effort-status',
+          'ask-provider',
+          'exit',
+        ],
+        JSON.stringify(result),
+      )
+      assert.match(result.normalizedTranscript, /Seteffortleveltomedium/)
+      assert.match(result.normalizedTranscript, /FastmodeON/)
+      assert.match(
+        result.normalizedTranscript,
+        /Currentmodel:gpt-5\.4-mini·reasoning:medium/,
+      )
+      assert.match(result.normalizedTranscript, /Setmodeltogpt-5\.4/)
+      assert.match(
+        result.normalizedTranscript,
+        /Currentmodel:gpt-5\.4·reasoning:medium/,
+      )
+      assert.match(result.normalizedTranscript, /Currenteffortlevel:medium/)
+      assert.equal(requestBodies.length, 1)
+      assert.equal(requestBodies[0]?.model, 'gpt-5.4')
+      assert.equal(requestBodies[0]?.reasoning?.effort, 'medium')
+      assert.equal(requestBodies[0]?.service_tier, 'priority')
     } finally {
       await rm(tempHome, { recursive: true, force: true })
     }

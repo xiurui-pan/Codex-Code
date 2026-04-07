@@ -165,9 +165,23 @@ export function resolvePickerEffortPersistence(
   modelDefault: EffortLevel,
   priorPersisted: EffortLevel | undefined,
   toggledInPicker: boolean,
+  supportsTargetModel: boolean,
 ): EffortLevel | undefined {
-  const hadExplicit = priorPersisted !== undefined || toggledInPicker
-  return hadExplicit || picked !== modelDefault ? picked : undefined
+  if (!supportsTargetModel) {
+    return undefined
+  }
+
+  if (toggledInPicker) {
+    return picked
+  }
+
+  if (picked !== undefined) {
+    return priorPersisted !== undefined || picked !== modelDefault
+      ? picked
+      : undefined
+  }
+
+  return priorPersisted
 }
 
 export function getEffortEnvOverride(): EffortValue | null | undefined {
