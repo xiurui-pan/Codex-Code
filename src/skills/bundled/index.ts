@@ -1,5 +1,6 @@
 import { feature } from 'bun:bundle'
 import { shouldAutoEnableClaudeInChrome } from 'src/utils/claudeInChrome/setup.js'
+import { isCurrentPhaseCustomCodexProvider } from 'src/utils/currentPhase.js'
 import { registerBatchSkill } from './batch.js'
 import { registerDebugSkill } from './debug.js'
 import { registerKeybindingsSkill } from './keybindings.js'
@@ -21,6 +22,8 @@ import { registerVerifySkill } from './verify.js'
  * 3. Import and call that function here
  */
 export function initBundledSkills(): void {
+  const currentPhaseCustomCodexProvider = isCurrentPhaseCustomCodexProvider()
+
   registerUpdateConfigSkill()
   registerKeybindingsSkill()
   registerVerifySkill()
@@ -60,13 +63,13 @@ export function initBundledSkills(): void {
     /* eslint-enable @typescript-eslint/no-require-imports */
     registerScheduleRemoteAgentsSkill()
   }
-  if (feature('BUILDING_CLAUDE_APPS')) {
+  if (!currentPhaseCustomCodexProvider && feature('BUILDING_CLAUDE_APPS')) {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { registerClaudeApiSkill } = require('./claudeApi.js')
     /* eslint-enable @typescript-eslint/no-require-imports */
     registerClaudeApiSkill()
   }
-  if (shouldAutoEnableClaudeInChrome()) {
+  if (!currentPhaseCustomCodexProvider && shouldAutoEnableClaudeInChrome()) {
     /* eslint-disable @typescript-eslint/no-require-imports */
     const { registerClaudeInChromeSkill } = require('./claudeInChrome.js')
     /* eslint-enable @typescript-eslint/no-require-imports */

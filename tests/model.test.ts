@@ -77,7 +77,7 @@ test('codex small-model helpers route UI side tasks through the lightweight Code
   const modelSource = await readModelSource()
   const modelUtilitySource = await readModelUtilitySource()
   const guideAgentSource = await readSource(
-    '../src/tools/AgentTool/built-in/claudeCodeGuideAgent.ts',
+    '../src/tools/AgentTool/built-in/codexCodeGuideAgent.ts',
   )
   const exploreAgentSource = await readSource(
     '../src/tools/AgentTool/built-in/exploreAgent.ts',
@@ -95,6 +95,10 @@ test('codex small-model helpers route UI side tasks through the lightweight Code
   )
   assert.match(modelSource, /model: args\.options\?\.model \?\? getSmallFastModel\(\)/)
   assert.match(guideAgentSource, /model: 'haiku'/)
+  assert.doesNotMatch(guideAgentSource, /platform\.claude\.com/)
+  assert.doesNotMatch(guideAgentSource, /code\.claude\.com/)
+  assert.match(guideAgentSource, /developers\.openai\.com\/codex\/cli/)
+  assert.match(guideAgentSource, /platform\.openai\.com\/docs\/overview/)
   assert.match(exploreAgentSource, /process\.env\.USER_TYPE === 'ant'[\s\S]*: 'haiku'/)
   assert.match(statuslineAgentSource, /model: 'haiku'/)
   assert.match(magicDocsSource, /model: 'haiku'/)

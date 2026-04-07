@@ -4459,7 +4459,7 @@ async function run(): Promise<CommanderCommand> {
   // claude auth
 
   const auth = program.command('auth').description('Manage authentication').configureHelp(createSortedHelpConfig());
-  auth.command('login').description('Sign in to your Anthropic account').option('--email <email>', 'Pre-populate email address on the login page').option('--sso', 'Force SSO login flow').option('--console', 'Use Anthropic Console (API usage billing) instead of Codex Code subscription').option('--claudeai', 'Use Codex Code subscription (default)').action(async ({
+  auth.command('login').description('Sign in').option('--email <email>', 'Pre-populate email address on the login page').option('--sso', 'Force SSO login flow').option('--console', 'Use API billing instead of account subscription').option('--claudeai', 'Use account subscription (default)').action(async ({
     email,
     sso,
     console: useConsole,
@@ -4489,7 +4489,7 @@ async function run(): Promise<CommanderCommand> {
     } = await import('./cli/handlers/auth.js');
     await authStatus(opts);
   });
-  auth.command('logout').description('Log out from your Anthropic account').action(async () => {
+  auth.command('logout').description('Log out').action(async () => {
     const {
       authLogout
     } = await import('./cli/handlers/auth.js');

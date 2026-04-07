@@ -14,32 +14,32 @@ import type {
   BuiltInAgentDefinition,
 } from '../loadAgentsDir.js'
 
-const CODEX_CODE_DOCS_MAP_URL =
-  'https://code.claude.com/docs/en/claude_code_docs_map.md'
-const CDP_DOCS_MAP_URL = 'https://platform.claude.com/llms.txt'
+const CODEX_CODE_DOCS_URL = 'https://developers.openai.com/codex/cli'
+const OPENAI_API_DOCS_URL = 'https://platform.openai.com/docs/overview'
+const AGENTS_SDK_DOCS_URL = 'https://openai.github.io/openai-agents-js/'
 
-export const CODEX_CODE_GUIDE_AGENT_TYPE = 'claude-code-guide'
+export const CODEX_CODE_GUIDE_AGENT_TYPE = 'codex-code-guide'
 
-function getClaudeCodeGuideBasePrompt(): string {
+function getCodexCodeGuideBasePrompt(): string {
   // Ant-native builds alias find/grep to embedded bfs/ugrep and remove the
   // dedicated Glob/Grep tools, so point at find/grep instead.
   const localSearchHint = hasEmbeddedSearchTools()
     ? `${FILE_READ_TOOL_NAME}, \`find\`, and \`grep\``
     : `${FILE_READ_TOOL_NAME}, ${GLOB_TOOL_NAME}, and ${GREP_TOOL_NAME}`
 
-  return `You are the Claude guide agent. Your primary responsibility is helping users understand and use Codex Code, the Codex Agent SDK, and the Claude API (formerly the Anthropic API) effectively.
+  return `You are the Codex guide agent. Your primary responsibility is helping users understand and use Codex Code, the Codex Agent SDK, and the OpenAI API effectively.
 
 **Your expertise spans three domains:**
 
 1. **Codex Code** (the CLI tool): Installation, configuration, hooks, skills, MCP servers, keyboard shortcuts, IDE integrations, settings, and workflows.
 
-2. **Codex Agent SDK**: A framework for building custom AI agents based on Codex Code technology. Available for Node.js/TypeScript and Python.
+2. **Codex Agent SDK**: A framework for building custom AI agents around Codex and OpenAI models. Available for Node.js/TypeScript and Python.
 
-3. **Claude API**: The Claude API (formerly known as the Anthropic API) for direct model interaction, tool use, and integrations.
+3. **OpenAI API**: The Responses API, tools, structured outputs, files, and related platform capabilities used by Codex-style workflows.
 
 **Documentation sources:**
 
-- **Codex Code docs** (${CODEX_CODE_DOCS_MAP_URL}): Fetch this for questions about the Codex Code CLI tool, including:
+- **Codex Code docs** (${CODEX_CODE_DOCS_URL}): Fetch this for questions about the Codex Code CLI tool, including:
   - Installation, setup, and getting started
   - Hooks (pre/post command execution)
   - Custom skills
@@ -50,28 +50,26 @@ function getClaudeCodeGuideBasePrompt(): string {
   - Subagents and plugins
   - Sandboxing and security
 
-- **Codex Agent SDK docs** (${CDP_DOCS_MAP_URL}): Fetch this for questions about building agents with the SDK, including:
+- **Codex Agent SDK docs** (${AGENTS_SDK_DOCS_URL}): Fetch this for questions about building agents with the SDK, including:
   - SDK overview and getting started (Python and TypeScript)
   - Agent configuration + custom tools
   - Session management and permissions
   - MCP integration in agents
   - Hosting and deployment
   - Cost tracking and context management
-  Note: Agent SDK docs are part of the Claude API documentation at the same URL.
 
-- **Claude API docs** (${CDP_DOCS_MAP_URL}): Fetch this for questions about the Claude API (formerly the Anthropic API), including:
-  - Messages API and streaming
-  - Tool use (function calling) and Anthropic-defined tools (computer use, code execution, web search, text editor, bash, programmatic tool calling, tool search tool, context editing, Files API, structured outputs)
-  - Vision, PDF support, and citations
-  - Extended thinking and structured outputs
-  - MCP connector for remote MCP servers
-  - Cloud provider integrations (Bedrock, Vertex AI, Foundry)
+- **OpenAI API docs** (${OPENAI_API_DOCS_URL}): Fetch this for questions about the OpenAI API, including:
+  - Responses API and streaming
+  - Tool use, function calling, and structured outputs
+  - Files, vision, and multimodal inputs
+  - Reasoning settings and response formats
+  - Platform setup and authentication
 
 **Approach:**
 1. Determine which domain the user's question falls into
-2. Use ${WEB_FETCH_TOOL_NAME} to fetch the appropriate docs map
-3. Identify the most relevant documentation URLs from the map
-4. Fetch the specific documentation pages
+2. Use ${WEB_FETCH_TOOL_NAME} to fetch the most relevant official documentation page
+3. Follow the relevant links when one page is not enough
+4. Fetch the specific documentation pages you need
 5. Provide clear, actionable guidance based on official documentation
 6. Use ${WEB_SEARCH_TOOL_NAME} if docs don't cover the topic
 7. Reference local project files (CLAUDE.md, .claude/ directory) when relevant using ${localSearchHint}
@@ -97,7 +95,7 @@ function getFeedbackGuideline(): string {
 
 export const CODEX_CODE_GUIDE_AGENT: BuiltInAgentDefinition = {
   agentType: CODEX_CODE_GUIDE_AGENT_TYPE,
-  whenToUse: `Use this agent when the user asks questions ("Can Claude...", "Does Claude...", "How do I...") about: (1) Codex Code (the CLI tool) - features, hooks, slash commands, MCP servers, settings, IDE integrations, keyboard shortcuts; (2) Codex Agent SDK - building custom agents; (3) Claude API (formerly Anthropic API) - API usage, tool use, Anthropic SDK usage. **IMPORTANT:** Before spawning a new agent, check if there is already a running or recently completed claude-code-guide agent that you can continue via ${SEND_MESSAGE_TOOL_NAME}.`,
+  whenToUse: `Use this agent when the user asks questions ("Can Codex...", "How do I...") about: (1) Codex Code - features, hooks, slash commands, MCP servers, settings, IDE integrations, keyboard shortcuts; (2) Codex Agent SDK - building custom agents; (3) OpenAI API - Responses API usage, tools, files, structured outputs, or related SDK usage. **IMPORTANT:** Before spawning a new agent, check if there is already a running or recently completed codex-code-guide agent that you can continue via ${SEND_MESSAGE_TOOL_NAME}.`,
   // Ant-native builds: Glob/Grep tools are removed; use Bash (with embedded
   // bfs/ugrep via find/grep aliases) for local file search instead.
   tools: hasEmbeddedSearchTools()
@@ -181,7 +179,7 @@ export const CODEX_CODE_GUIDE_AGENT: BuiltInAgentDefinition = {
 
     // Add the feedback guideline (conditional based on whether user is using 3P services)
     const feedbackGuideline = getFeedbackGuideline()
-    const basePromptWithFeedback = `${getClaudeCodeGuideBasePrompt()}
+    const basePromptWithFeedback = `${getCodexCodeGuideBasePrompt()}
 ${feedbackGuideline}`
 
     // If we have any context to add, append it to the base system prompt
