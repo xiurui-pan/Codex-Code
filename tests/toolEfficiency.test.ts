@@ -2,12 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 import { createUserMessage } from '../src/utils/messages.js'
 import { BASH_TOOL_NAME } from '../src/tools/BashTool/toolName.js'
-import {
-  buildSyntheticToolPreamble,
-  buildToolEfficiencyReminder,
-  detectRedundantToolCall,
-} from '../src/services/tools/toolEfficiency.js'
-import { FILE_READ_TOOL_NAME } from '../src/tools/FileReadTool/constants.js'
+import { detectRedundantToolCall } from '../src/services/tools/toolEfficiency.js'
 
 function createBashAssistant(command: string, id = 'tool-1') {
   return {
@@ -19,20 +14,6 @@ function createBashAssistant(command: string, id = 'tool-1') {
           id,
           name: BASH_TOOL_NAME,
           input: { command },
-        },
-      ],
-    },
-  } as const
-}
-
-function createAssistantText(text: string) {
-  return {
-    type: 'assistant',
-    message: {
-      content: [
-        {
-          type: 'text',
-          text,
         },
       ],
     },
@@ -114,163 +95,4 @@ PY`,
   )
 
   assert.match(message ?? '', /inline script whose main job is dumping file contents/i)
-})
-
-test('adds a hidden efficiency reminder after a silent investigative streak', () => {
-  const reminder = buildToolEfficiencyReminder({
-    messages: [createUserMessage({ content: 'inspect these files' })],
-    assistantMessages: [
-      createBashAssistant('rg --files src', 'a'),
-    ],
-    toolUseBlocks: [
-      {
-        type: 'tool_use',
-        id: 'a',
-        name: BASH_TOOL_NAME,
-        input: { command: 'rg --files src' },
-      },
-      {
-        type: 'tool_use',
-        id: 'b',
-        name: BASH_TOOL_NAME,
-        input: { command: 'git branch --show-current' },
-      },
-      {
-        type: 'tool_use',
-        id: 'c',
-        name: FILE_READ_TOOL_NAME,
-        input: { file_path: 'src/index.ts' },
-      },
-    ],
-  })
-
-  assert.match(reminder ?? '', /^Tool-efficiency reminder:/)
-  assert.match(reminder ?? '', /send one short progress update/i)
-})
-
-test('builds a visible synthetic preamble before the first main-thread tool batch', () => {
-  const preamble = buildSyntheticToolPreamble({
-    messages: [createUserMessage({ content: 'find the helper' })],
-    assistantMessages: [createBashAssistant('rg --files src', 'a')],
-    toolUseBlocks: [
-      {
-        type: 'tool_use',
-        id: 'a',
-        name: BASH_TOOL_NAME,
-        input: { command: 'rg --files src' },
-      },
-    ],
-    isMainThread: true,
-  })
-
-  assert.equal(typeof preamble, 'string')
-  assert.match(preamble ?? '', /locate the relevant implementation/i)
-})
-
-test('builds a Chinese tracking note when the user prompt is in Chinese', () => {
-  const preamble = buildSyntheticToolPreamble({
-    messages: [createUserMessage({ content: '帮我找一下相关实现' })],
-    assistantMessages: [createBashAssistant('rg --files src', 'a')],
-    toolUseBlocks: [
-      {
-        type: 'tool_use',
-        id: 'a',
-        name: BASH_TOOL_NAME,
-        input: { command: 'rg --files src' },
-      },
-    ],
-    isMainThread: true,
-  })
-
-  assert.match(preamble ?? '', /先定位相关实现和调用点/)
-})
-
-test('does not build a synthetic preamble when assistant text already exists in the current request', () => {
-  const preamble = buildSyntheticToolPreamble({
-    messages: [
-      createUserMessage({ content: 'find the helper' }),
-      createAssistantText('I found the likely area and will confirm one file.'),
-    ],
-    assistantMessages: [createBashAssistant('rg --files src', 'a')],
-    toolUseBlocks: [
-      {
-        type: 'tool_use',
-        id: 'a',
-        name: BASH_TOOL_NAME,
-        input: { command: 'rg --files src' },
-      },
-    ],
-    isMainThread: true,
-  })
-
-  assert.equal(preamble, null)
-})
-
-test('builds a follow-up synthetic preamble after earlier tool work if no fresh note was shown afterward', () => {
-  const preamble = buildSyntheticToolPreamble({
-    messages: [
-      createUserMessage({ content: '帮我查一下哪里有问题' }),
-      createAssistantText('先定位相关实现和调用点。'),
-      createBashAssistant('rg -n "MARKER" src', 'search-1'),
-      createToolResult('search-1', 'src/file.ts:12:MARKER'),
-    ],
-    assistantMessages: [createBashAssistant('rg -n "SECOND" src', 'search-2')],
-    toolUseBlocks: [
-      {
-        type: 'tool_use',
-        id: 'search-2',
-        name: BASH_TOOL_NAME,
-        input: { command: 'rg -n "SECOND" src' },
-      },
-    ],
-    isMainThread: true,
-  })
-
-  assert.match(preamble ?? '', /已经缩小到相关范围了，我再核对最后一个关键点。/)
-})
-
-test('adds the reminder after the first silent search batch so the next turn is not mute again', () => {
-  const reminder = buildToolEfficiencyReminder({
-    messages: [createUserMessage({ content: 'find the relevant file' })],
-    assistantMessages: [createBashAssistant('rg --files src', 'a')],
-    toolUseBlocks: [
-      {
-        type: 'tool_use',
-        id: 'a',
-        name: BASH_TOOL_NAME,
-        input: { command: 'rg --files src' },
-      },
-    ],
-  })
-
-  assert.match(reminder ?? '', /^Tool-efficiency reminder:/)
-})
-
-test('skips the reminder when assistant text is already visible in the batch', () => {
-  const reminder = buildToolEfficiencyReminder({
-    messages: [createUserMessage({ content: 'inspect these files' })],
-    assistantMessages: [createAssistantText('I found the first clue and will confirm one file.')],
-    toolUseBlocks: [
-      {
-        type: 'tool_use',
-        id: 'a',
-        name: BASH_TOOL_NAME,
-        input: { command: 'rg --files src' },
-      },
-      {
-        type: 'tool_use',
-        id: 'b',
-        name: BASH_TOOL_NAME,
-        input: { command: 'git branch --show-current' },
-      },
-      {
-        type: 'tool_use',
-        id: 'c',
-        name: FILE_READ_TOOL_NAME,
-        input: { file_path: 'src/index.ts' },
-      },
-    ],
-  })
-
-  assert.equal(reminder, null)
 })

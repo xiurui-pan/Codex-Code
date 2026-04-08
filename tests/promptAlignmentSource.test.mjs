@@ -16,14 +16,8 @@ test('system prompt restores brief milestone updates without command echoing', (
     source,
     /Before making tool calls, send a brief preamble to the user explaining what you are about to do\./,
   )
-  assert.match(
-    source,
-    /Make it feel like a short progress update or tracking note, not a raw tool announcement\./,
-  )
-  assert.match(
-    source,
-    /do give one before each meaningful batch of tools when the user has not gotten a fresh progress note since the last batch/i,
-  )
+  assert.match(source, /Group related actions together, keep it concise, and build on prior context/)
+  assert.match(source, /Avoid a preamble for every trivial read unless it is part of a larger grouped action\./)
   assert.match(source, /Do not narrate the terminal\./)
   assert.match(
     source,

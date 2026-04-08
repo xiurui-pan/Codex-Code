@@ -21,8 +21,18 @@ test('system prompt now tells the model to stop after enough evidence and avoid 
   )
   assert.match(
     source,
-    /If you still need another meaningful tool batch and the user has not gotten a fresh progress note since the previous batch, send one short progress update first/,
+    /If a task runs long or needs many tool calls, send brief progress updates at reasonable intervals/,
   )
+})
+
+test('tool efficiency source keeps only duplicate-check logic and no host-written progress text', () => {
+  const source = readSource('src/services/tools/toolEfficiency.ts')
+
+  assert.doesNotMatch(source, /buildSyntheticToolPreamble/)
+  assert.doesNotMatch(source, /先做一轮定向检查，再收束结论。/)
+  assert.doesNotMatch(source, /已经有初步结论了/)
+  assert.doesNotMatch(source, /Tool-efficiency reminder:/)
+  assert.doesNotMatch(source, /send one short progress update/)
 })
 
 test('agent prompt now defaults to local work and avoids proactive delegation', () => {
@@ -39,18 +49,11 @@ test('agent prompt now defaults to local work and avoids proactive delegation', 
   )
 })
 
-test('query loop emits a visible pre-tool progress note and still keeps the silent-stretch reminder', () => {
+test('query loop no longer injects host-written progress notes or reminder messages', () => {
   const source = readSource('src/query.ts')
 
-  assert.match(source, /buildToolEfficiencyReminder/)
-  assert.match(source, /buildSyntheticToolPreamble/)
-  assert.match(source, /createAssistantMessage\(\{\s*content: syntheticToolPreamble,/s)
-  assert.match(
-    source,
-    /syntheticToolPreambleMessage\.message\.model\s*=\s*toolUseContext\.options\.mainLoopModel/,
-  )
-  assert.match(
-    source,
-    /avoid repeating the same fact checks, and only send one short progress sentence/,
-  )
+  assert.doesNotMatch(source, /buildToolEfficiencyReminder/)
+  assert.doesNotMatch(source, /buildSyntheticToolPreamble/)
+  assert.doesNotMatch(source, /syntheticToolPreambleMessage/)
+  assert.doesNotMatch(source, /one short progress sentence/)
 })
