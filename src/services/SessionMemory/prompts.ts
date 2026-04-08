@@ -62,11 +62,15 @@ CRITICAL RULES FOR EDITING:
 - Do NOT reference this note-taking process or instructions anywhere in the notes
 - It's OK to skip updating a section if there are no substantial new insights to add. Do not add filler content like "No info yet", just leave sections blank/unedited if appropriate.
 - Write DETAILED, INFO-DENSE content for each section - include specifics like file paths, function names, error messages, exact commands, technical details, etc.
+- If the current notes are still mostly the untouched template, fill the key sections from scratch using the conversation above.
+- After any substantive conversation, do NOT leave the file as a near-empty template. At minimum, update "Session Title", "Current State", "Task specification", "Files and Functions", and "Worklog" when the conversation contains material for them.
 - For "Key results", include the complete, exact output the user requested (e.g., full table, full answer, etc.)
 - Do not include information that's already in the CLAUDE.md files included in the context
 - Keep each section under ~${MAX_SECTION_LENGTH} tokens/words - if a section is approaching this limit, condense it by cycling out less important details while preserving the most critical information
 - Focus on actionable, specific information that would help someone understand or recreate the work discussed in the conversation
 - IMPORTANT: Always update "Current State" to reflect the most recent work - this is critical for continuity after compaction
+- "Current State" must mention the latest completed action, the current stopping point, and the exact next step if one exists.
+- Before stopping, verify that the notes no longer look like an untouched blank template unless the conversation truly contained no useful work details.
 
 Use the Edit tool with file_path: {{notesPath}}
 

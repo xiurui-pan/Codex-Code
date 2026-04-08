@@ -17,7 +17,11 @@ import { suppressCompactWarning } from '../../services/compact/compactWarningSta
 import { microcompactMessages } from '../../services/compact/microCompact.js'
 import { runPostCompactCleanup } from '../../services/compact/postCompactCleanup.js'
 import { trySessionMemoryCompaction } from '../../services/compact/sessionMemoryCompact.js'
-import { setLastSummarizedMessageId } from '../../services/SessionMemory/sessionMemoryUtils.js'
+import { manuallyExtractSessionMemory } from '../../services/SessionMemory/sessionMemory.js'
+import {
+  getLastSummarizedMessageId,
+  setLastSummarizedMessageId,
+} from '../../services/SessionMemory/sessionMemoryUtils.js'
 import type { ToolUseContext } from '../../Tool.js'
 import type { LocalCommandCall } from '../../types/command.js'
 import type { Message } from '../../types/message.js'
@@ -59,6 +63,28 @@ export const call: LocalCommandCall = async (args, context) => {
       !customInstructions &&
       (getGlobalConfig().compactionMode ?? 'summary') === 'summary'
     ) {
+      const latestMessageUuid = messages[messages.length - 1]?.uuid
+      const lastSummarizedMessageId = getLastSummarizedMessageId()
+      const needsSessionMemoryRefresh =
+        messages.length > 2 &&
+        latestMessageUuid !== undefined &&
+        lastSummarizedMessageId !== latestMessageUuid
+
+      if (needsSessionMemoryRefresh) {
+        // Refresh the session memory just before manual compaction when the
+        // in-memory summary is behind the latest visible work.
+        const extractionResult = await manuallyExtractSessionMemory(
+          messages,
+          context,
+        )
+        if (!extractionResult.success) {
+          throw new Error(
+            extractionResult.error ??
+              'Failed to refresh session memory before compaction',
+          )
+        }
+      }
+
       const sessionMemoryResult = await trySessionMemoryCompaction(
         messages,
         context.agentId,
