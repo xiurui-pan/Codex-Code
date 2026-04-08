@@ -69,3 +69,27 @@ test('leaner context path drops output-style attachments and broad main-thread s
     /Skip the broad initial listing there to keep[\s\S]*!toolUseContext\.agentId/,
   )
 })
+
+test('ultrathink and ultraplan keywords now stay local and use model-aware effort', () => {
+  const processSource = readSource('src/utils/processUserInput/processUserInput.ts')
+  const promptInputSource = readSource('src/components/PromptInput/PromptInput.tsx')
+  const attachmentSource = readSource('src/utils/attachments.ts')
+
+  assert.match(
+    processSource,
+    /getUltrathinkEffortLevel\(\s*context\.options\.mainLoopModel,\s*\)/,
+  )
+  assert.match(processSource, /hasUltrathinkKeyword\(ultrathinkInput\)/)
+  assert.match(
+    promptInputSource,
+    /text:\s*ultrathinkEffortLevel\s*\?\s*`Effort set to \$\{ultrathinkEffortLevel\} for this turn`\s*:\s*'This turn will use deeper reasoning'/,
+  )
+  assert.match(
+    promptInputSource,
+    /This prompt will ask Codex to deepen the plan in this session/,
+  )
+  assert.match(
+    attachmentSource,
+    /getUltrathinkEffortAttachment\(input, toolUseContext\.options\.mainLoopModel\)/,
+  )
+})

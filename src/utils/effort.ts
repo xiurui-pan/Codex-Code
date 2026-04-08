@@ -327,6 +327,29 @@ export function getEffortSuffix(
   return ` with ${convertEffortValueToLevel(resolved)} effort`
 }
 
+export function getUltrathinkEffortLevel(
+  model: string,
+): EffortLevel | undefined {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    const supportedLevels = getCodexSupportedEffortLevels(model)
+    if (supportedLevels.includes('xhigh')) {
+      return 'xhigh'
+    }
+    if (supportedLevels.includes('high')) {
+      return 'high'
+    }
+    if (supportedLevels.includes('medium')) {
+      return 'medium'
+    }
+    if (supportedLevels.includes('low')) {
+      return 'low'
+    }
+    return undefined
+  }
+
+  return modelSupportsEffort(model) ? 'high' : undefined
+}
+
 function getCodexPlanModeEffortOverride(
   model: string,
   permissionMode: PermissionMode | undefined,

@@ -34,7 +34,7 @@ test('memory injection keeps a bounded total size and records when files are ski
     },
   ])
 
-  assert.ok(prompt.length < 36000, `prompt too large: ${prompt.length}`)
+  assert.ok(prompt.length < 28000, `prompt too large: ${prompt.length}`)
   assert.match(
     prompt,
     /Additional memory files were skipped|truncated to fit prompt budget/,

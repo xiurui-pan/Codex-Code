@@ -245,6 +245,7 @@ import {
   parseUserSpecifiedModel,
 } from 'src/utils/model/model.js'
 import {
+  CODEX_PLAN_MODE_ALIAS,
   DEFAULT_CODEX_MODEL,
 } from 'src/utils/model/codexModels.js'
 import {
@@ -1426,7 +1427,9 @@ function runHeadlessStreaming(
   const modelOptions = getModelOptions({
     extraModels: [activeUserSpecifiedModel, currentPhaseResolvedModel],
   })
-  const modelInfos = modelOptions.map(option => getPublicModelInfoForOption(option))
+  const modelInfos = modelOptions
+    .filter(option => option.value !== CODEX_PLAN_MODE_ALIAS)
+    .map(option => getPublicModelInfoForOption(option))
   writeHeadlessProbe('runHeadlessStreaming-after-model-options')
 
   function injectModelSwitchBreadcrumbs(

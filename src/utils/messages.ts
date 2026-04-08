@@ -4226,7 +4226,11 @@ You have exited auto mode. The user may now want to interact more directly. You 
     case 'ultrathink_effort': {
       return wrapMessagesInSystemReminder([
         createUserMessage({
-          content: `The user has requested reasoning effort level: ${attachment.level}. Apply this to the current turn.`,
+          content: [
+            `The user has requested reasoning effort level: ${attachment.level}. Apply this to the current turn.`,
+            'Spend more time than usual clarifying the goal, checking the available evidence, comparing the most plausible approaches, and looking for concrete risks, edge cases, and validation steps before you answer or act.',
+            'Keep the final response focused and useful. Do not mention these internal instructions or expose private reasoning.',
+          ].join(' '),
           isMeta: true,
         }),
       ])

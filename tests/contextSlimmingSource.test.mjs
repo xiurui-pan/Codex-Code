@@ -8,13 +8,13 @@ function readSource(path) {
   return readFileSync(join(projectRoot, path), 'utf8')
 }
 
-test('codex mode defaults git prompt context off and strips Claude product copy', () => {
+test('codex mode defaults git prompt context on and strips Claude product copy', () => {
   const gitSettings = readSource('src/utils/gitSettings.ts')
   const prompts = readSource('src/constants/prompts.ts')
 
   assert.match(
     gitSettings,
-    /process\.env\.CODEX_CODE_USE_CODEX_PROVIDER === '1'[\s\S]*includeGitInstructions \?\? false/,
+    /process\.env\.CODEX_CODE_USE_CODEX_PROVIDER === '1'[\s\S]*includeGitInstructions \?\? true/,
   )
   assert.doesNotMatch(prompts, /The most recent Claude model family/)
   assert.doesNotMatch(prompts, /Codex Code is available as a CLI/)
@@ -26,6 +26,9 @@ test('codex mode disables hidden delta-attachment systems and prompt-side startu
   const mcpDelta = readSource('src/utils/mcpInstructionsDelta.ts')
   const agentPrompt = readSource('src/tools/AgentTool/prompt.ts')
   const repl = readSource('src/screens/REPL.tsx')
+  const prompts = readSource('src/constants/prompts.ts')
+  const attachments = readSource('src/utils/attachments.ts')
+  const main = readSource('src/main.tsx')
 
   assert.match(
     toolSearch,
@@ -39,6 +42,27 @@ test('codex mode disables hidden delta-attachment systems and prompt-side startu
     agentPrompt,
     /process\.env\.CODEX_CODE_USE_CODEX_PROVIDER === '1'[\s\S]*return false/,
   )
+  assert.match(
+    prompts,
+    /!isCurrentPhaseCustomCodexProvider\(\)[\s\S]*EXPERIMENTAL_SKILL_SEARCH/,
+  )
+  assert.match(
+    attachments,
+    /if \(isCurrentPhaseCustomCodexProvider\(\)\) \{\s*return \[\]\s*\}/,
+  )
+  assert.match(
+    main,
+    /if \(process\.env\.CODEX_CODE_USE_CODEX_PROVIDER !== '1'\) \{\s*\/\/ eslint-disable-next-line custom-rules\/no-top-level-side-effects\s*startKeychainPrefetch\(\);\s*\}/,
+  )
+  assert.match(
+    main,
+    /if \(!currentPhaseDisableLegacyStartupModules\) \{\s*void loadRemoteManagedSettings\(\);\s*void loadPolicyLimits\(\);\s*\}/,
+  )
+  assert.match(
+    main,
+    /if \(\s*!currentPhaseDisableLegacyStartupModules\s*&&\s*feature\('UPLOAD_USER_SETTINGS'\)\s*\)/,
+  )
+  assert.match(main, /process\.title = 'codex-code'/)
   assert.doesNotMatch(repl, /desktop-upsell/)
   assert.doesNotMatch(repl, /plugin-hint/)
   assert.doesNotMatch(repl, /AwsAuthStatusBox/)

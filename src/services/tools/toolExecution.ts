@@ -123,6 +123,7 @@ import {
 import { mcpInfoFromString } from '../mcp/mcpStringUtils.js'
 import { normalizeNameForMCP } from '../mcp/normalization.js'
 import type { MCPServerConnection } from '../mcp/types.js'
+import { detectRedundantToolCall } from './toolEfficiency.js'
 
 function appendModelTurnItemMessages(
   resultingMessages: Array<{ message: Message; contextModifier?: unknown }>,
@@ -794,6 +795,34 @@ async function checkPermissionsAndCallTool(
       },
     ]
   }
+
+  const redundantToolCallMessage = detectRedundantToolCall(
+    tool.name,
+    parsedInput.data,
+    toolUseContext,
+  )
+  if (redundantToolCallMessage) {
+    logForDebugging(
+      `${tool.name} tool redundant call blocked: ${redundantToolCallMessage.slice(0, 200)}`,
+    )
+    return [
+      {
+        message: createUserMessage({
+          content: [
+            {
+              type: 'tool_result',
+              content: `<tool_use_error>${redundantToolCallMessage}</tool_use_error>`,
+              is_error: true,
+              tool_use_id: toolUseID,
+            },
+          ],
+          toolUseResult: `Error: ${redundantToolCallMessage}`,
+          sourceToolAssistantUUID: assistantMessage.uuid,
+        }),
+      },
+    ]
+  }
+
   // Speculatively start the bash allow classifier check early so it runs in
   // parallel with pre-tool hooks, deny/ask classifiers, and permission dialog
   // setup. The UI indicator (setClassifierChecking) is NOT set here — it's

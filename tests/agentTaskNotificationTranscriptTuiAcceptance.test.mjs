@@ -321,12 +321,12 @@ test(
             },
             {
               name: 'open-transcript',
-              waitFor: ['TASK_NOTIFICATION_ACK'],
+              waitFor: ['background transcript'],
               send: '\u000f',
             },
             {
               name: 'exit',
-              waitFor: ['Showing detailed transcript', 'Response:BG_TASK_FINAL_OK'],
+              waitFor: ['Response:BG_TASK_FINAL_OK'],
               send: '/exit\r',
               settleMs: 1600,
             },

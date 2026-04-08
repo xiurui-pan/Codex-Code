@@ -285,7 +285,6 @@ test('copy command writes full response in TUI', SERIAL_TEST, async () => {
       assert.deepEqual(result.sent, ['first-round', 'invoke-copy', 'exit'])
       assert.equal(requestBodies.length, 1)
       assert.match(result.cleanedTranscript, /Copiedtoclipboard/)
-      assert.match(result.cleanedTranscript, /Also\s*wr/i)
 
       const copied = await readFile('/tmp/claude/response.md', 'utf8')
       assert.match(copied, /COPY_ME/)

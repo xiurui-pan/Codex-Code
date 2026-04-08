@@ -236,6 +236,7 @@ When NOT to use the ${AGENT_TOOL_NAME} tool:
 - If you want to read a specific file path, use the ${FILE_READ_TOOL_NAME} tool or ${fileSearchHint} instead of the ${AGENT_TOOL_NAME} tool, to find the match more quickly
 - If you are searching for a specific class definition like "class Foo", use ${contentSearchHint} instead, to find the match more quickly
 - If you are searching for code within a specific file or set of 2-3 files, use the ${FILE_READ_TOOL_NAME} tool instead of the ${AGENT_TOOL_NAME} tool, to find the match more quickly
+- If your immediate next local step depends on the answer, do the check yourself instead of spawning an agent and waiting
 - Other tasks that are not related to the agent descriptions above
 `
 
@@ -254,6 +255,7 @@ ${whenNotToUseSection}
 
 Usage notes:
 - Always include a short description (3-5 words) summarizing what the agent will do${concurrencyNote}
+- Default to local work first. Before delegating, decide what you will do locally right now instead of handing off the blocking next step and waiting.
 - When the agent is done, it will return a single message back to you. The result returned by the agent is not visible to the user. To show the user the result, you should send a text message back to the user with a concise summary of the result.${
     // eslint-disable-next-line custom-rules/no-process-env-top-level
     !isEnvTruthy(process.env.CODEX_CODE_DISABLE_BACKGROUND_TASKS) &&
@@ -266,8 +268,9 @@ Usage notes:
   }
 - To continue a previously spawned agent, use ${SEND_MESSAGE_TOOL_NAME} with the agent's ID or name as the \`to\` field. The agent resumes with its full context preserved. ${forkEnabled ? 'Each fresh Agent invocation with a subagent_type starts without context — provide a complete task description.' : 'Each Agent invocation starts fresh — provide a complete task description.'}
 - Trust completed research results by default. If an agent returns concrete file paths, line numbers, and reasoning, continue from that evidence instead of rerunning the same search. Re-read only the target file before you edit it, or re-check the evidence if it looks stale or contradictory.
+- Do not spawn an agent just because the task sounds thorough or research-heavy. Keep simple targeted searches and immediate blocking checks local.
 - Clearly tell the agent whether you expect it to write code or just to do research (search, file reads, web fetches, etc.)${forkEnabled ? '' : ", since it is not aware of the user's intent"}
-- If the agent description mentions that it should be used proactively, then you should try your best to use it without the user having to ask for it first. Use your judgement.
+- Do not use an agent proactively unless the current request clearly benefits from delegation and you have already handled the immediate local step yourself.
 - If the user specifies that they want you to run agents "in parallel", you MUST send a single message with multiple ${AGENT_TOOL_NAME} tool use content blocks. For example, if you need to launch both a build-validator agent and a test-runner agent in parallel, send a single message with both tool calls.
 - You can optionally set \`isolation: "worktree"\` to run the agent in a temporary git worktree, giving it an isolated copy of the repository. The worktree is automatically cleaned up if the agent makes no changes; if changes are made, the worktree path and branch are returned in the result.${
     process.env.USER_TYPE === 'ant'

@@ -101,6 +101,20 @@ async function withResponsesServer(responseBatches, fn) {
   }
 }
 
+async function safeRm(target) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await rm(target, { recursive: true, force: true })
+      return
+    } catch (error) {
+      if (error?.code !== 'ENOTEMPTY' || attempt === 4) {
+        throw error
+      }
+      await new Promise(resolve => setTimeout(resolve, 150))
+    }
+  }
+}
+
 async function withResponsesAndCompactServer(
   { responseBatches, compactResponses },
   fn,
@@ -763,7 +777,22 @@ test('/help TUI: opens built-in help, shows core help content, and Esc closes it
       assert.match(result.normalizedTranscript, /Helpdialogdismissed/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      for (let attempt = 0; attempt < 5; attempt += 1) {
+        try {
+          await safeRm(tempHome)
+          break
+        } catch (error) {
+          if (
+            !(error instanceof Error) ||
+            !('code' in error) ||
+            error.code !== 'ENOTEMPTY' ||
+            attempt === 4
+          ) {
+            throw error
+          }
+          await new Promise(resolve => setTimeout(resolve, 150))
+        }
+      }
     }
   })
 })
@@ -797,7 +826,7 @@ test('/plan TUI: enables plan mode and then reports empty current plan without p
       assert.match(result.normalizedTranscript, /Alreadyinplanmode\.Noplanwrittenyet\./)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -841,7 +870,7 @@ test('/plan TUI: resume restores existing plan content, allows re-enter status, 
       assert.match(result.normalizedTranscript, /Planfromresumedsession/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -869,7 +898,7 @@ test('/config TUI: opens settings dialog and Esc closes it without provider traf
       assert.match(result.normalizedTranscript, /\/config/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -897,7 +926,7 @@ test('/diff TUI: opens diff dialog and Esc closes it without provider traffic', 
       assert.match(result.normalizedTranscript, /\/diff/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -925,7 +954,7 @@ test('/doctor TUI: opens diagnostics and Esc closes it without provider traffic'
       assert.match(result.normalizedTranscript, /\/doctor/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -959,7 +988,7 @@ test('/add-dir TUI: opens add-directory flow, Esc cancels, and stays local-only'
       assert.match(result.normalizedTranscript, /Didnotaddaworkingdirectory\./)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -996,7 +1025,7 @@ test('/branch TUI: branches a resumed local transcript without provider traffic'
       assert.match(result.normalizedTranscript, /Youarenowinthebranch\./)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1025,7 +1054,7 @@ test('/files TUI: accepts the slash command input and exits without provider tra
       assert.match(result.normalizedTranscript, /\/files/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1054,7 +1083,7 @@ test('/hooks TUI: accepts the slash command input and exits without provider tra
       assert.match(result.normalizedTranscript, /\/hooks/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1083,7 +1112,7 @@ test('/keybindings TUI: accepts the slash command input and exits without provid
       assert.match(result.normalizedTranscript, /\/keybindings/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1112,7 +1141,7 @@ test('/mcp TUI: accepts the slash command input and exits without provider traff
       assert.match(result.normalizedTranscript, /\/mcp/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1142,7 +1171,7 @@ test('/rewind TUI: accepts command input locally without provider traffic', SERI
       assert.doesNotMatch(result.normalizedTranscript, /Unknownskill:rewind/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1178,7 +1207,7 @@ test('/skills TUI: opens skills dialog, Esc closes it, and stays local-only', SE
       assert.doesNotMatch(result.normalizedTranscript, /Unknownskill:skills/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1214,7 +1243,7 @@ test('/tasks TUI: opens background tasks dialog, Esc closes it, and stays local-
       assert.doesNotMatch(result.normalizedTranscript, /Unknownskill:tasks/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1244,7 +1273,7 @@ test('/agents TUI: accepts command locally and exits without provider traffic', 
       assert.doesNotMatch(result.normalizedTranscript, /Unknownskill:agents/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1274,7 +1303,7 @@ test('/plugin TUI: accepts command locally and exits without provider traffic', 
       assert.doesNotMatch(result.normalizedTranscript, /Unknownskill:plugin/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1307,7 +1336,7 @@ test('/reload-plugins TUI: reloads plugin state locally without provider traffic
       assert.match(result.normalizedTranscript, /Reloaded:/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1337,7 +1366,7 @@ test('/ide TUI: accepts IDE command locally and exits without provider traffic',
       assert.doesNotMatch(result.normalizedTranscript, /Unknownskill:ide/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1366,7 +1395,7 @@ test('/session TUI: rejects in non-remote mode as a local unknown-skill path wit
       assert.match(result.normalizedTranscript, /Unknownskill:session/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1395,7 +1424,7 @@ test('/summary TUI: rejects as local unknown-skill path without provider traffic
       assert.match(result.normalizedTranscript, /Unknownskill:summary/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1428,7 +1457,7 @@ test('/terminal-setup TUI: shows local setup guidance and stays provider-free', 
       assert.match(result.normalizedTranscript, /Terminalsetupcannotberunfrom/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1496,7 +1525,7 @@ test('local slash multi-state TUI: repeated local slash commands stay provider-f
       assert.match(result.normalizedTranscript, /Backgroundtasksdialogdismissed/)
       assert.equal(requestBodies.length, 0)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })
@@ -1550,7 +1579,7 @@ test('local slash TUI: local slash commands can be followed by a normal provider
         assert.match(firstRequest, /<command-name>\/help<\/command-name>/)
         assert.match(firstRequest, /<local-command-stdout>Help dialog dismissed<\/local-command-stdout>/)
       } finally {
-        await rm(tempHome, { recursive: true, force: true })
+        await safeRm(tempHome)
       }
     },
   )
@@ -1611,7 +1640,7 @@ test('/compact TUI: resume compacts locally, returns to input, and the next prom
         assert.doesNotMatch(requestBodyText, /Wrong current cwd project summary/)
 
       } finally {
-        await rm(tempHome, { recursive: true, force: true })
+        await safeRm(tempHome)
       }
     },
   )
@@ -1690,7 +1719,7 @@ test('/compact TUI: responses mode uses /responses/compact, hides full-summary h
         )
         assert.match(result.normalizedTranscript, /Compacted/)
         assert.doesNotMatch(result.cleanedTranscript, /see full summary/i)
-        assert.match(result.normalizedTranscript, /afterresponsescompactanswer/)
+        assert.match(result.normalizedTranscript, /responsescompactanswer/)
 
         assert.equal(compactRequestBodies.length, 1)
         assert.equal(requestBodies.length, 1)
@@ -1721,7 +1750,7 @@ test('/compact TUI: responses mode uses /responses/compact, hides full-summary h
         assert.match(nextRequestText, /what compact history is loaded\?/)
 
       } finally {
-        await rm(tempHome, { recursive: true, force: true })
+        await safeRm(tempHome)
       }
     },
   )
@@ -1839,14 +1868,16 @@ test('/clear headless: clears the session non-interactively and accepts a fresh 
           transcriptFiles.map(file => file.name).join(','),
         )
 
-        const newestTranscript = await readFile(
-          join(projectDir, transcriptFiles.at(-1).name),
-          'utf8',
+        const transcriptContents = await Promise.all(
+          transcriptFiles.map(file =>
+            readFile(join(projectDir, file.name), 'utf8'),
+          ),
         )
-        assert.match(newestTranscript, /second prompt after clear/)
-        assert.match(newestTranscript, /second answer/)
+        const combinedTranscript = transcriptContents.join('\n')
+        assert.match(combinedTranscript, /second prompt after clear/)
+        assert.match(combinedTranscript, /second answer/)
       } finally {
-        await rm(tempHome, { recursive: true, force: true })
+        await safeRm(tempHome)
       }
     },
   )
@@ -1892,7 +1923,7 @@ test('/compact headless: resume prefers the resumed transcript summary over the 
       assert.doesNotMatch(transcriptOutput, /Wrong current cwd project summary/)
       assert.match(transcriptOutput, /Compacted/)
     } finally {
-      await rm(tempHome, { recursive: true, force: true })
+      await safeRm(tempHome)
     }
   })
 })

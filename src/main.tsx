@@ -16,8 +16,10 @@ import { startMdmRawRead } from './utils/settings/mdm/rawRead.js';
 startMdmRawRead();
 import { ensureKeychainPrefetchCompleted, startKeychainPrefetch } from './utils/secureStorage/keychainPrefetch.js';
 
-// eslint-disable-next-line custom-rules/no-top-level-side-effects
-startKeychainPrefetch();
+if (process.env.CODEX_CODE_USE_CODEX_PROVIDER !== '1') {
+  // eslint-disable-next-line custom-rules/no-top-level-side-effects
+  startKeychainPrefetch();
+}
 import { feature } from 'bun:bundle';
 import { Command as CommanderCommand, InvalidArgumentError, Option } from '@commander-js/extra-typings';
 import chalk from 'chalk';
@@ -33,12 +35,8 @@ import { init, initializeTelemetryAfterTrust } from './entrypoints/init.js';
 import { addToHistory } from './history.js';
 import type { Root } from './ink.js';
 import { launchRepl } from './replLauncher.js';
-import { fetchBootstrapData } from './services/api/bootstrap.js';
 import { type DownloadResult, downloadSessionFiles, type FilesApiConfig, parseFileSpecs } from './services/api/filesApi.js';
-import { prefetchOfficialMcpUrls } from './services/mcp/officialRegistry.js';
 import type { McpSdkServerConfig, McpServerConfig, ScopedMcpServerConfig } from './services/mcp/types.js';
-import { isPolicyAllowed, loadPolicyLimits, refreshPolicyLimits, waitForPolicyLimitsToLoad } from './services/policyLimits/index.js';
-import { loadRemoteManagedSettings, refreshRemoteManagedSettings } from './services/remoteManagedSettings/index.js';
 import { getEmptyToolPermissionContext, type ToolInputJSONSchema } from './Tool.js';
 import { createSyntheticOutputTool, isSyntheticOutputToolEnabled } from './tools/SyntheticOutputTool/SyntheticOutputTool.js';
 import { getTools } from './tools.js';
@@ -92,6 +90,18 @@ const coordinatorModeModule = feature('COORDINATOR_MODE') ? require('./coordinat
 import { relative, resolve } from 'path';
 const require = createRequire(import.meta.url);
 const currentPhaseDisableLegacyStartupModules = isCurrentPhaseCustomCodexProvider();
+const getPolicyLimitsModule = () => require('./services/policyLimits/index.js') as typeof import('./services/policyLimits/index.js');
+const loadPolicyLimits = (...args: Parameters<typeof import('./services/policyLimits/index.js')['loadPolicyLimits']>) => currentPhaseDisableLegacyStartupModules ? Promise.resolve() : getPolicyLimitsModule().loadPolicyLimits(...args);
+const refreshPolicyLimits = (...args: Parameters<typeof import('./services/policyLimits/index.js')['refreshPolicyLimits']>) => currentPhaseDisableLegacyStartupModules ? Promise.resolve() : getPolicyLimitsModule().refreshPolicyLimits(...args);
+const waitForPolicyLimitsToLoad = (...args: Parameters<typeof import('./services/policyLimits/index.js')['waitForPolicyLimitsToLoad']>) => currentPhaseDisableLegacyStartupModules ? Promise.resolve() : getPolicyLimitsModule().waitForPolicyLimitsToLoad(...args);
+const isPolicyAllowed = (...args: Parameters<typeof import('./services/policyLimits/index.js')['isPolicyAllowed']>) => currentPhaseDisableLegacyStartupModules ? true : getPolicyLimitsModule().isPolicyAllowed(...args);
+const getRemoteManagedSettingsModule = () => require('./services/remoteManagedSettings/index.js') as typeof import('./services/remoteManagedSettings/index.js');
+const loadRemoteManagedSettings = (...args: Parameters<typeof import('./services/remoteManagedSettings/index.js')['loadRemoteManagedSettings']>) => currentPhaseDisableLegacyStartupModules ? Promise.resolve() : getRemoteManagedSettingsModule().loadRemoteManagedSettings(...args);
+const refreshRemoteManagedSettings = (...args: Parameters<typeof import('./services/remoteManagedSettings/index.js')['refreshRemoteManagedSettings']>) => currentPhaseDisableLegacyStartupModules ? Promise.resolve() : getRemoteManagedSettingsModule().refreshRemoteManagedSettings(...args);
+const getBootstrapModule = () => require('./services/api/bootstrap.js') as typeof import('./services/api/bootstrap.js');
+const fetchBootstrapData = (...args: Parameters<typeof import('./services/api/bootstrap.js')['fetchBootstrapData']>) => currentPhaseDisableLegacyStartupModules ? Promise.resolve() : getBootstrapModule().fetchBootstrapData(...args);
+const getOfficialRegistryModule = () => require('./services/mcp/officialRegistry.js') as typeof import('./services/mcp/officialRegistry.js');
+const prefetchOfficialMcpUrls = (...args: Parameters<typeof import('./services/mcp/officialRegistry.js')['prefetchOfficialMcpUrls']>) => currentPhaseDisableLegacyStartupModules ? Promise.resolve() : getOfficialRegistryModule().prefetchOfficialMcpUrls(...args);
 const canUserConfigureAdvisor = (
   ...args: Parameters<typeof import('./utils/advisor.js')['canUserConfigureAdvisor']>
 ) => currentPhaseDisableLegacyStartupModules ? false : canUserConfigureAdvisorFromAdvisor(...args);
@@ -377,6 +387,10 @@ async function logStartupTelemetry(): Promise<void> {
 // Bump this when adding a new sync migration so existing users re-run the set.
 const CURRENT_MIGRATION_VERSION = 11;
 function runMigrations(): void {
+  if (currentPhaseDisableLegacyStartupModules) {
+    return;
+  }
+
   if (getGlobalConfig().migrationVersion !== CURRENT_MIGRATION_VERSION) {
     migrateAutoUpdatesToSettings();
     migrateBypassPermissionsAcceptedToSettings();
@@ -966,7 +980,12 @@ async function run(): Promise<CommanderCommand> {
     // Must resolve before init() which triggers the first settings read
     // (applySafeConfigEnvironmentVariables → getSettingsForSource('policySettings')
     // → isRemoteManagedSettingsEligible → sync keychain reads otherwise ~65ms).
-    await Promise.all([ensureMdmSettingsLoaded(), ensureKeychainPrefetchCompleted()]);
+    await Promise.all([
+      ensureMdmSettingsLoaded(),
+      currentPhaseDisableLegacyStartupModules
+        ? Promise.resolve()
+        : ensureKeychainPrefetchCompleted(),
+    ]);
     profileCheckpoint('preAction_after_mdm');
     writeStartupProbe('preAction:after-mdm');
     await init();
@@ -977,7 +996,7 @@ async function run(): Promise<CommanderCommand> {
     // terminal shell integration may mirror the process name to the tab.
     // After init() so settings.json env can also gate this (gh-4765).
     if (!isEnvTruthy(process.env.CODEX_CODE_DISABLE_TERMINAL_TITLE)) {
-      process.title = 'claude';
+      process.title = 'codex-code';
     }
 
     // Attach logging sinks so subcommand handlers can use logEvent/logError.
@@ -1023,14 +1042,19 @@ async function run(): Promise<CommanderCommand> {
     // Fails open - if fetch fails, continues without remote settings
     // Settings are applied via hot-reload when they arrive
     // Must happen after init() to ensure config reading is allowed
-    void loadRemoteManagedSettings();
-    void loadPolicyLimits();
+    if (!currentPhaseDisableLegacyStartupModules) {
+      void loadRemoteManagedSettings();
+      void loadPolicyLimits();
+    }
     profileCheckpoint('preAction_after_remote_settings');
     writeStartupProbe('preAction:after-remote-settings');
 
     // Load settings sync (non-blocking, fail-open)
     // CLI: uploads local settings to remote (CCR download is handled by print.ts)
-    if (feature('UPLOAD_USER_SETTINGS')) {
+    if (
+      !currentPhaseDisableLegacyStartupModules &&
+      feature('UPLOAD_USER_SETTINGS')
+    ) {
       void import('./services/settingsSync/index.js').then(m => m.uploadUserSettingsInBackground());
     }
     profileCheckpoint('preAction_after_settings_sync');

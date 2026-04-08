@@ -60,7 +60,7 @@ import { Cursor } from '../../utils/Cursor.js';
 import { getGlobalConfig, type PastedContent, saveGlobalConfig } from '../../utils/config.js';
 import { logForDebugging } from '../../utils/debug.js';
 import { parseDirectMemberMessage, sendDirectMemberMessage } from '../../utils/directMemberMessage.js';
-import type { EffortLevel } from '../../utils/effort.js';
+import { getUltrathinkEffortLevel, type EffortLevel } from '../../utils/effort.js';
 import { env } from '../../utils/env.js';
 import { errorMessage } from '../../utils/errors.js';
 import { isBilledAsExtraUsage } from '../../utils/extraUsage.js';
@@ -237,6 +237,10 @@ function PromptInput({
   voiceInterimRange
 }: Props): React.ReactNode {
   const mainLoopModel = useMainLoopModel();
+  const ultrathinkEffortLevel = useMemo(
+    () => getUltrathinkEffortLevel(mainLoopModel),
+    [mainLoopModel],
+  );
   // A local-jsx command (e.g., /mcp while agent is running) renders a full-
   // screen dialog on top of PromptInput via the immediate-command path with
   // shouldHidePromptInput: false. Those dialogs don't register in the overlay
@@ -743,19 +747,19 @@ function PromptInput({
     if (thinkTriggers.length && isUltrathinkEnabled()) {
       addNotification({
         key: 'ultrathink-active',
-        text: 'Effort set to high for this turn',
+        text: ultrathinkEffortLevel ? `Effort set to ${ultrathinkEffortLevel} for this turn` : 'This turn will use deeper reasoning',
         priority: 'immediate',
         timeoutMs: 5000
       });
     } else {
       removeNotification('ultrathink-active');
     }
-  }, [addNotification, removeNotification, thinkTriggers.length]);
+  }, [addNotification, removeNotification, thinkTriggers.length, ultrathinkEffortLevel]);
   useEffect(() => {
     if (feature('ULTRAPLAN') && ultraplanTriggers.length) {
       addNotification({
         key: 'ultraplan-active',
-        text: 'This prompt will launch an ultraplan session in Codex Code on the web',
+        text: 'This prompt will ask Codex to deepen the plan in this session',
         priority: 'immediate',
         timeoutMs: 5000
       });

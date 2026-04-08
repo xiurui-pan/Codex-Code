@@ -145,6 +145,7 @@ buffer = b""
 clean = ""
 normalized = ""
 sent = []
+started_at_ms = time.time() * 1000
 timeout_at = time.time() + 90
 
 while time.time() < timeout_at:
@@ -162,7 +163,13 @@ while time.time() < timeout_at:
     if len(sent) < len(actions):
         action = actions[len(sent)]
         wait_for = action.get("waitFor", [])
-        if all(re.sub(r"\s+", "", token) in normalized for token in wait_for):
+        wait_at_least_ms = action.get("waitAtLeastMs", 0)
+        time_ready = ((time.time() * 1000) - started_at_ms) >= wait_at_least_ms
+        text_ready = all(re.sub(r"\s+", "", token) in normalized for token in wait_for)
+        if time_ready and text_ready:
+            pre_delay_ms = action.get("preDelayMs", 0)
+            if pre_delay_ms > 0:
+                time.sleep(pre_delay_ms / 1000.0)
             os.write(master, action["send"].encode("utf-8"))
             sent.append(action["name"])
             settle_ms = action.get("settleMs", 0)
@@ -318,12 +325,13 @@ test(
               },
               {
                 name: 'enter-transcript',
-                waitFor: ['MAIN_DONE'],
+                waitFor: ['ctrl+o to expand'],
                 send: '\u000f',
+                settleMs: 600,
               },
               {
                 name: 'exit',
-                waitFor: ['Showing detailed transcript'],
+                waitFor: ['Prompt:', 'Response:'],
                 send: '/exit\r',
                 settleMs: 1600,
               },

@@ -114,6 +114,7 @@ import {
   isCurrentSessionMemoryContextMessage,
 } from './services/SessionMemory/sessionMemoryContext.js'
 import { StreamingToolExecutor } from './services/tools/StreamingToolExecutor.js'
+import { buildToolEfficiencyReminder } from './services/tools/toolEfficiency.js'
 import { queryCheckpoint } from './utils/queryProfiler.js'
 import { runTools } from './services/tools/toolOrchestration.js'
 import { applyToolResultBudget } from './utils/toolResultStorage.js'
@@ -1583,7 +1584,7 @@ async function* queryLoop(
 
           const continuationMessage = createUserMessage({
             content:
-              `You have ${incompleteCount} incomplete task(s). If you need input or a decision from the user, do not ask in plain text; call the AskUserQuestion tool instead. Otherwise, continue with the next tool call immediately — do not summarize progress or explain what you will do, just do it.`,
+              `You have ${incompleteCount} incomplete task(s). If you need input or a decision from the user, do not ask in plain text; call the AskUserQuestion tool instead. Otherwise, keep moving on the next concrete step. Reuse what you already learned, avoid repeating the same fact checks, and only send one short progress sentence if you found something load-bearing or changed direction.`,
             isMeta: true,
           })
           const next: State = {
@@ -1767,6 +1768,20 @@ async function* queryLoop(
     // If a hook indicated to prevent continuation, stop here
     if (shouldPreventContinuation) {
       return { reason: 'hook_stopped' }
+    }
+
+    const toolEfficiencyReminder = buildToolEfficiencyReminder({
+      messages: [...messagesForQuery, ...assistantMessages, ...toolResults],
+      assistantMessages,
+      toolUseBlocks,
+    })
+    if (toolEfficiencyReminder) {
+      toolResults.push(
+        createUserMessage({
+          content: toolEfficiencyReminder,
+          isMeta: true,
+        }),
+      )
     }
 
     if (tracking?.compacted) {

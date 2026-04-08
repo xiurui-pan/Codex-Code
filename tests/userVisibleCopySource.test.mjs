@@ -290,7 +290,10 @@ test('command descriptions avoid stale Claude Code wording', async () => {
   assert.match(doctorSource, /Diagnose and verify your Codex Code installation and settings/)
   assert.match(memorySource, /Edit Codex memory files/)
   assert.match(reviewSource, /Runs in the Codex Code web session\./)
-  assert.match(ultraplanSource, /Codex Code web session drafts an advanced plan/)
+  assert.match(
+    ultraplanSource,
+    /Ask Codex to stay in plan mode and produce a deeper, execution-ready plan in this session/,
+  )
   assert.match(installSource, /Install Codex Code native build/)
   assert.match(desktopCommandSource, /Continue the current session in Codex Code Desktop/)
   assert.match(fastCommandSource, /Toggle fast mode \(\$\{FAST_MODE_MODEL_DISPLAY\} for faster responses\)/)
@@ -300,6 +303,7 @@ test('command descriptions avoid stale Claude Code wording', async () => {
   assert.doesNotMatch(fastPickerSource, /Opus 4\.6 only/)
   assert.doesNotMatch(settingsConfigSource, /Opus 4\.6 only/)
   assert.doesNotMatch(reviewSource, /Runs in Claude Code on the web\./)
+  assert.doesNotMatch(ultraplanSource, /Codex Code web session drafts an advanced plan/)
   assert.doesNotMatch(ultraplanSource, /Claude Code on the web drafts an advanced plan/)
   assert.doesNotMatch(loginSource, /Anthropic account/)
   assert.doesNotMatch(logoutSource, /Anthropic account/)

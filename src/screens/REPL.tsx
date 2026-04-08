@@ -119,6 +119,8 @@ const getCoordinatorUserContext: (mcpClients: ReadonlyArray<{
   [k: string]: string;
 } = feature('COORDINATOR_MODE') ? require('../coordinator/coordinatorMode.js').getCoordinatorUserContext : () => ({});
 /* eslint-enable custom-rules/no-process-env-top-level, @typescript-eslint/no-require-imports */
+
+const PRODUCT_NAME = 'Codex Code';
 import useCanUseTool from '../hooks/useCanUseTool.js';
 import type { ToolPermissionContext, Tool } from '../Tool.js';
 import { applyPermissionUpdate, applyPermissionUpdates, persistPermissionUpdate } from '../utils/permissions/PermissionUpdate.js';

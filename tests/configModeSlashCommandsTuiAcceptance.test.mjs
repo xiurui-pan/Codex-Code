@@ -201,6 +201,21 @@ while time.time() < timeout_at:
         normalized_lines = [
             re.sub(r"\s+", "", line) for line in clean.splitlines() if line.strip()
         ]
+        normalized_option_lines = []
+        current_option_line = None
+        for line in normalized_lines:
+            if re.match(r"^\d+\.", line):
+                if current_option_line is not None:
+                    normalized_option_lines.append(current_option_line)
+                current_option_line = line
+            elif re.match(r"^(Learnmore:|Entertoconfirm|Auto-memory:)", line):
+                if current_option_line is not None:
+                    normalized_option_lines.append(current_option_line)
+                    current_option_line = None
+            elif current_option_line is not None:
+                current_option_line += line
+        if current_option_line is not None:
+            normalized_option_lines.append(current_option_line)
         for action in actions:
             if action["name"] in sent:
                 continue
@@ -220,7 +235,7 @@ while time.time() < timeout_at:
                     time.sleep(pre_delay_ms / 1000.0)
                 if "selectByPattern" in action:
                     match = None
-                    for line in normalized_lines:
+                    for line in normalized_option_lines + normalized_lines:
                         line_match = re.match(action["selectByPattern"], line)
                         if line_match:
                             match = line_match
@@ -397,7 +412,7 @@ test('config/mode slash commands TUI: /vim toggles vim mode without calling the 
       assert.match(result.normalizedTranscript, /Editormodesettovim/)
       assert.match(
         result.normalizedTranscript,
-        /UseEscapekeytotogglebetweenINSERTandNORMALmo/,
+        /UseEscapekeytotogglebetweenINSERTandNORMALm/,
       )
       assert.equal(globalConfig.editorMode, 'vim')
     } finally {

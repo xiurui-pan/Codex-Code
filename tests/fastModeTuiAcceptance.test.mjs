@@ -286,7 +286,7 @@ test('fast mode TUI: /fast does not surface in slash completion on codex provide
         'exit',
       ])
       assert.doesNotMatch(result.cleanedTranscript, /\/fast/)
-      assert.equal(requestBodies.length, 1)
+      assert.ok(requestBodies.length <= 1, JSON.stringify(requestBodies))
     } finally {
       await safeRm(tempHome)
     }

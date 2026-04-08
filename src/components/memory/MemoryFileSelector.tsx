@@ -19,12 +19,12 @@ import { getAgentMemoryDir } from '../../tools/AgentTool/agentMemory.js';
 import { openPath } from '../../utils/browser.js';
 import { getMemoryFiles, type MemoryFileInfo } from '../../utils/claudemd.js';
 import { getClaudeConfigHomeDir } from '../../utils/envUtils.js';
-import { getDisplayPath } from '../../utils/file.js';
 import { formatRelativeTimeAgo } from '../../utils/format.js';
 import { projectIsInGitRepo } from '../../utils/memory/versions.js';
 import { updateSettingsForSource } from '../../utils/settings/settings.js';
 import { Select } from '../CustomSelect/index.js';
 import { ListItem } from '../design-system/ListItem.js';
+import { getRelativeMemoryPath } from './MemoryUpdateNotification.js';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const require = createRequire(import.meta.url);
@@ -67,17 +67,17 @@ export function MemoryFileSelector(t0) {
   }])];
   const depths = new Map();
   const memoryOptions = allMemoryFiles.map(file => {
-    const displayPath = getDisplayPath(file.path);
+    const displayPath = getRelativeMemoryPath(file.path);
     const existsLabel = file.exists ? "" : " (new)";
     const depth = file.parent ? (depths.get(file.parent) ?? 0) + 1 : 0;
     depths.set(file.path, depth);
     const indent = depth > 0 ? "  ".repeat(depth - 1) : "";
     let label;
     if (file.type === "User" && !file.isNested && file.path === userMemoryPath) {
-      label = "User memory";
+      label = "User";
     } else {
       if (file.type === "Project" && !file.isNested && file.path === projectMemoryPath) {
-        label = "Project memory";
+        label = "Project";
       } else {
         if (depth > 0) {
           label = `${indent}L ${displayPath}${existsLabel}`;

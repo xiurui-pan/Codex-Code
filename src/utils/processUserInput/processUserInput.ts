@@ -37,7 +37,7 @@ import {
   getAttachmentMessages,
 } from '../attachments.js'
 import type { PastedContent } from '../config.js'
-import type { EffortValue } from '../effort.js'
+import { getUltrathinkEffortLevel, type EffortValue } from '../effort.js'
 import { toArray } from '../generators.js'
 import {
   executeUserPromptSubmitHooks,
@@ -59,6 +59,10 @@ import {
   hasUltraplanKeyword,
   replaceUltraplanKeyword,
 } from '../ultraplan/keyword.js'
+import {
+  hasUltrathinkKeyword,
+  isUltrathinkEnabled,
+} from '../thinking.js'
 import { processTextPrompt } from './processTextPrompt.js'
 export type ProcessUserInputContext = ToolUseContext & LocalJSXCommandContext
 
@@ -174,6 +178,22 @@ export async function processUserInput({
 
   if (!result.shouldQuery) {
     return result
+  }
+
+  const ultrathinkInput = preExpansionInput ?? inputString
+  if (
+    mode === 'prompt' &&
+    ultrathinkInput !== null &&
+    !ultrathinkInput.startsWith('/') &&
+    isUltrathinkEnabled() &&
+    hasUltrathinkKeyword(ultrathinkInput)
+  ) {
+    const ultrathinkEffort = getUltrathinkEffortLevel(
+      context.options.mainLoopModel,
+    )
+    if (ultrathinkEffort !== undefined) {
+      result.effort = ultrathinkEffort
+    }
   }
 
   // Execute UserPromptSubmit hooks and handle blocking

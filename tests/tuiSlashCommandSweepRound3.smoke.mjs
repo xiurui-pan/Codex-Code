@@ -17,6 +17,20 @@ import { projectRoot } from './helpers/projectRoot.mjs'
 const cwd = projectRoot
 const cliPath = join(cwd, 'dist/cli.js')
 
+async function safeRm(target) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await rm(target, { recursive: true, force: true })
+      return
+    } catch (error) {
+      if (error?.code !== 'ENOTEMPTY' || attempt === 4) {
+        throw error
+      }
+      await new Promise(resolve => setTimeout(resolve, 150))
+    }
+  }
+}
+
 async function createTempHome(port) {
   const tempHome = await mkdtemp(join(tmpdir(), 'codex-code-sweep3-'))
   const codexDir = join(tempHome, '.codex')
@@ -202,7 +216,7 @@ for (const cmd of LOCAL_JSX_COMMANDS) {
     const server = await withResponseServer()
     t.after(() => server.close())
     const tempHome = await createTempHome(server.port)
-    t.after(() => rm(tempHome, { recursive: true, force: true }))
+    t.after(() => safeRm(tempHome))
 
     const result = await runSingleCommand({ tempHome, command: `/${cmd}` })
     t.diagnostic(`/${cmd}: promptSeen=${result.promptSeen} sentCmd=${result.sentCmd} gotResponse=${result.gotResponse}`)
@@ -221,7 +235,7 @@ for (const cmd of PROMPT_COMMANDS) {
     const server = await withResponseServer()
     t.after(() => server.close())
     const tempHome = await createTempHome(server.port)
-    t.after(() => rm(tempHome, { recursive: true, force: true }))
+    t.after(() => safeRm(tempHome))
 
     const result = await runSingleCommand({ tempHome, command: `/${cmd}` })
     t.diagnostic(`/${cmd}: promptSeen=${result.promptSeen} sentCmd=${result.sentCmd} gotResponse=${result.gotResponse}`)
@@ -237,7 +251,7 @@ for (const cmd of MINIMAL_COMMANDS) {
     const server = await withResponseServer()
     t.after(() => server.close())
     const tempHome = await createTempHome(server.port)
-    t.after(() => rm(tempHome, { recursive: true, force: true }))
+    t.after(() => safeRm(tempHome))
 
     const result = await runSingleCommand({ tempHome, command: `/${cmd}` })
     t.diagnostic(`/${cmd}: promptSeen=${result.promptSeen} sentCmd=${result.sentCmd}`)

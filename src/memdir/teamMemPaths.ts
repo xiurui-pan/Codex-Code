@@ -1,6 +1,7 @@
 import { lstat, realpath } from 'fs/promises'
 import { dirname, join, resolve, sep } from 'path'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../services/analytics/growthbook.js'
+import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js'
 import { getErrnoCode } from '../utils/errors.js'
 import { getAutoMemPath, isAutoMemoryEnabled } from './paths.js'
 
@@ -71,7 +72,7 @@ function sanitizePathKey(key: string): string {
  * disabled via env var or settings.
  */
 export function isTeamMemoryEnabled(): boolean {
-  if (!isAutoMemoryEnabled()) {
+  if (!isAutoMemoryEnabled() || isCurrentPhaseCustomCodexProvider()) {
     return false
   }
   return getFeatureValue_CACHED_MAY_BE_STALE('tengu_herring_clock', false)

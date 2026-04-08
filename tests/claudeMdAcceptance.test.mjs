@@ -274,6 +274,48 @@ test(
 )
 
 test(
+  'Codex headless injects literal @import directives from CLAUDE.md into the real request body',
+  SERIAL_TEST,
+  async () => {
+    const projectDir = await mkdtemp(join(CLI_CWD, '.tmp-codex-claudemd-import-literal-project-'))
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-claudemd-import-literal-home-'))
+    try {
+      await mkdir(join(projectDir, 'notes'), { recursive: true })
+      await writeFile(
+        join(projectDir, 'CLAUDE.md'),
+        '# Project rules\nPROJECT_RULE_SENTINEL_ECHO\n@import ./notes/imported.md\n',
+        'utf8',
+      )
+      await writeFile(
+        join(projectDir, 'notes', 'imported.md'),
+        'IMPORTED_RULE_SENTINEL_FOXTROT\n',
+        'utf8',
+      )
+
+      const result = await runHeadlessPrompt({
+        projectDir,
+        tempHome,
+        prompt: '请总结当前导入说明。',
+      })
+
+      assert.equal(result.code, 0, result.stderr)
+      assert.equal(result.requestBodies.length > 0, true, result.stderr)
+      const requestBody = result.requestBodies[0] ?? {}
+      const instructions = getInstructionsText(requestBody)
+      const inputText = getInputText(requestBody)
+      assert.ok(instructions.length > 0, JSON.stringify(requestBody))
+      assert.match(inputText, /PROJECT_RULE_SENTINEL_ECHO/)
+      assert.match(inputText, /IMPORTED_RULE_SENTINEL_FOXTROT/)
+      assert.match(inputText, /notes\/imported\.md|notes\\\\imported\.md/)
+      assert.match(inputText, /请总结当前导入说明/)
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+      await rm(projectDir, { recursive: true, force: true })
+    }
+  },
+)
+
+test(
   'Codex headless injects @文件引用 content into the real request body',
   SERIAL_TEST,
   async () => {

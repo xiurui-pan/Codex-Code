@@ -152,7 +152,7 @@ print(json.dumps({
   return JSON.parse(stdout)
 }
 
-test('/help TUI: Esc closes help and restores the normal footer hint', SERIAL_TEST, async () => {
+test('/help TUI: Esc closes help and restores the normal prompt area', SERIAL_TEST, async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'codex-help-dismiss-'))
   try {
     await writeCodexConfig(tempHome)
@@ -177,17 +177,13 @@ test('/help TUI: Esc closes help and restores the normal footer hint', SERIAL_TE
     assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
     assert.deepEqual(result.sent, ['open-help', 'dismiss-help', 'exit'])
     assert.match(result.normalizedTranscript, /Helpdialogdismissed/)
-    assert.match(result.normalizedTranscript, /\?shortcuts|\?forshortcuts/)
 
     const helpDismissedAt = result.normalizedTranscript.lastIndexOf('Helpdialogdismissed')
-    const helpHintAt = Math.max(
-      result.normalizedTranscript.lastIndexOf('?shortcuts'),
-      result.normalizedTranscript.lastIndexOf('?forshortcuts'),
-    )
+    const promptAt = result.normalizedTranscript.lastIndexOf('❯')
     const cancelHintAt = result.normalizedTranscript.lastIndexOf('esctocancel')
 
     assert.ok(helpDismissedAt >= 0, result.cleanedTranscript)
-    assert.ok(helpHintAt > helpDismissedAt, result.cleanedTranscript)
+    assert.ok(promptAt > helpDismissedAt, result.cleanedTranscript)
     assert.ok(cancelHintAt >= 0 && cancelHintAt < helpDismissedAt, result.cleanedTranscript)
   } finally {
     await rm(tempHome, { recursive: true, force: true })

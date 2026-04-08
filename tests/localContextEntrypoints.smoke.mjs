@@ -216,7 +216,7 @@ async function runHeadlessContextSession({
 // so the same scenarios are checked at the input, display, cancel, and
 // error-reporting layers as well.
 
-test('当前 headless Codex 主链会把 CLAUDE.md 注入请求体，但裸 @path 仍只保留字面文本', async () => {
+test('当前 headless Codex 主链会把 --add-dir 下 CLAUDE.md 与同目录导入内容一起注入请求体', async () => {
   const result = await runHeadlessContextSession({
     projectFiles: {
       'CLAUDE.md':
@@ -234,12 +234,11 @@ test('当前 headless Codex 主链会把 CLAUDE.md 注入请求体，但裸 @pat
   assert.equal(result.requestBodies.length > 0, true, result.stderr)
   const payload = JSON.stringify(result.requestBodies[0] ?? {})
   assert.match(payload, /ALPHA_CONTEXT/)
-  assert.match(payload, /@\.\/imported\.md/)
-  assert.doesNotMatch(payload, /INCLUDE_BETA_CONTEXT/)
+  assert.match(payload, /INCLUDE_BETA_CONTEXT/)
   assert.match(payload, /请总结当前上下文/)
 })
 
-test('缺口：当前 headless Codex 主链里 @文件引用仍只保留字面路径，未把文件内容带进请求体', async () => {
+test('当前 headless Codex 主链会把显式 @文件引用内容带进请求体', async () => {
   const projectFiles = {
     'note.txt': 'Referenced file says GAMMA_FILE_CONTEXT.\n',
   }
@@ -251,11 +250,11 @@ test('缺口：当前 headless Codex 主链里 @文件引用仍只保留字面�
   assert.equal(result.code, 0, result.stderr)
   assert.equal(result.requestBodies.length > 0, true, result.stderr)
   const payload = JSON.stringify(result.requestBodies[0] ?? {})
-  assert.doesNotMatch(payload, /GAMMA_FILE_CONTEXT/)
+  assert.match(payload, /GAMMA_FILE_CONTEXT/)
   assert.match(payload, /note\.txt/)
 })
 
-test('当前 Codex 主链会把 CLAUDE.md 注入请求体，但 @import 仍保留字面文本', async () => {
+test('当前 Codex 主链会把 CLAUDE.md 里的 @import 内容一起注入请求体', async () => {
   const result = await runHeadlessContextSession({
     projectFiles: {
       'CLAUDE.md':
@@ -273,6 +272,5 @@ test('当前 Codex 主链会把 CLAUDE.md 注入请求体，但 @import 仍保�
   assert.equal(result.requestBodies.length > 0, true, result.stderr)
   const payload = JSON.stringify(result.requestBodies[0] ?? {})
   assert.match(payload, /KEEP_DELTA_CONTEXT/)
-  assert.match(payload, /@import \.\/imported\.md/)
-  assert.doesNotMatch(payload, /SHOULD_NOT_BE_IMPORTED_BY_LITERAL_AT_IMPORT/)
+  assert.match(payload, /SHOULD_NOT_BE_IMPORTED_BY_LITERAL_AT_IMPORT/)
 })

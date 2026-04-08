@@ -5,6 +5,7 @@ import { projectRoot } from './helpers/projectRoot.mjs'
 import { join } from 'node:path'
 
 const PATHS_SOURCE_PATH = join(projectRoot, 'src/memdir/paths.ts')
+const TEAM_MEM_SOURCE_PATH = join(projectRoot, 'src/memdir/teamMemPaths.ts')
 
 test('codex-only memory mode is evaluated dynamically from env', async () => {
   const source = await readFile(PATHS_SOURCE_PATH, 'utf8')
@@ -23,4 +24,13 @@ test('codex-only memory mode is evaluated dynamically from env', async () => {
 test('broad auto-memory gating uses codex-only mode helper at call time', async () => {
   const source = await readFile(PATHS_SOURCE_PATH, 'utf8')
   assert.match(source, /if \(isCodexOnlyMemoryMode\(\)\) \{/)
+})
+
+test('team memory is disabled entirely in codex mode', async () => {
+  const source = await readFile(TEAM_MEM_SOURCE_PATH, 'utf8')
+
+  assert.match(
+    source,
+    /if \(!isAutoMemoryEnabled\(\) \|\| isCurrentPhaseCustomCodexProvider\(\)\) \{\s*return false/s,
+  )
 })

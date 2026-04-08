@@ -4,7 +4,7 @@ import figures from 'figures';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useNotifications } from 'src/context/notifications.js';
 import { type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS, logEvent } from 'src/services/analytics/index.js';
-import { useAppState, useAppStateStore, useSetAppState } from '../../../state/AppState.js';
+import { useAppState, useSetAppState } from '../../../state/AppState.js';
 import { getSdkBetas, getSessionId, isSessionPersistenceDisabled, setHasExitedPlanMode, setNeedsAutoModeExitAttachment, setNeedsPlanModeExitAttachment } from '../../../bootstrap/state.js';
 import { generateSessionName } from '../../../commands/rename/generateSessionName.js';
 import type { KeyboardEvent } from '../../../ink/events/keyboard-event.js';
@@ -19,8 +19,8 @@ import { calculateContextPercentages, getContextWindowForModel } from '../../../
 import { getExternalEditor } from '../../../utils/editor.js';
 import { getDisplayPath } from '../../../utils/file.js';
 import { toIDEDisplayName } from '../../../utils/ide.js';
+import { getUltrathinkEffortLevel } from '../../../utils/effort.js';
 import { logError } from '../../../utils/log.js';
-import { enqueuePendingNotification } from '../../../utils/messageQueueManager.js';
 import { createUserMessage } from '../../../utils/messages.js';
 import { getMainLoopModel, getRuntimeMainLoopModel } from '../../../utils/model/model.js';
 import { createPromptRuleContent, isClassifierPermissionsEnabled, PROMPT_PREFIX } from '../../../utils/permissions/bashClassifier.js';
@@ -41,8 +41,8 @@ import { PermissionRuleExplanation } from '../PermissionRuleExplanation.js';
 
 /* eslint-disable @typescript-eslint/no-require-imports */
 const autoModeStateModule = feature('TRANSCRIPT_CLASSIFIER') ? require('../../../utils/permissions/autoModeState.js') as typeof import('../../../utils/permissions/autoModeState.js') : null;
-const currentStageDisableUltraplan = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1';
-const launchUltraplan = feature('ULTRAPLAN') && !currentStageDisableUltraplan ? (require('../../../commands/ultraplan.js') as typeof import('../../../commands/ultraplan.js')).launchUltraplan : null;
+const ultraplanModule = feature('ULTRAPLAN') ? require('../../../commands/ultraplan.js') as typeof import('../../../commands/ultraplan.js') : null;
+const buildLocalUltraplanPrompt = ultraplanModule?.buildLocalUltraplanPrompt ?? null;
 import type { Base64ImageSource, ImageBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs';
 /* eslint-enable @typescript-eslint/no-require-imports */
 import type { PastedContent } from '../../../utils/config.js';
@@ -126,7 +126,6 @@ export function ExitPlanModePermissionRequest({
 }: PermissionRequestProps): React.ReactNode {
   const toolPermissionContext = useAppState(s => s.toolPermissionContext);
   const setAppState = useSetAppState();
-  const store = useAppStateStore();
   const {
     addNotification
   } = useNotifications();
@@ -143,7 +142,7 @@ export function ExitPlanModePermissionRequest({
   // selecting it would dismiss the dialog and reject locally before
   // launchUltraplan can notice the session exists and return "already polling".
   // feature() must sit directly in an if/ternary (bun:bundle DCE constraint).
-  const showUltraplan = feature('ULTRAPLAN') && !currentStageDisableUltraplan ? !ultraplanSessionUrl && !ultraplanLaunching : false;
+  const showUltraplan = feature('ULTRAPLAN') && !!buildLocalUltraplanPrompt ? !ultraplanSessionUrl && !ultraplanLaunching : false;
   const messages = useAppState(s => s.messages);
   const messagesForContext = useMemo(() => {
     if (!messages?.length) {
@@ -285,39 +284,64 @@ export function ExitPlanModePermissionRequest({
   async function handleResponse(value: ResponseValue): Promise<void> {
     const trimmedFeedback = planFeedback.trim();
     const acceptFeedback = trimmedFeedback || undefined;
+    const getImageBlocks = async (): Promise<ImageBlockParam[] | undefined> => {
+      if (!hasImages) {
+        return undefined;
+      }
+      return Promise.all(imageAttachments.map(async img => {
+        const block: ImageBlockParam = {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: (img.mediaType || 'image/png') as Base64ImageSource['media_type'],
+            data: img.content
+          }
+        };
+        const resized = await maybeResizeAndDownsampleImageBlock(block);
+        return resized.block;
+      }));
+    };
 
-    // Ultraplan: reject locally, teleport the plan to CCR as a seed draft.
-    // Dialog dismisses immediately so the query loop unblocks; the teleport
-    // runs detached and its launch message lands via the command queue.
+    // Ultraplan: stay in this session, ask Codex to deepen the plan, and
+    // keep plan mode active until the refined version is ready.
     if (value === 'ultraplan') {
-      if (!launchUltraplan) {
+      if (!buildLocalUltraplanPrompt) {
         addNotification({
           key: 'ultraplan-disabled-codex-provider',
-          text: '当前阶段不支持 Ultraplan。',
+          text: 'Ultraplan is unavailable right now.',
           color: 'warning',
           priority: 'high'
         });
         return;
       }
+      const localUltraplanPrompt = buildLocalUltraplanPrompt({
+        seedPlan: currentPlan,
+        extraFeedback: trimmedFeedback || undefined
+      });
+      const localUltrathinkEffort = getUltrathinkEffortLevel(toolUseConfirm.toolUseContext.options.mainLoopModel);
+      if (localUltrathinkEffort) {
+        const previousGetAppState = toolUseConfirm.toolUseContext.getAppState;
+        toolUseConfirm.toolUseContext.getAppState = () => ({
+          ...previousGetAppState(),
+          effortValue: localUltrathinkEffort
+        });
+      }
+      const imageBlocks = await getImageBlocks();
       logEvent('tengu_plan_exit', {
         planLengthChars: currentPlan.length,
         outcome: 'ultraplan' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
         interviewPhaseEnabled: isPlanModeInterviewPhaseEnabled(),
         planStructureVariant
       });
+      addNotification({
+        key: 'ultraplan-local-refine',
+        text: 'Refining the plan more deeply in this session',
+        priority: 'immediate',
+        timeoutMs: 4000
+      });
       onDone();
       onReject();
-      toolUseConfirm.onReject('Plan being refined via Ultraplan — please wait for the result.');
-      void launchUltraplan({
-        blurb: '',
-        seedPlan: currentPlan,
-        getAppState: store.getState,
-        setAppState: store.setState,
-        signal: new AbortController().signal
-      }).then(msg => enqueuePendingNotification({
-        value: msg,
-        mode: 'task-notification'
-      })).catch(logError);
+      toolUseConfirm.onReject(localUltraplanPrompt, imageBlocks && imageBlocks.length > 0 ? imageBlocks : undefined);
       return;
     }
 
@@ -506,21 +530,7 @@ export function ExitPlanModePermissionRequest({
       });
 
       // Convert pasted images to ImageBlockParam[] with resizing
-      let imageBlocks: ImageBlockParam[] | undefined;
-      if (hasImages) {
-        imageBlocks = await Promise.all(imageAttachments.map(async img => {
-          const block: ImageBlockParam = {
-            type: 'image',
-            source: {
-              type: 'base64',
-              media_type: (img.mediaType || 'image/png') as Base64ImageSource['media_type'],
-              data: img.content
-            }
-          };
-          const resized = await maybeResizeAndDownsampleImageBlock(block);
-          return resized.block;
-        }));
-      }
+      const imageBlocks = await getImageBlocks();
       onDone();
       onReject();
       toolUseConfirm.onReject(trimmedFeedback || (hasImages ? '(See attached image)' : undefined), imageBlocks && imageBlocks.length > 0 ? imageBlocks : undefined);
@@ -717,7 +727,7 @@ export function buildPlanApprovalOptions({
   });
   if (showUltraplan) {
     options.push({
-      label: 'No, refine with Ultraplan on Codex Code on the web',
+      label: 'No, refine with Ultraplan here',
       value: 'ultraplan'
     });
   }

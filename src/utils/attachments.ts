@@ -208,6 +208,7 @@ const sessionTranscriptModule = feature('KAIROS')
   ? (require('../services/sessionTranscript/sessionTranscript.js') as typeof import('../services/sessionTranscript/sessionTranscript.js'))
   : null
 /* eslint-enable @typescript-eslint/no-require-imports */
+import { getUltrathinkEffortLevel, type EffortLevel } from './effort.js'
 import { hasUltrathinkKeyword, isUltrathinkEnabled } from './thinking.js'
 import {
   tokenCountFromLastAPIResponse,
@@ -218,6 +219,7 @@ import {
   isAutoCompactEnabled,
 } from '../services/compact/autoCompact.js'
 import { getFeatureValue_CACHED_MAY_BE_STALE } from '../services/analytics/growthbook.js'
+import { isCurrentPhaseCustomCodexProvider } from './currentPhase.js'
 import {
   hasInstructionsLoadedHook,
   executeInstructionsLoadedHooks,
@@ -675,7 +677,7 @@ export type Attachment =
     }
   | {
       type: 'ultrathink_effort'
-      level: 'high'
+      level: EffortLevel
     }
   | {
       type: 'deferred_tools_delta'
@@ -744,15 +746,39 @@ export async function getAttachments(
   querySource?: QuerySource,
   options?: { skipSkillDiscovery?: boolean },
 ): Promise<Attachment[]> {
-  if (
-    isEnvTruthy(process.env.CODEX_CODE_DISABLE_ATTACHMENTS) ||
-    isEnvTruthy(process.env.CODEX_CODE_SIMPLE)
-  ) {
+  if (isEnvTruthy(process.env.CODEX_CODE_DISABLE_ATTACHMENTS)) {
     // query.ts:removeFromQueue dequeues these unconditionally after
     // getAttachmentMessages runs — returning [] here silently drops them.
     // Coworker runs with --bare and depends on task-notification for
     // mid-tool-call notifications from Local*Task/Remote*Task.
     return getQueuedCommandAttachments(queuedCommands)
+  }
+
+  if (isEnvTruthy(process.env.CODEX_CODE_SIMPLE)) {
+    if (!input) {
+      return getQueuedCommandAttachments(queuedCommands)
+    }
+
+    const context = { ...toolUseContext, abortController: createAbortController() }
+    const [queued, atMentionedFiles, mcpResources, agentMentions] =
+      await Promise.all([
+        getQueuedCommandAttachments(queuedCommands),
+        processAtMentionedFiles(input, context),
+        processMcpResourceAttachments(input, context),
+        Promise.resolve(
+          processAgentMentions(
+            input,
+            toolUseContext.options.agentDefinitions.activeAgents,
+          ),
+        ),
+      ])
+
+    return [
+      ...queued,
+      ...atMentionedFiles,
+      ...mcpResources,
+      ...agentMentions,
+    ]
   }
 
   // This will slow down submissions
@@ -793,7 +819,8 @@ export async function getAttachments(
         // but that content is NOT user intent and must not trigger discovery.
         // Without this gate, a 110KB SKILL.md fires ~3.3s of chunked AKI
         // queries on every skill invocation (session 13a9afae).
-        ...(feature('EXPERIMENTAL_SKILL_SEARCH') &&
+        ...(!isCurrentPhaseCustomCodexProvider() &&
+        feature('EXPERIMENTAL_SKILL_SEARCH') &&
         skillSearchModules &&
         !options?.skipSkillDiscovery
           ? [
@@ -826,7 +853,9 @@ export async function getAttachments(
       Promise.resolve(getDateChangeAttachments(messages)),
     ),
     maybe('ultrathink_effort', () =>
-      Promise.resolve(getUltrathinkEffortAttachment(input)),
+      Promise.resolve(
+        getUltrathinkEffortAttachment(input, toolUseContext.options.mainLoopModel),
+      ),
     ),
     maybe('changed_files', () => getChangedFiles(context)),
     maybe('nested_memory', () => getNestedMemoryAttachments(context)),
@@ -1362,12 +1391,19 @@ export function getDateChangeAttachments(
   return [{ type: 'date_change', newDate: currentDate }]
 }
 
-function getUltrathinkEffortAttachment(input: string | null): Attachment[] {
+function getUltrathinkEffortAttachment(
+  input: string | null,
+  model: string,
+): Attachment[] {
   if (!isUltrathinkEnabled() || !input || !hasUltrathinkKeyword(input)) {
     return []
   }
+  const level = getUltrathinkEffortLevel(model)
+  if (level === undefined) {
+    return []
+  }
   logEvent('tengu_ultrathink', {})
-  return [{ type: 'ultrathink_effort', level: 'high' }]
+  return [{ type: 'ultrathink_effort', level }]
 }
 
 // Exported for compact.ts — the gate must be identical at both call sites.
@@ -2450,6 +2486,10 @@ export function filterDuplicateMemoryAttachments(
 async function getDynamicSkillAttachments(
   toolUseContext: ToolUseContext,
 ): Promise<Attachment[]> {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return []
+  }
+
   const attachments: Attachment[] = []
 
   if (
@@ -2564,6 +2604,10 @@ export function filterToBundledAndMcp(commands: Command[]): Command[] {
 async function getSkillListingAttachments(
   toolUseContext: ToolUseContext,
 ): Promise<Attachment[]> {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    return []
+  }
+
   if (process.env.NODE_ENV === 'test') {
     return []
   }

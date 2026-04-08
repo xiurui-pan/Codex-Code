@@ -15,7 +15,7 @@ export function shouldIncludeGitInstructions(): boolean {
   if (isEnvTruthy(envVal)) return false
   if (isEnvDefinedFalsy(envVal)) return true
   if (process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1') {
-    return getInitialSettings().includeGitInstructions ?? false
+    return getInitialSettings().includeGitInstructions ?? true
   }
   return getInitialSettings().includeGitInstructions ?? true
 }

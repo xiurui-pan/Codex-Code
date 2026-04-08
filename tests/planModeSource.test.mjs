@@ -97,3 +97,41 @@ test('exit plan mode result keeps the full plan visible and avoids Claude-brande
   assert.match(exitToolUiSource, /Plan approved and ready for implementation/)
   assert.doesNotMatch(exitToolUiSource, /User approved Claude&apos;s plan/)
 })
+
+test('plan exit can refine locally with ultraplan instead of sending the user away', () => {
+  const commandsSource = readSource('src/commands.ts')
+  const source = readSource(
+    'src/components/permissions/ExitPlanModePermissionRequest/ExitPlanModePermissionRequest.tsx',
+  )
+  const commandSource = readSource('src/commands/ultraplan.tsx')
+
+  assert.match(commandsSource, /const ultraplan = feature\('ULTRAPLAN'\)/)
+  assert.doesNotMatch(
+    commandsSource,
+    /feature\('ULTRAPLAN'\) && process\.env\.CODEX_CODE_USE_CODEX_PROVIDER !== '1'/,
+  )
+  assert.match(source, /buildLocalUltraplanPrompt/)
+  assert.match(
+    source,
+    /toolUseConfirm\.toolUseContext\.getAppState = \(\) => \(\{/,
+  )
+  assert.match(source, /Refining the plan more deeply in this session/)
+  assert.match(source, /label: 'No, refine with Ultraplan here'/)
+  assert.match(
+    commandSource,
+    /ultrathink and turn the current task into a stronger, execution-ready plan\./,
+  )
+  assert.match(
+    commandSource,
+    /clarify the exact goal, scope, and success bar before locking the plan/,
+  )
+  assert.match(
+    commandSource,
+    /separate confirmed facts from assumptions or missing evidence/,
+  )
+  assert.match(
+    commandSource,
+    /stay in plan mode and wait for approval after updating the plan/,
+  )
+  assert.doesNotMatch(commandSource, /Codex Code on the web/)
+})

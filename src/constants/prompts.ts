@@ -54,6 +54,7 @@ import { SLEEP_TOOL_NAME } from '../tools/SleepTool/prompt.js'
 import { TICK_TAG } from './xml.js'
 import { logForDebugging } from '../utils/debug.js'
 import { loadMemoryPrompt } from '../memdir/memdir.js'
+import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js'
 import { isUndercover } from '../utils/undercover.js'
 import { isMcpInstructionsDeltaEnabled } from '../utils/mcpInstructionsDelta.js'
 
@@ -284,6 +285,8 @@ function getUsingYourToolsSection(enabledTools: Set<string>): string {
           `Use ${GLOB_TOOL_NAME} or ${GREP_TOOL_NAME} when you specifically need their structured result modes, glob filters, or permission-aware search behavior`,
         ]),
     `Use the ${BASH_TOOL_NAME} tool for shell work and fast local searches. Prefer the dedicated read, edit, and write tools once you know which files you need to inspect or modify.`,
+    `Once a search or single-fact check answers the question, stop. Do not rerun the same lookup with a slightly different command just to feel safer.`,
+    `Do not use Bash or inline Python or Node scripts to dump file contents when ${FILE_READ_TOOL_NAME} or \`rg\` can show the needed lines. Use a script only when you truly need computation across many files.`,
   ]
 
   const items = [
@@ -300,8 +303,8 @@ function getUsingYourToolsSection(enabledTools: Set<string>): string {
 
 function getAgentToolSection(): string {
   return isForkSubagentEnabled()
-    ? `Calling ${AGENT_TOOL_NAME} without a subagent_type creates a fork, which runs in the background and keeps its tool output out of your context \u2014 so you can keep chatting with the user while it works. Reach for it when research or multi-step implementation work would otherwise fill your context with raw output you won't need again. **If you ARE the fork** \u2014 execute directly; do not re-delegate.`
-    : `Use the ${AGENT_TOOL_NAME} tool with specialized agents when the task at hand matches the agent's description. Subagents are valuable for parallelizing independent queries or for protecting the main context window from excessive results, but they should not be used excessively when not needed. Avoid duplicating work that subagents are already doing: if you delegate research, do not run the same search in parallel, and if a completed research subagent gives concrete file paths, line numbers, and recommendations, continue from that result and only reopen the specific file you are about to edit.`
+    ? `Calling ${AGENT_TOOL_NAME} without a subagent_type creates a fork, which runs in the background and keeps its tool output out of your context \u2014 so you can keep chatting with the user while it works. Default to local work first. Fork only when the side work will not block your immediate next local step and the intermediate output is not worth keeping in your own context. **If you ARE the fork** \u2014 execute directly; do not re-delegate.`
+    : `Use the ${AGENT_TOOL_NAME} tool with specialized agents only when the task clearly matches the agent's description and delegation will save real time or context. Default to local work first. If the very next thing you need is the answer, do it yourself instead of spawning a subagent and waiting. Avoid duplicating work that subagents are already doing: if you delegate research, do not run the same search in parallel, and if a completed research subagent gives concrete file paths, line numbers, and recommendations, continue from that result and only reopen the specific file you are about to edit.`
 }
 
 /**
@@ -317,6 +320,7 @@ function getAgentToolSection(): string {
  */
 function getDiscoverSkillsGuidance(): string | null {
   if (
+    !isCurrentPhaseCustomCodexProvider() &&
     feature('EXPERIMENTAL_SKILL_SEARCH') &&
     DISCOVER_SKILLS_TOOL_NAME !== null
   ) {
@@ -363,12 +367,13 @@ function getSessionSpecificGuidanceSection(
     !isForkSubagentEnabled()
       ? [
           `For simple, directed codebase searches (e.g. a specific file, class, or function) prefer ${searchTools} first.`,
-          `For broader codebase exploration and deep research, use the ${AGENT_TOOL_NAME} tool with subagent_type=${EXPLORE_AGENT.agentType}. This is slower than direct search, so use it only when the direct path gets noisy or when the task will clearly require more than ${EXPLORE_AGENT_MIN_QUERIES} linked queries.`,
+          `For broader codebase exploration and deep research, use the ${AGENT_TOOL_NAME} tool with subagent_type=${EXPLORE_AGENT.agentType}. This is slower than direct search, so use it only when the direct path gets noisy, when the task will clearly require more than ${EXPLORE_AGENT_MIN_QUERIES} linked queries, or when the user explicitly wants a deeper sweep.`,
         ]
       : []),
     hasSkills
       ? `/<skill-name> (e.g., /commit) is shorthand for users to invoke a user-invocable skill. When executed, the skill gets expanded to a full prompt. Use the ${SKILL_TOOL_NAME} tool to execute them. IMPORTANT: Only use ${SKILL_TOOL_NAME} for skills listed in its user-invocable skills section - do not guess or use built-in CLI commands.`
       : null,
+    !isCurrentPhaseCustomCodexProvider() &&
     DISCOVER_SKILLS_TOOL_NAME !== null &&
     hasSkills &&
     enabledTools.has(DISCOVER_SKILLS_TOOL_NAME)
@@ -405,6 +410,10 @@ These user-facing text instructions do not apply to code or tool calls.`
 Be concise, but do not go silent. Before your first meaningful batch of tool calls, send one short sentence about what you are about to inspect or change. While working, send brief updates only at natural milestones: when you find the root cause, change direction, finish a meaningful sub-step, or hit a blocker.
 
 Do not narrate the terminal. Do not repeat exact shell commands, tool names, raw arguments, permission waits, or "done" boilerplate that the TUI already shows. Explain intent or findings instead of command syntax.
+
+If you are about to make another search or read call after already gathering several results on the same question, pause and ask whether you already have enough evidence to answer. Reuse earlier evidence instead of repeating the same fact check.
+
+If you still need another tool after a silent stretch, send one short sentence first so the user knows what remains unresolved.
 
 Keep text output brief and direct. Lead with the answer or next action, not the reasoning. Skip filler words and unnecessary transitions. Do not restate what the user said — just do it. When explaining, include only what the user needs in order to follow along.
 
@@ -687,6 +696,7 @@ export async function enhanceSystemPromptWithEnvDetails(
   // AgentTool.tsx:768 builds the prompt before assembleToolPool:830 so it
   // omits this param — `?? true` preserves guidance there.
   const discoverSkillsGuidance =
+    !isCurrentPhaseCustomCodexProvider() &&
     feature('EXPERIMENTAL_SKILL_SEARCH') &&
     skillSearchFeatureCheck?.isSkillSearchEnabled() &&
     DISCOVER_SKILLS_TOOL_NAME !== null &&

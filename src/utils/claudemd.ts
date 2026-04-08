@@ -17,7 +17,8 @@
  *
  * Memory @include directive:
  * - Memory files can include other files using @ notation
- * - Syntax: @path, @./relative/path, @~/home/path, or @/absolute/path
+ * - Syntax: @path, @./relative/path, @~/home/path, @/absolute/path,
+ *   or @import <path>
  * - @path (without prefix) is treated as a relative path (same as @./path)
  * - Works in leaf text nodes only (not inside code blocks or code strings)
  * - Included files are added as separate entries before the including file
@@ -94,7 +95,7 @@ const MEMORY_INSTRUCTION_PROMPT =
   'Repo and user instructions are shown below. They override default behavior when they apply.'
 // Recommended max character count for a memory file
 export const MAX_MEMORY_CHARACTER_COUNT = 40000
-const MAX_TOTAL_MEMORY_PROMPT_CHARACTERS = 32000
+const MAX_TOTAL_MEMORY_PROMPT_CHARACTERS = 24000
 const MIN_TRUNCATED_MEMORY_CONTENT_CHARS = 400
 const MEMORY_PROMPT_TYPE_PRIORITY: Record<MemoryType, number> = {
   Managed: 0,
@@ -258,6 +259,20 @@ export type MemoryFileInfo = {
 
 function pathInOriginalCwd(path: string): boolean {
   return pathInWorkingPath(path, getOriginalCwd())
+}
+
+function pathInAllowedClaudeMdRoots(path: string): boolean {
+  if (pathInOriginalCwd(path)) {
+    return true
+  }
+
+  for (const dir of getAdditionalDirectoriesForClaudeMd()) {
+    if (pathInWorkingPath(path, dir)) {
+      return true
+    }
+  }
+
+  return false
 }
 
 /**
@@ -470,7 +485,7 @@ function extractIncludePathsFromTokens(
 
   // Extract @paths from a text string and add resolved paths to absolutePaths.
   function extractPathsFromText(textContent: string) {
-    const includeRegex = /(?:^|\s)@((?:[^\s\\]|\\ )+)/g
+    const includeRegex = /(?:^|\s)@(?:import\s+)?((?:[^\s\\]|\\ )+)/g
     let match
     while ((match = includeRegex.exec(textContent)) !== null) {
       let path = match[1]
@@ -486,7 +501,7 @@ function extractIncludePathsFromTokens(
       // Unescape the spaces in the path
       path = path.replace(/\\ /g, ' ')
 
-      // Accept @path, @./path, @~/path, or @/path
+      // Accept @path, @./path, @~/path, @/path, or @import <path>
       if (path) {
         const isValidPath =
           path.startsWith('./') ||
@@ -678,7 +693,7 @@ export async function processMemoryFile(
   result.push(memoryFile)
 
   for (const resolvedIncludePath of resolvedIncludePaths) {
-    const isExternal = !pathInOriginalCwd(resolvedIncludePath)
+    const isExternal = !pathInAllowedClaudeMdRoots(resolvedIncludePath)
     if (isExternal && !includeExternal) {
       continue
     }
@@ -1192,10 +1207,8 @@ export const getClaudeMds = (
         MEMORY_PROMPT_TYPE_PRIORITY[a.type] - MEMORY_PROMPT_TYPE_PRIORITY[b.type],
     )
 
-  for (const file of eligibleFiles) {
-    if (filter && !filter(file.type)) continue
-    if (skipProjectLevel && (file.type === 'Project' || file.type === 'Local'))
-      continue
+  for (let index = eligibleFiles.length - 1; index >= 0; index -= 1) {
+    const file = eligibleFiles[index]!
     const description =
       file.type === 'Project'
         ? ' (project instructions, checked into the codebase)'
@@ -1215,7 +1228,7 @@ export const getClaudeMds = (
     const fullEntry = wrapMemoryContent(content)
 
     if (fullEntry.length <= remainingCharacters) {
-      memories.push(fullEntry)
+      memories.unshift(fullEntry)
       remainingCharacters -= fullEntry.length
       continue
     }
@@ -1224,17 +1237,17 @@ export const getClaudeMds = (
     const contentBudget =
       remainingCharacters - baseEntry.length - '\n...[truncated to fit prompt budget]'.length
     if (contentBudget < MIN_TRUNCATED_MEMORY_CONTENT_CHARS) {
-      skippedEntries++
-      continue
+      skippedEntries += index + 1
+      break
     }
 
-    memories.push(
+    memories.unshift(
       wrapMemoryContent(
         `${content.slice(0, contentBudget).trimEnd()}\n...[truncated to fit prompt budget]`,
       ),
     )
     remainingCharacters = 0
-    skippedEntries++
+    skippedEntries += index
     break
   }
 
