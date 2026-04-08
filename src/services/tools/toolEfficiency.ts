@@ -271,9 +271,9 @@ export function buildToolEfficiencyReminder(args: {
     }
   }
 
-  if (investigativeToolCount < 3) {
+  if (investigativeToolCount < 1) {
     return null
   }
 
-  return `${TOOL_EFFICIENCY_REMINDER_PREFIX} You already have several search or read results for this request. Reuse earlier evidence instead of repeating the same lookup. Do not repeat single-value checks like the current branch. Do not use inline Python or Node scripts to dump file contents when Read or rg can show what you need. If another tool is still necessary, send one short sentence about the next distinct check first; otherwise answer the user directly.`
+  return `${TOOL_EFFICIENCY_REMINDER_PREFIX} You already have search or read evidence for this request. Reuse earlier evidence instead of repeating the same lookup. Do not repeat single-value checks like the current branch. Do not use inline Python or Node scripts to dump file contents when Read or rg can show what you need. If another tool is still necessary, send one short sentence about the next distinct check first; otherwise answer the user directly.`
 }

@@ -12,10 +12,18 @@ test('system prompt restores brief milestone updates without command echoing', (
   const source = readSource('src/constants/prompts.ts')
 
   assert.match(source, /Be concise, but do not go silent\./)
+  assert.match(
+    source,
+    /Before making tool calls, send a brief preamble to the user explaining what you are about to do next\./,
+  )
   assert.match(source, /Do not narrate the terminal\./)
   assert.match(
     source,
     /Do not repeat exact shell commands, tool names, raw arguments, permission waits, or "done" boilerplate/,
+  )
+  assert.doesNotMatch(
+    source,
+    /they can see your tool calls\./,
   )
 })
 

@@ -144,6 +144,23 @@ test('adds a hidden efficiency reminder after a silent investigative streak', ()
   assert.match(reminder ?? '', /send one short sentence/i)
 })
 
+test('adds the reminder after the first silent search batch so the next turn is not mute again', () => {
+  const reminder = buildToolEfficiencyReminder({
+    messages: [createUserMessage({ content: 'find the relevant file' })],
+    assistantMessages: [createBashAssistant('rg --files src', 'a')],
+    toolUseBlocks: [
+      {
+        type: 'tool_use',
+        id: 'a',
+        name: BASH_TOOL_NAME,
+        input: { command: 'rg --files src' },
+      },
+    ],
+  })
+
+  assert.match(reminder ?? '', /^Tool-efficiency reminder:/)
+})
+
 test('skips the reminder when assistant text is already visible in the batch', () => {
   const reminder = buildToolEfficiencyReminder({
     messages: [createUserMessage({ content: 'inspect these files' })],
