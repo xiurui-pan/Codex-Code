@@ -153,6 +153,19 @@ test('main help and session copy use Codex-facing wording', async () => {
   assert.doesNotMatch(resumeSource, /Loading Claude Code sessions…/)
 })
 
+test('background shortcut hints use the same tmux wording in task and session views', async () => {
+  const taskHintSource = await readFile(`${ROOT}/tools/BashTool/UI.tsx`, 'utf8')
+  const sessionHintSource = await readFile(
+    `${ROOT}/components/SessionBackgroundHint.tsx`,
+    'utf8',
+  )
+
+  assert.ok(taskHintSource.includes('"ctrl+b ctrl+b"'))
+  assert.doesNotMatch(taskHintSource, /ctrl\\+b ctrl\\+b \\(twice\\)/)
+  assert.ok(taskHintSource.includes('action="background"'))
+  assert.ok(sessionHintSource.includes('"ctrl+b ctrl+b"'))
+})
+
 test('secondary TUI copy no longer tells users to ask Claude', async () => {
   const interruptSource = await readFile(`${ROOT}/components/InterruptedByUser.tsx`, 'utf8')
   const eventModeSource = await readFile(`${ROOT}/components/hooks/SelectEventMode.tsx`, 'utf8')

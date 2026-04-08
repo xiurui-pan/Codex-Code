@@ -68,13 +68,13 @@ export function BackgroundHint(t0) {
   }
   useKeybinding("task:background", handleBackground, t3);
   const baseShortcut = useShortcutDisplay("task:background", "Task", "ctrl+b");
-  const shortcut = env.terminal === "tmux" && baseShortcut === "ctrl+b" ? "ctrl+b ctrl+b (twice)" : baseShortcut;
+  const shortcut = env.terminal === "tmux" && baseShortcut === "ctrl+b" ? "ctrl+b ctrl+b" : baseShortcut;
   if (isEnvTruthy(process.env.CODEX_CODE_DISABLE_BACKGROUND_TASKS)) {
     return null;
   }
   let t4;
   if ($[7] !== shortcut) {
-    t4 = <Box paddingLeft={5}><Text dimColor={true}><KeyboardShortcutHint shortcut={shortcut} action="run in background" parens={true} /></Text></Box>;
+    t4 = <Box paddingLeft={5}><Text dimColor={true}><KeyboardShortcutHint shortcut={shortcut} action="background" parens={true} /></Text></Box>;
     $[7] = shortcut;
     $[8] = t4;
   } else {
