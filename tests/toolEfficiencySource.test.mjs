@@ -21,7 +21,7 @@ test('system prompt now tells the model to stop after enough evidence and avoid 
   )
   assert.match(
     source,
-    /If you still need another tool after a silent stretch, send one short progress update first/,
+    /If you still need another meaningful tool batch and the user has not gotten a fresh progress note since the previous batch, send one short progress update first/,
   )
 })
 

@@ -20,6 +20,10 @@ test('system prompt restores brief milestone updates without command echoing', (
     source,
     /Make it feel like a short progress update or tracking note, not a raw tool announcement\./,
   )
+  assert.match(
+    source,
+    /do give one before each meaningful batch of tools when the user has not gotten a fresh progress note since the last batch/i,
+  )
   assert.match(source, /Do not narrate the terminal\./)
   assert.match(
     source,

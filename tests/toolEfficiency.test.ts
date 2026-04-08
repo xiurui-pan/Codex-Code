@@ -206,6 +206,29 @@ test('does not build a synthetic preamble when assistant text already exists in 
   assert.equal(preamble, null)
 })
 
+test('builds a follow-up synthetic preamble after earlier tool work if no fresh note was shown afterward', () => {
+  const preamble = buildSyntheticToolPreamble({
+    messages: [
+      createUserMessage({ content: '帮我查一下哪里有问题' }),
+      createAssistantText('先定位相关实现和调用点。'),
+      createBashAssistant('rg -n "MARKER" src', 'search-1'),
+      createToolResult('search-1', 'src/file.ts:12:MARKER'),
+    ],
+    assistantMessages: [createBashAssistant('rg -n "SECOND" src', 'search-2')],
+    toolUseBlocks: [
+      {
+        type: 'tool_use',
+        id: 'search-2',
+        name: BASH_TOOL_NAME,
+        input: { command: 'rg -n "SECOND" src' },
+      },
+    ],
+    isMainThread: true,
+  })
+
+  assert.match(preamble ?? '', /已经缩小到相关范围了，我再核对最后一个关键点。/)
+})
+
 test('adds the reminder after the first silent search batch so the next turn is not mute again', () => {
   const reminder = buildToolEfficiencyReminder({
     messages: [createUserMessage({ content: 'find the relevant file' })],

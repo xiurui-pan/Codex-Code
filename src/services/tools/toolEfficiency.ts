@@ -79,6 +79,28 @@ function getMessagesSinceLastHumanTurn(messages: readonly Message[]): Message[] 
   return [...messages]
 }
 
+function isToolActivityMessage(message: Message): boolean {
+  if (message.type === 'assistant' && Array.isArray(message.message.content)) {
+    return message.message.content.some(block => block.type === 'tool_use')
+  }
+
+  if (message.type === 'user' && Array.isArray(message.message.content)) {
+    return message.message.content.some(block => block.type === 'tool_result')
+  }
+
+  return false
+}
+
+function getMessagesSinceLastToolActivity(messages: readonly Message[]): Message[] {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const message = messages[i]
+    if (message && isToolActivityMessage(message)) {
+      return messages.slice(i + 1)
+    }
+  }
+  return [...messages]
+}
+
 function hasVisibleAssistantText(messages: readonly Message[]): boolean {
   return messages.some(
     message =>
@@ -436,8 +458,11 @@ export function buildSyntheticToolPreamble(args: {
   }
 
   const currentRequestMessages = getMessagesSinceLastHumanTurn(args.messages)
+  const messagesSinceLastToolActivity = getMessagesSinceLastToolActivity(
+    currentRequestMessages,
+  )
   if (
-    hasVisibleAssistantText(currentRequestMessages) ||
+    hasVisibleAssistantText(messagesSinceLastToolActivity) ||
     hasVisibleAssistantText(args.assistantMessages)
   ) {
     return null
