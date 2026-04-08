@@ -47,6 +47,10 @@ test('query loop emits a visible pre-tool progress note and still keeps the sile
   assert.match(source, /createAssistantMessage\(\{\s*content: syntheticToolPreamble,/s)
   assert.match(
     source,
+    /syntheticToolPreambleMessage\.message\.model\s*=\s*toolUseContext\.options\.mainLoopModel/,
+  )
+  assert.match(
+    source,
     /avoid repeating the same fact checks, and only send one short progress sentence/,
   )
 })

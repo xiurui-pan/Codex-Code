@@ -1622,10 +1622,13 @@ async function* queryLoop(
       isMainThread: !toolUseContext.agentId,
     })
     if (syntheticToolPreamble) {
-      yield createAssistantMessage({
+      const syntheticToolPreambleMessage = createAssistantMessage({
         content: syntheticToolPreamble,
         isVirtual: true,
       })
+      syntheticToolPreambleMessage.message.model =
+        toolUseContext.options.mainLoopModel
+      yield syntheticToolPreambleMessage
     }
 
     if (streamingToolExecutor) {
