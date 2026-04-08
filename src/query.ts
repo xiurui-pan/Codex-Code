@@ -1,5 +1,6 @@
 // biome-ignore-all assist/source/organizeImports: ANT-ONLY import markers must not be reordered
 import type {
+  ContentBlock,
   ToolResultBlockParam,
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/index.mjs'
@@ -47,6 +48,7 @@ import {
 import { logAntError, logForDebugging } from './utils/debug.js'
 import { getTaskListId, listTasks } from './utils/tasks.js'
 import {
+  createAssistantMessage,
   createUserMessage,
   createUserInterruptionMessage,
   normalizeMessagesForAPI,
@@ -597,6 +599,7 @@ async function* queryLoop(
     const assistantMessages: AssistantMessage[] = []
     const toolResults: (UserMessage | AttachmentMessage)[] = []
     const codexRetryCleanupMessages: Message[] = []
+    const completedTranscriptThinkingByBlock = new Map<string, string>()
     // @see https://docs.claude.com/en/docs/build-with-claude/tool-use
     // Note: stop_reason === 'tool_use' is unreliable -- it's not always set correctly.
     // Set during streaming whenever a tool_use block arrives — the sole
@@ -765,6 +768,7 @@ async function* queryLoop(
               assistantMessages.length = 0
               toolResults.length = 0
               toolUseBlocks.length = 0
+              completedTranscriptThinkingByBlock.clear()
               needsFollowUp = false
               if (streamingToolExecutor) {
                 streamingToolExecutor.discard()
@@ -789,6 +793,7 @@ async function* queryLoop(
                     kind: 'api_error',
                     errorMessage: errorChunk.errorMessage,
                   }),
+                  currentModel,
                 )
             } else if ((chunk as CodexResponseChunk).kind === 'turn_items') {
               const turnChunk = chunk as Extract<
@@ -820,6 +825,7 @@ async function* queryLoop(
               const assistantCandidate =
                 createAssistantMessageFromPreferredAssistantResponsePayload(
                   assistantPayload,
+                  currentModel,
                 )
               if (assistantCandidate.message.content.length > 0) {
                 internalAssistantMessage = assistantCandidate
@@ -840,9 +846,61 @@ async function* queryLoop(
                 CodexResponseChunk,
                 { kind: 'stream_event' }
               >
+              const streamEvent = streamChunk.event
+
+              if (streamEvent.type === 'content_block_start') {
+                const contentBlock = streamEvent.content_block as
+                  | { type?: string }
+                  | undefined
+                if (
+                  contentBlock?.type === 'thinking' ||
+                  contentBlock?.type === 'redacted_thinking'
+                ) {
+                  const thinkingKey = `${String(
+                    streamEvent.output_index ?? 0,
+                  )}:${String(streamEvent.index ?? 0)}`
+                  completedTranscriptThinkingByBlock.set(thinkingKey, '')
+                }
+              } else if (streamEvent.type === 'content_block_delta') {
+                const delta = streamEvent.delta as
+                  | { type?: string; thinking?: string }
+                  | undefined
+                if (delta?.type === 'thinking_delta') {
+                  const thinkingKey = `${String(
+                    streamEvent.output_index ?? 0,
+                  )}:${String(streamEvent.index ?? 0)}`
+                  completedTranscriptThinkingByBlock.set(
+                    thinkingKey,
+                    `${completedTranscriptThinkingByBlock.get(thinkingKey) ?? ''}${delta.thinking ?? ''}`,
+                  )
+                }
+              } else if (streamEvent.type === 'content_block_stop') {
+                const thinkingKey = `${String(
+                  streamEvent.output_index ?? 0,
+                )}:${String(streamEvent.index ?? 0)}`
+                const completedThinking =
+                  completedTranscriptThinkingByBlock.get(thinkingKey) ?? ''
+                completedTranscriptThinkingByBlock.delete(thinkingKey)
+
+                if (completedThinking.trim().length > 0) {
+                  const transcriptThinkingMessage = createAssistantMessage({
+                    content: [
+                      {
+                        type: 'thinking',
+                        thinking: completedThinking,
+                      } as ContentBlock,
+                    ],
+                    isVisibleInTranscriptOnly: true,
+                    model: currentModel,
+                  })
+                  yield transcriptThinkingMessage
+                  codexRetryCleanupMessages.push(transcriptThinkingMessage)
+                }
+              }
+
               yield {
                 type: 'stream_event',
-                event: streamChunk.event,
+                event: streamEvent,
               } as StreamEvent
               continue
             } else if ((chunk as CodexResponseChunk).kind === 'usage') {

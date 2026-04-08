@@ -68,6 +68,7 @@ type BaseEnvelope = {
   parentUuid?: UUID | string
   agentId?: AgentId | string
   isMeta?: boolean
+  isVisibleInTranscriptOnly?: true
   origin?: MessageOrigin
 }
 
@@ -90,7 +91,6 @@ export type UserMessage = BaseContentMessage<
   }
   sourceToolAssistantUUID?: UUID | string
   permissionMode?: string
-  isVisibleInTranscriptOnly?: true
   isVirtual?: true
   isCompactSummary?: true
   summarizeMetadata?: {

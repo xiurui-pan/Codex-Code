@@ -1332,6 +1332,7 @@ export async function* queryCodexResponsesStream({
               event: {
                 type: 'content_block_delta',
                 index: summaryIndex,
+                output_index: outputIndex,
                 delta: { type: 'thinking_delta', thinking: event.delta },
               },
             }
@@ -1342,11 +1343,14 @@ export async function* queryCodexResponsesStream({
         if (event.type === 'response.reasoning_summary_part.done') {
           const summaryIndex =
             typeof event.summary_index === 'number' ? event.summary_index : 0
+          const outputIndex =
+            typeof event.output_index === 'number' ? event.output_index : 0
           yield {
             kind: 'stream_event',
             event: {
               type: 'content_block_stop',
               index: summaryIndex,
+              output_index: outputIndex,
             },
           }
           continue

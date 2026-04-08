@@ -14,6 +14,7 @@ import {
 
 function createSyntheticAssistantMessage(
   content: ContentBlock[],
+  model = 'codex-synthetic',
 ): AssistantMessage {
   return {
     type: 'assistant',
@@ -22,7 +23,7 @@ function createSyntheticAssistantMessage(
     message: {
       id: randomUUID(),
       container: null,
-      model: 'codex-synthetic',
+      model,
       role: 'assistant',
       stop_reason: 'stop_sequence',
       stop_sequence: '',
@@ -50,8 +51,9 @@ function createSyntheticAssistantMessage(
 
 export function createAssistantMessageFromSyntheticPayload(
   payload: SyntheticAssistantPayload,
+  model?: string,
 ): AssistantMessage {
-  const message = createSyntheticAssistantMessage(payload.content)
+  const message = createSyntheticAssistantMessage(payload.content, model)
   if (payload.modelTurnItems.length > 0) {
     message.modelTurnItems = payload.modelTurnItems
   }
@@ -60,6 +62,7 @@ export function createAssistantMessageFromSyntheticPayload(
 
 export function createAssistantMessageFromPreferredAssistantResponsePayload(
   payload: PreferredAssistantResponsePayload,
+  model?: string,
 ): AssistantMessage {
   if (payload.kind === 'api_error') {
     return createSyntheticAssistantApiErrorMessage(payload.errorMessage)
@@ -69,20 +72,24 @@ export function createAssistantMessageFromPreferredAssistantResponsePayload(
     return createAssistantMessageFromSyntheticPayload({
       content: [],
       modelTurnItems: [],
-    })
+    }, model)
   }
 
-  return createAssistantMessageFromSyntheticPayload(payload.payload)
+  return createAssistantMessageFromSyntheticPayload(payload.payload, model)
 }
 
 export function maybeCreateAssistantMessageFromPreferredAssistantResponsePayload(
   payload: PreferredAssistantResponsePayload,
+  model?: string,
 ): AssistantMessage | null {
   if (isEmptyPreferredAssistantResponsePayload(payload)) {
     return null
   }
 
-  return createAssistantMessageFromPreferredAssistantResponsePayload(payload)
+  return createAssistantMessageFromPreferredAssistantResponsePayload(
+    payload,
+    model,
+  )
 }
 
 export function buildAssistantMessageFromPreferredContent(

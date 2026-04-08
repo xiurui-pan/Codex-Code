@@ -361,6 +361,7 @@ function baseCreateAssistantMessage({
   error,
   errorDetails,
   isVirtual,
+  model = SYNTHETIC_MODEL,
   usage = {
     input_tokens: 0,
     output_tokens: 0,
@@ -383,6 +384,7 @@ function baseCreateAssistantMessage({
   error?: SDKAssistantMessageError
   errorDetails?: string
   isVirtual?: true
+  model?: string
   usage?: Usage
 }): AssistantMessage {
   return {
@@ -392,7 +394,7 @@ function baseCreateAssistantMessage({
     message: {
       id: randomUUID(),
       container: null,
-      model: SYNTHETIC_MODEL,
+      model,
       role: 'assistant',
       stop_reason: 'stop_sequence',
       stop_sequence: '',
@@ -414,11 +416,15 @@ export function createAssistantMessage({
   content,
   usage,
   isVirtual,
+  isVisibleInTranscriptOnly,
+  model,
   modelTurnItems,
 }: {
   content: string | BetaContentBlock[]
   usage?: Usage
   isVirtual?: true
+  isVisibleInTranscriptOnly?: true
+  model?: string
   modelTurnItems?: ModelTurnItem[]
 }): AssistantMessage {
   const message = baseCreateAssistantMessage({
@@ -433,7 +439,11 @@ export function createAssistantMessage({
         : content,
     usage,
     isVirtual,
+    model,
   })
+  if (isVisibleInTranscriptOnly) {
+    message.isVisibleInTranscriptOnly = true
+  }
   if (modelTurnItems?.length) {
     message.modelTurnItems = modelTurnItems
   }
@@ -2008,7 +2018,11 @@ export function normalizeMessagesForAPI(
   // Then strip virtual messages — they're display-only (e.g. REPL inner tool
   // calls) and must never reach the API.
   const reorderedMessages = reorderAttachmentsForAPI(messages).filter(
-    m => !((m.type === 'user' || m.type === 'assistant') && m.isVirtual),
+    m =>
+      !(
+        (m.type === 'user' || m.type === 'assistant') &&
+        (m.isVirtual || m.isVisibleInTranscriptOnly)
+      ),
   )
 
   // Build a map from error text → which block types to strip from the preceding user message.
@@ -5111,6 +5125,10 @@ export function filterOrphanedThinkingOnlyMessages(
 
     if (!allThinking) {
       return true // Has non-thinking content, keep it
+    }
+
+    if (msg.isVisibleInTranscriptOnly) {
+      return true
     }
 
     // It's thinking-only. Keep it if there's another message with same id

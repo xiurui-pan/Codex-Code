@@ -162,6 +162,31 @@ test('preferred response conversion keeps payload first and only wraps at the ou
   assert.equal(assistantMessage.message.content[0]?.text, 'payload text')
 })
 
+test('preferred response conversion can preserve the real model name', () => {
+  const payload = preferredTurnResultToPayload({
+    kind: 'assistant',
+    preferred: {
+      kind: 'text',
+      text: 'payload text',
+      renderableItems: [
+        {
+          kind: 'final_answer',
+          provider: 'custom',
+          text: 'payload text',
+          source: 'message_output',
+        },
+      ],
+    },
+  })
+
+  const assistantMessage =
+    createAssistantMessageFromPreferredAssistantResponsePayload(
+      payload,
+      'gpt-5.4',
+    )
+  assert.equal(assistantMessage.message.model, 'gpt-5.4')
+})
+
 test('preferred response conversion keeps api_error on the payload side until wrapping', () => {
   const payload = preferredTurnResultToPayload({
     kind: 'api_error',
