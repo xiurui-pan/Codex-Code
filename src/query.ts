@@ -114,7 +114,10 @@ import {
   isCurrentSessionMemoryContextMessage,
 } from './services/SessionMemory/sessionMemoryContext.js'
 import { StreamingToolExecutor } from './services/tools/StreamingToolExecutor.js'
-import { buildToolEfficiencyReminder } from './services/tools/toolEfficiency.js'
+import {
+  buildSyntheticToolPreamble,
+  buildToolEfficiencyReminder,
+} from './services/tools/toolEfficiency.js'
 import { queryCheckpoint } from './utils/queryProfiler.js'
 import { runTools } from './services/tools/toolOrchestration.js'
 import { applyToolResultBudget } from './utils/toolResultStorage.js'
@@ -1612,6 +1615,18 @@ async function* queryLoop(
 
     queryCheckpoint('query_tool_execution_start')
 
+    const syntheticToolPreamble = buildSyntheticToolPreamble({
+      messages: messagesForQuery,
+      assistantMessages,
+      toolUseBlocks,
+      isMainThread: !toolUseContext.agentId,
+    })
+    if (syntheticToolPreamble) {
+      yield createAssistantMessage({
+        content: syntheticToolPreamble,
+        isVirtual: true,
+      })
+    }
 
     if (streamingToolExecutor) {
       logEvent('tengu_streaming_tool_execution_used', {

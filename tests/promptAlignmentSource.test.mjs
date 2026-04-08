@@ -14,7 +14,11 @@ test('system prompt restores brief milestone updates without command echoing', (
   assert.match(source, /Be concise, but do not go silent\./)
   assert.match(
     source,
-    /Before making tool calls, send a brief preamble to the user explaining what you are about to do next\./,
+    /Before making tool calls, send a brief preamble to the user explaining what you are about to do\./,
+  )
+  assert.match(
+    source,
+    /Make it feel like a short progress update or tracking note, not a raw tool announcement\./,
   )
   assert.match(source, /Do not narrate the terminal\./)
   assert.match(

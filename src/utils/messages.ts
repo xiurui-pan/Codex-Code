@@ -3042,20 +3042,22 @@ export function handleMessageFromStream(
 
   switch (message.event.type) {
     case 'content_block_start':
-      onStreamingText?.(() => null)
       if (
         feature('CONNECTOR_TEXT') &&
         isConnectorTextBlock(message.event.content_block)
       ) {
+        onStreamingText?.(() => null)
         onSetStreamMode('responding')
         return
       }
       switch (message.event.content_block.type) {
         case 'thinking':
         case 'redacted_thinking':
+          onStreamingText?.(() => null)
           onSetStreamMode('thinking')
           return
         case 'text':
+          onStreamingText?.(() => null)
           onSetStreamMode('responding')
           return
         case 'tool_use': {
