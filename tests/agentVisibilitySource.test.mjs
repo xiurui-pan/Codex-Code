@@ -37,3 +37,12 @@ test('transcript mode uses fresh messages after the turn ends', () => {
     /const transcriptBaseMessages = frozenTranscriptState \? transcriptMessageSource\.slice\(0, frozenTranscriptState\.messagesLength\) : transcriptMessageSource;/,
   )
 })
+
+test('main message list receives streaming thinking state too', () => {
+  const source = readSource('src/screens/REPL.tsx')
+
+  assert.match(
+    source,
+    /streamingThinking=\{viewedAgentTask \? null : streamingThinking\}/,
+  )
+})

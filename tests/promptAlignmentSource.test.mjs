@@ -14,10 +14,23 @@ test('system prompt restores brief milestone updates without command echoing', (
   assert.match(source, /Be concise, but do not go silent\./)
   assert.match(
     source,
+    /Before exploring or doing substantial work, start with a brief user update that says what you are checking first\./,
+  )
+  assert.match(
+    source,
     /Before making tool calls, send a brief preamble to the user explaining what you are about to do\./,
   )
-  assert.match(source, /Group related actions together, keep it concise, and build on prior context/)
-  assert.match(source, /Avoid a preamble for every trivial read unless it is part of a larger grouped action\./)
+  assert.match(source, /Logically group related actions:/)
+  assert.match(source, /Build on prior context:/)
+  assert.match(source, /Exception: avoid adding a preamble for every trivial read unless it is part of a larger grouped action\./)
+  assert.match(
+    source,
+    /I’ve explored the repo; now checking the API route definitions\./,
+  )
+  assert.match(
+    source,
+    /The messages you send before tool calls should describe what is immediately about to be done next in very concise language\./,
+  )
   assert.match(source, /Do not narrate the terminal\./)
   assert.match(
     source,

@@ -26,9 +26,11 @@ test('codex responses stream maps reasoning summary events into thinking deltas'
   const source = await readFile(SOURCE_PATH, 'utf8')
 
   assert.match(source, /event\.type === 'response\.reasoning_summary_part\.added'/)
+  assert.match(source, /event\.type === 'response\.reasoning_summary_part\.done'/)
   assert.match(source, /event\.type === 'response\.reasoning_summary_text\.delta'/)
   assert.match(source, /type: 'thinking'/)
   assert.match(source, /type: 'thinking_delta'/)
+  assert.match(source, /type: 'content_block_stop'/)
 })
 
 test('codex responses stream normalizes status-less web search done events to completed', async () => {

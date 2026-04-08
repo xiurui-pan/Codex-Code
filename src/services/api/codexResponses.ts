@@ -220,6 +220,13 @@ type ResponsesReasoningSummaryPartAddedEvent = {
   output_index?: number
 }
 
+type ResponsesReasoningSummaryPartDoneEvent = {
+  type: 'response.reasoning_summary_part.done'
+  summary_index?: number
+  item_id?: string
+  output_index?: number
+}
+
 type ResponsesReasoningSummaryTextDeltaEvent = {
   type: 'response.reasoning_summary_text.delta'
   delta?: string
@@ -237,6 +244,7 @@ type ResponsesStreamEvent =
   | ResponsesFailureEvent
   | ResponsesIncompleteEvent
   | ResponsesReasoningSummaryPartAddedEvent
+  | ResponsesReasoningSummaryPartDoneEvent
   | ResponsesReasoningSummaryTextDeltaEvent
   | { type?: string }
 
@@ -1327,6 +1335,19 @@ export async function* queryCodexResponsesStream({
                 delta: { type: 'thinking_delta', thinking: event.delta },
               },
             }
+          }
+          continue
+        }
+
+        if (event.type === 'response.reasoning_summary_part.done') {
+          const summaryIndex =
+            typeof event.summary_index === 'number' ? event.summary_index : 0
+          yield {
+            kind: 'stream_event',
+            event: {
+              type: 'content_block_stop',
+              index: summaryIndex,
+            },
           }
           continue
         }
