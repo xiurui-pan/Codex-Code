@@ -23,3 +23,10 @@ test('Message.tsx drops assistant and user wrapper boxes when every child render
   assert.match(source, /function hasRenderableNode\(children: React\.ReactNode\)/);
   assert.match(source, /if \(!hasRenderableNode\(t3\)\) \{\s*return null;/);
 });
+
+test('prompt mode only renders live streaming thinking, not completed leftovers', () => {
+  const source = readSource('src/components/Messages.tsx');
+
+  assert.match(source, /return streamingThinking\?\.isStreaming \?\? false;/);
+  assert.doesNotMatch(source, /30000/);
+});

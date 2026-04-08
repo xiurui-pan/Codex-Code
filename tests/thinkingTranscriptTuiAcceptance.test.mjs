@@ -18,7 +18,11 @@ const DEFAULT_CONFIG_LINES = [
   'response_storage = false',
 ]
 
-function buildReasoningResponse() {
+function buildReasoningResponse({
+  thinking = 'Checking files',
+  finalText = 'FINAL_OK',
+  responseId = 'resp-thinking-transcript-1',
+} = {}) {
   return [
     'event: response.reasoning_summary_part.added',
     `data: ${JSON.stringify({
@@ -32,7 +36,7 @@ function buildReasoningResponse() {
       type: 'response.reasoning_summary_text.delta',
       output_index: 0,
       summary_index: 0,
-      delta: 'Checking files',
+      delta: thinking,
     })}`,
     '',
     'event: response.reasoning_summary_part.done',
@@ -48,14 +52,14 @@ function buildReasoningResponse() {
       item: {
         type: 'message',
         role: 'assistant',
-        content: [{ type: 'output_text', text: 'FINAL_OK' }],
+        content: [{ type: 'output_text', text: finalText }],
       },
     })}`,
     '',
     'event: response.completed',
     `data: ${JSON.stringify({
       type: 'response.completed',
-      response: { id: 'resp-thinking-transcript-1' },
+      response: { id: responseId },
     })}`,
     '',
     'data: [DONE]',
@@ -65,6 +69,7 @@ function buildReasoningResponse() {
 
 async function withResponsesServer(responseBody, run) {
   const sockets = new Set()
+  let requestCount = 0
 
   const server = http.createServer((req, res) => {
     if (req.method !== 'POST' || req.url !== '/responses') {
@@ -79,12 +84,18 @@ async function withResponsesServer(responseBody, run) {
     })
     req.on('end', () => {
       void body
+      const resolvedBody =
+        typeof responseBody === 'function'
+          ? responseBody(requestCount++)
+          : Array.isArray(responseBody)
+            ? responseBody[Math.min(requestCount++, responseBody.length - 1)]
+            : responseBody
       res.writeHead(200, {
         'content-type': 'text/event-stream',
         connection: 'keep-alive',
         'cache-control': 'no-cache',
       })
-      res.write(responseBody)
+      res.write(resolvedBody)
       res.end()
     })
   })
@@ -191,11 +202,14 @@ while time.time() < timeout_at:
         if all(re.sub(r"\s+", "", token) in normalized for token in wait_for):
             os.write(master, action["send"].encode("utf-8"))
             sent.append(action["name"])
+            after_send_ms = action.get("afterSendSettleMs", 0)
+            if after_send_ms > 0:
+                time.sleep(after_send_ms / 1000.0)
             if len(sent) == len(actions):
                 settle_ms = action.get("settleMs", 1000)
                 if settle_ms > 0:
                     time.sleep(settle_ms / 1000.0)
-                timeout_at = time.time()
+                timeout_at = time.time() + 1.0
 
 if proc.poll() is None:
     proc.send_signal(signal.SIGTERM)
@@ -257,57 +271,64 @@ print(json.dumps({
 }
 
 test(
-  'TUI transcript shows completed thinking after prompt-mode thinking clears',
+  'TUI transcript keeps completed thinking from multiple turns',
   SERIAL_TEST,
   async () => {
     const tempHome = await mkdtemp(
-      join(tmpdir(), 'codex-thinking-transcript-'),
+      join(tmpdir(), 'codex-thinking-transcript-multiturn-'),
     )
 
     try {
-      await withResponsesServer(buildReasoningResponse(), async ({ port }) => {
-        await writeCodexConfig(tempHome, port)
+      await withResponsesServer(
+        [
+          buildReasoningResponse({
+            thinking: 'First turn thinking',
+            finalText: 'FIRST_OK',
+            responseId: 'resp-thinking-transcript-first',
+          }),
+          buildReasoningResponse({
+            thinking: 'Second turn thinking',
+            finalText: 'SECOND_OK',
+            responseId: 'resp-thinking-transcript-second',
+          }),
+        ],
+        async ({ port }) => {
+          await writeCodexConfig(tempHome, port)
 
-        const result = await runTuiFlow({
-          tempHome,
-          actions: [
-            {
-              name: 'prompt',
-              waitFor: ['╭─'],
-              send: 'show me the result\r',
-            },
-            {
-              name: 'open-transcript',
-              waitFor: ['FINAL_OK'],
-              send: '\u000f',
-            },
-            {
-              name: 'close-transcript',
-              waitFor: ['Showing detailed transcript', 'Checking files'],
-              send: '\u000f',
-            },
-            {
-              name: 'exit',
-              waitFor: ['FINAL_OK'],
-              send: '/exit\r',
-              settleMs: 300,
-            },
-          ],
-        })
+          const result = await runTuiFlow({
+            tempHome,
+            actions: [
+              {
+                name: 'first-prompt',
+                waitFor: ['❯'],
+                send: 'first turn\r',
+              },
+              {
+                name: 'second-prompt',
+                waitFor: ['FIRST_OK'],
+                send: 'second turn\r',
+                afterSendSettleMs: 1500,
+              },
+              {
+                name: 'open-transcript',
+                waitFor: [],
+                send: '\u000f',
+                settleMs: 1500,
+              },
+            ],
+          })
 
-        assert.deepEqual(result.sent, [
-          'prompt',
-          'open-transcript',
-          'close-transcript',
-          'exit',
-        ])
-        assert.match(result.cleanedTranscript, /FINAL_OK/)
-        assert.match(
-          result.normalizedTranscript,
-          /Showingdetailedtranscript/i,
-        )
-        assert.match(result.normalizedTranscript, /Checkingfiles/)
-      })
+          assert.deepEqual(result.sent, [
+            'first-prompt',
+            'second-prompt',
+            'open-transcript',
+          ])
+          assert.match(result.normalizedTranscript, /FIRST_OK/)
+          assert.match(result.normalizedTranscript, /SECOND_OK/)
+          assert.match(result.normalizedTranscript, /Firstturnthinking/)
+          assert.match(result.normalizedTranscript, /Secondturnthinking/)
+        },
+      )
     } finally {
       await rm(tempHome, { recursive: true, force: true })
     }

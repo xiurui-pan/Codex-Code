@@ -424,14 +424,11 @@ const MessagesImpl = ({
   const toggleShowAllShortcut = useShortcutDisplay('transcript:toggleShowAll', 'Transcript', 'Ctrl+E');
   const normalizedMessages = useMemo(() => normalizeMessages(messages).filter(isNotEmptyMessage), [messages]);
 
-  // Check if streaming thinking should be visible (streaming or within 30s timeout)
+  // In prompt mode, live thinking may appear while it streams, but completed
+  // thinking should live in transcript-only assistant messages instead of
+  // lingering on the main screen.
   const isStreamingThinkingVisible = useMemo(() => {
-    if (!streamingThinking) return false;
-    if (streamingThinking.isStreaming) return true;
-    if (streamingThinking.streamingEndedAt) {
-      return Date.now() - streamingThinking.streamingEndedAt < 30000;
-    }
-    return false;
+    return streamingThinking?.isStreaming ?? false;
   }, [streamingThinking]);
 
   // Find the last thinking block (message UUID + content index) for hiding past thinking in transcript mode

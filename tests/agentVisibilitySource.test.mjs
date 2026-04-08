@@ -46,3 +46,9 @@ test('main message list receives streaming thinking state too', () => {
     /streamingThinking=\{viewedAgentTask \? null : streamingThinking\}/,
   )
 })
+
+test('transcript mode keeps all completed thinking blocks instead of hiding past turns', () => {
+  const source = readSource('src/screens/REPL.tsx')
+
+  assert.match(source, /hidePastThinking=\{false\}/)
+})
