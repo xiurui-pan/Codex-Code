@@ -1,4 +1,6 @@
 import type { PermissionMode } from '../permissions/PermissionMode.js'
+import type { EffortValue } from '../effort.js'
+import { resolveCodexModelInput } from './codexModels.js'
 import { capitalize } from '../stringUtils.js'
 import { MODEL_ALIASES, type ModelAlias } from './aliases.js'
 import { applyBedrockRegionPrefix, getBedrockRegionPrefix } from './bedrock.js'
@@ -20,6 +22,24 @@ export type AgentModelOption = {
   description: string
 }
 
+const CODEX_AGENT_ALIAS_PRESETS: Record<
+  'haiku' | 'sonnet' | 'opus',
+  { model: string; effort: EffortValue }
+> = {
+  haiku: {
+    model: 'gpt-5.4-mini',
+    effort: 'xhigh',
+  },
+  sonnet: {
+    model: 'gpt-5.4',
+    effort: 'medium',
+  },
+  opus: {
+    model: 'gpt-5.4',
+    effort: 'xhigh',
+  },
+}
+
 /**
  * Get the default subagent model. Returns 'inherit' so subagents inherit
  * the model from the parent thread.
@@ -39,7 +59,7 @@ export function getDefaultSubagentModel(): string {
 export function getAgentModel(
   agentModel: string | undefined,
   parentModel: string,
-  toolSpecifiedModel?: ModelAlias,
+  toolSpecifiedModel?: string,
   permissionMode?: PermissionMode,
 ): string {
   if (process.env.CODEX_CODE_SUBAGENT_MODEL) {
@@ -108,6 +128,58 @@ export function getAgentModel(
   }
   const model = parseUserSpecifiedModel(agentModelWithExp)
   return applyParentRegionPrefix(model, agentModelWithExp)
+}
+
+function getCodexAgentAliasPreset(
+  model: string | undefined,
+): { model: string; effort: EffortValue } | undefined {
+  if (!model) {
+    return undefined
+  }
+
+  const normalized = model.trim().toLowerCase()
+  if (
+    normalized === 'haiku' ||
+    normalized === 'sonnet' ||
+    normalized === 'opus'
+  ) {
+    const preset = CODEX_AGENT_ALIAS_PRESETS[normalized]
+    return {
+      model: resolveCodexModelInput(preset.model),
+      effort: preset.effort,
+    }
+  }
+
+  return undefined
+}
+
+export function getAgentEffort(
+  agentModel: string | undefined,
+  agentEffort: EffortValue | undefined,
+  toolSpecifiedModel?: string,
+  toolSpecifiedEffort?: EffortValue,
+): EffortValue | undefined {
+  if (toolSpecifiedEffort !== undefined) {
+    return toolSpecifiedEffort
+  }
+
+  if (toolSpecifiedModel !== undefined) {
+    if (!isCurrentPhaseCustomCodexProvider()) {
+      return undefined
+    }
+
+    return getCodexAgentAliasPreset(toolSpecifiedModel)?.effort
+  }
+
+  if (agentEffort !== undefined) {
+    return agentEffort
+  }
+
+  if (!isCurrentPhaseCustomCodexProvider()) {
+    return undefined
+  }
+
+  return getCodexAgentAliasPreset(agentModel)?.effort
 }
 
 /**

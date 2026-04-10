@@ -49,12 +49,12 @@ export function AgentProgressLine({
       : 'Done'
 
   return (
-    <Box flexDirection="column">
-      <Box paddingLeft={3} flexDirection="row">
+    <Box flexDirection="column" width="100%">
+      <Box paddingLeft={3} flexDirection="row" width="100%">
         <Box flexShrink={0}>
           <Text dimColor>{treeChar} </Text>
         </Box>
-        <Box flexShrink={1}>
+        <Box flexGrow={1} flexShrink={1} minWidth={0}>
           <Text dimColor={!isResolved} wrap="truncate-end">
             {hideType ? (
               <>
@@ -96,11 +96,11 @@ export function AgentProgressLine({
         </Box>
       </Box>
       {!isBackgrounded && (
-        <Box paddingLeft={3} flexDirection="row">
+        <Box paddingLeft={3} flexDirection="row" width="100%">
           <Box flexShrink={0}>
             <Text dimColor>{isLast ? '   ⎿  ' : '│  ⎿  '}</Text>
           </Box>
-          <Box flexShrink={1}>
+          <Box flexGrow={1} flexShrink={1} minWidth={0}>
             <Text dimColor wrap="truncate-end">
               {statusText}
             </Text>

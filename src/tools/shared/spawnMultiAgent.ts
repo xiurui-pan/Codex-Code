@@ -22,6 +22,7 @@ import { isInBundledMode } from '../../utils/bundledMode.js'
 import { getGlobalConfig } from '../../utils/config.js'
 import { getCwd } from '../../utils/cwd.js'
 import { logForDebugging } from '../../utils/debug.js'
+import type { EffortValue } from '../../utils/effort.js'
 import { errorMessage } from '../../utils/errors.js'
 import { execFileNoThrow } from '../../utils/execFileNoThrow.js'
 import { parseUserSpecifiedModel } from '../../utils/model/model.js'
@@ -127,6 +128,7 @@ export type SpawnTeammateConfig = {
   use_splitpane?: boolean
   plan_mode_required?: boolean
   model?: string
+  effort?: EffortValue
   agent_type?: string
   description?: string
   /** request_id of the API call whose response contained the tool_use that
@@ -144,6 +146,7 @@ type SpawnInput = {
   use_splitpane?: boolean
   plan_mode_required?: boolean
   model?: string
+  effort?: EffortValue
   agent_type?: string
   description?: string
   invokingRequestId?: string
@@ -894,6 +897,7 @@ async function handleSpawnInProcess(
     color: teammateColor,
     planModeRequired: plan_mode_required ?? false,
     model,
+    effort: input.effort,
   }
 
   const result = await spawnInProcessTeammate(config, context)
@@ -922,6 +926,7 @@ async function handleSpawnInProcess(
       prompt,
       description: input.description,
       model,
+      effort: input.effort,
       agentDefinition,
       teammateContext: result.teammateContext,
       // Strip messages: the teammate never reads toolUseContext.messages

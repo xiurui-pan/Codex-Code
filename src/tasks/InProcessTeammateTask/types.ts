@@ -2,6 +2,7 @@ import type { TaskStateBase } from '../../Task.js'
 import type { AgentToolResult } from '../../tools/AgentTool/agentToolUtils.js'
 import type { AgentDefinition } from '../../tools/AgentTool/loadAgentsDir.js'
 import type { Message } from '../../types/message.js'
+import type { EffortValue } from '../../utils/effort.js'
 import type { PermissionMode } from '../../utils/permissions/PermissionMode.js'
 import type { AgentProgress } from '../LocalAgentTask/LocalAgentTask.js'
 
@@ -30,6 +31,8 @@ export type InProcessTeammateTaskState = TaskStateBase & {
   prompt: string
   // Optional model override for this teammate
   model?: string
+  // Optional reasoning effort override for this teammate
+  effort?: EffortValue
   // Optional: Only set if teammate uses a specific agent definition
   // Many teammates run as general-purpose agents without a predefined definition
   selectedAgent?: AgentDefinition

@@ -19,12 +19,15 @@ import { runWithAgentContext } from '../../utils/agentContext.js';
 import { isAgentSwarmsEnabled } from '../../utils/agentSwarmsEnabled.js';
 import { getCwd, runWithCwdOverride } from '../../utils/cwd.js';
 import { logForDebugging } from '../../utils/debug.js';
+import { EFFORT_LEVELS, type EffortValue } from '../../utils/effort.js';
 import { isEnvTruthy } from '../../utils/envUtils.js';
 import { AbortError, errorMessage, toError } from '../../utils/errors.js';
 import type { CacheSafeParams } from '../../utils/forkedAgent.js';
 import { lazySchema } from '../../utils/lazySchema.js';
 import { createUserMessage, extractTextContent, isSyntheticMessage, normalizeMessages } from '../../utils/messages.js';
-import { getAgentModel } from '../../utils/model/agent.js';
+import { getAgentEffort, getAgentModel } from '../../utils/model/agent.js';
+import { getCodexModelCapabilities } from '../../utils/model/codexModels.js';
+import { isCurrentPhaseCustomCodexProvider } from '../../utils/currentPhase.js';
 import { permissionModeSchema } from '../../utils/permissions/PermissionMode.js';
 import type { PermissionResult } from '../../utils/permissions/PermissionResult.js';
 import { filterDeniedAgents, getDenyRuleForAgent } from '../../utils/permissions/permissions.js';
@@ -78,14 +81,40 @@ function getAutoBackgroundMs(): number {
 
 // Multi-agent type constants are defined inline inside gated blocks to enable dead code elimination
 
+const codexAgentToolModelValues = getCodexModelCapabilities().map(capability => capability.value);
+
+function buildAgentToolModelSchema() {
+  if (!isCurrentPhaseCustomCodexProvider()) {
+    return z.enum(['sonnet', 'opus', 'haiku']).optional().describe("Optional model override for this agent. Takes precedence over the agent definition's model frontmatter. If omitted, uses the agent definition's model, or inherits from the parent.");
+  }
+
+  const literals = codexAgentToolModelValues.map(value => z.literal(value));
+  const codexModelSchema = literals.length === 1 ? literals[0]! : z.union(literals as [z.ZodLiteral<string>, z.ZodLiteral<string>, ...Array<z.ZodLiteral<string>>]);
+  return codexModelSchema.optional().describe(`Optional Codex model override for this agent. Supported values: ${codexAgentToolModelValues.join(', ')}.`);
+}
+
+function buildAgentToolReasoningEffortSchema() {
+  if (!isCurrentPhaseCustomCodexProvider()) {
+    return undefined;
+  }
+
+  return z.enum(EFFORT_LEVELS).optional().describe('Optional reasoning effort override for this agent. If omitted, the agent uses its configured default or the session/model default.');
+}
+
 // Base input schema without multi-agent parameters
-const baseInputSchema = lazySchema(() => z.object({
-  description: z.string().describe('A short (3-5 word) description of the task'),
-  prompt: z.string().describe('The task for the agent to perform'),
-  subagent_type: z.string().optional().describe('The type of specialized agent to use for this task'),
-  model: z.enum(['sonnet', 'opus', 'haiku']).optional().describe("Optional model override for this agent. Takes precedence over the agent definition's model frontmatter. If omitted, uses the agent definition's model, or inherits from the parent."),
-  run_in_background: z.boolean().optional().describe('Set to true to run this agent in the background. You will be notified when it completes.')
-}));
+const baseInputSchema = lazySchema(() => {
+  const schema = z.object({
+    description: z.string().describe('A short (3-5 word) description of the task'),
+    prompt: z.string().describe('The task for the agent to perform'),
+    subagent_type: z.string().optional().describe('The type of specialized agent to use for this task'),
+    model: buildAgentToolModelSchema(),
+    run_in_background: z.boolean().optional().describe('Set to true to run this agent in the background. You will be notified when it completes.')
+  });
+  const reasoningEffortSchema = buildAgentToolReasoningEffortSchema();
+  return reasoningEffortSchema ? schema.extend({
+    reasoning_effort: reasoningEffortSchema
+  }) : schema;
+});
 
 // Full schema combining base + multi-agent params + isolation
 const fullInputSchema = lazySchema(() => {
@@ -135,6 +164,7 @@ type AgentToolInput = z.infer<ReturnType<typeof baseInputSchema>> & {
   mode?: z.infer<ReturnType<typeof permissionModeSchema>>;
   isolation?: 'worktree' | 'remote';
   cwd?: string;
+  reasoning_effort?: EffortValue;
 };
 
 // Output schema - multi-agent spawned schema added dynamically at runtime when enabled
@@ -242,6 +272,7 @@ export const AgentTool = buildTool({
     subagent_type,
     description,
     model: modelParam,
+    reasoning_effort,
     run_in_background,
     name,
     team_name,
@@ -296,6 +327,7 @@ export const AgentTool = buildTool({
         use_splitpane: true,
         plan_mode_required: spawnMode === 'plan',
         model: model ?? agentDef?.model,
+        effort: reasoning_effort,
         agent_type: subagent_type,
         invokingRequestId: assistantMessage?.requestId
       }, toolUseContext);
@@ -417,6 +449,7 @@ export const AgentTool = buildTool({
 
     // Resolve agent params for logging (these are already resolved in runAgent)
     const resolvedAgentModel = getAgentModel(selectedAgent.model, toolUseContext.options.mainLoopModel, isForkPath ? undefined : model, permissionMode);
+    const resolvedAgentEffort = getAgentEffort(selectedAgent.model, selectedAgent.effort, isForkPath ? undefined : model, reasoning_effort);
     logEvent('tengu_agent_tool_selected', {
       agent_type: selectedAgent.agentType as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
       model: resolvedAgentModel as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -610,6 +643,7 @@ export const AgentTool = buildTool({
       isAsync: shouldRunAsync,
       querySource: toolUseContext.options.querySource ?? getQuerySourceForAgent(selectedAgent.agentType, isBuiltInAgent(selectedAgent)),
       model: isForkPath ? undefined : model,
+      effort: resolvedAgentEffort,
       // Fork path: pass parent's system prompt AND parent's exact tool
       // array (cache-identical prefix). workerTools is rebuilt under
       // permissionMode 'bubble' which differs from the parent's mode, so

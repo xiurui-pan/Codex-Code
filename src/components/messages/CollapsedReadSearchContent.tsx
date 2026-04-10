@@ -445,29 +445,32 @@ export function CollapsedReadSearchContent({
         {memoryWriteCount === 1 ? 'memory' : 'memories'}
       </Text>);
   }
-  return <Box flexDirection="column" marginTop={1} backgroundColor={bg}>
-      <Box flexDirection="row">
+  return <Box flexDirection="column" marginTop={1} backgroundColor={bg} width="100%">
+      <Box flexDirection="row" width="100%" gap={1}>
         {isActiveGroup ? <ToolUseLoader shouldAnimate isUnresolved isError={anyError} /> : <Box minWidth={2} />}
-        <Text dimColor={!isActiveGroup}>
-          {nonMemParts}
-          {memParts}
-          {feature('TEAMMEM') ? teamMemCollapsed!.TeamMemCountParts({
-          message,
-          isActiveGroup,
-          hasPrecedingParts: hasPrecedingNonMem || memParts.length > 0
-        }) : null}
-          {isActiveGroup && <Text key="ellipsis">…</Text>} <CtrlOToExpand />
-        </Text>
+        <Box flexGrow={1} flexShrink={1} minWidth={0}>
+          <Text dimColor={!isActiveGroup} wrap="truncate-end">
+            {nonMemParts}
+            {memParts}
+            {feature('TEAMMEM') ? teamMemCollapsed!.TeamMemCountParts({
+            message,
+            isActiveGroup,
+            hasPrecedingParts: hasPrecedingNonMem || memParts.length > 0
+          }) : null}
+            {isActiveGroup && <Text key="ellipsis">…</Text>}
+          </Text>
+        </Box>
+        <Box flexShrink={0}><CtrlOToExpand /></Box>
       </Box>
       {isActiveGroup && displayedHint !== undefined &&
     // Row layout: 5-wide gutter for ⎿, then a flex column for the text.
     // Ink's wrap stays inside the right column so continuation lines
     // indent under ⎿. MAX_HINT_CHARS in commandAsHint caps total at ~5 lines.
-    <Box flexDirection="row">
+    <Box flexDirection="row" width="100%">
           <Box width={5} flexShrink={0}>
             <Text dimColor>{'  ⎿  '}</Text>
           </Box>
-          <Box flexDirection="column" flexGrow={1}>
+          <Box flexDirection="column" flexGrow={1} flexShrink={1} minWidth={0}>
             {displayedHint.split('\n').map((line, i, arr) => <Text key={`hint-${i}`} dimColor>
                 {line}
                 {i === arr.length - 1 && shellProgressSuffix}

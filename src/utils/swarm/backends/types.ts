@@ -1,4 +1,5 @@
 import type { AgentColorName } from '../../../tools/AgentTool/agentColorManager.js'
+import type { EffortValue } from '../../effort.js'
 
 /**
  * Types of backends available for teammate execution.
@@ -209,6 +210,8 @@ export type TeammateSpawnConfig = TeammateIdentity & {
   cwd: string
   /** Model to use for this teammate */
   model?: string
+  /** Reasoning effort to use for this teammate */
+  effort?: EffortValue
   /** System prompt for this teammate (resolved from workflow config) */
   systemPrompt?: string
   /** How to apply the system prompt: 'replace' or 'append' to default */

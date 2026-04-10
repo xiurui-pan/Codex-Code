@@ -1,10 +1,9 @@
-import type { ModelAlias } from 'src/utils/model/aliases.js'
 import { getAgentModel } from 'src/utils/model/agent.js'
 import { renderModelName } from 'src/utils/model/model.js'
 import { getBuiltInAgents } from './builtInAgents.js'
 
 type AgentToolUseInput = Partial<{
-  model?: ModelAlias
+  model?: string
   subagent_type: string
 }>
 

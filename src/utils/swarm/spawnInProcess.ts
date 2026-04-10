@@ -27,6 +27,7 @@ import { createAbortController } from '../abortController.js'
 import { formatAgentId } from '../agentId.js'
 import { registerCleanup } from '../cleanupRegistry.js'
 import { logForDebugging } from '../debug.js'
+import type { EffortValue } from '../effort.js'
 import { emitTaskTerminatedSdk } from '../sdkEventQueue.js'
 import { evictTaskOutput } from '../task/diskOutput.js'
 import {
@@ -69,6 +70,8 @@ export type InProcessSpawnConfig = {
   planModeRequired: boolean
   /** Optional model override for this teammate */
   model?: string
+  /** Optional reasoning effort override for this teammate */
+  effort?: EffortValue
 }
 
 /**
@@ -105,7 +108,7 @@ export async function spawnInProcessTeammate(
   config: InProcessSpawnConfig,
   context: SpawnContext,
 ): Promise<InProcessSpawnOutput> {
-  const { name, teamName, prompt, color, planModeRequired, model } = config
+  const { name, teamName, prompt, color, planModeRequired, model, effort } = config
   const { setAppState } = context
 
   // Generate deterministic agent ID
@@ -166,6 +169,7 @@ export async function spawnInProcessTeammate(
       identity,
       prompt,
       model,
+      effort,
       abortController,
       awaitingPlanApproval: false,
       spinnerVerb: sample(getSpinnerVerbs()),

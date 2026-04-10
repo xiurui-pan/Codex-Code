@@ -42,6 +42,7 @@ import type {
 } from '../../types/message.js'
 import { createAttachmentMessage } from '../../utils/attachments.js'
 import { AbortError } from '../../utils/errors.js'
+import type { EffortValue } from '../../utils/effort.js'
 import { getDisplayPath } from '../../utils/file.js'
 import {
   cloneFileStateCache,
@@ -57,7 +58,6 @@ import { clearSessionHooks } from '../../utils/hooks/sessionHooks.js'
 import { executeSubagentStartHooks } from '../../utils/hooks.js'
 import { createUserMessage } from '../../utils/messages.js'
 import { getAgentModel } from '../../utils/model/agent.js'
-import type { ModelAlias } from '../../utils/model/aliases.js'
 import {
   clearAgentTranscriptSubdir,
   recordSidechainTranscript,
@@ -80,6 +80,7 @@ import {
 import type { ContentReplacementState } from '../../utils/toolResultStorage.js'
 import { createAgentId } from '../../utils/uuid.js'
 import { resolveAgentTools } from './agentToolUtils.js'
+import { ONE_SHOT_BUILTIN_AGENT_TYPES } from './constants.js'
 import { type AgentDefinition, isBuiltInAgent } from './loadAgentsDir.js'
 
 export class IncompleteAgentExecutionError extends Error {
@@ -252,6 +253,51 @@ function isRecordableMessage(
   )
 }
 
+function hasAssistantTextBlocks(message: Message): boolean {
+  return (
+    message.type === 'assistant' &&
+    message.message.content.some(block => block.type === 'text')
+  )
+}
+
+function shouldRequestBuiltInFinalResponse(
+  agentDefinition: AgentDefinition,
+  agentMessages: Message[],
+): boolean {
+  if (
+    !isBuiltInAgent(agentDefinition) ||
+    !ONE_SHOT_BUILTIN_AGENT_TYPES.has(agentDefinition.agentType)
+  ) {
+    return false
+  }
+
+  const lastRecordable = agentMessages.findLast(
+    message => message.type === 'assistant' || message.type === 'user',
+  )
+  if (!lastRecordable) {
+    return false
+  }
+
+  if (lastRecordable.type === 'assistant') {
+    return !hasAssistantTextBlocks(lastRecordable)
+  }
+
+  const content = lastRecordable.message.content
+  return (
+    Array.isArray(content) &&
+    content.length > 0 &&
+    content.every(block => 'type' in block && block.type === 'tool_result')
+  )
+}
+
+function getBuiltInFinalResponsePrompt(agentType: string): string {
+  if (agentType === 'Plan') {
+    return 'Provide the final implementation plan now using the evidence already collected. Do not call any tools. Respond with plain text only.'
+  }
+
+  return 'Provide your final findings now using the evidence already collected. Do not call any tools. Respond with plain text only.'
+}
+
 export async function* runAgent({
   agentDefinition,
   promptMessages,
@@ -263,6 +309,7 @@ export async function* runAgent({
   querySource,
   override,
   model,
+  effort,
   maxTurns,
   preserveToolUseResults,
   availableTools,
@@ -292,7 +339,8 @@ export async function* runAgent({
     abortController?: AbortController
     agentId?: AgentId
   }
-  model?: ModelAlias
+  model?: string
+  effort?: EffortValue
   maxTurns?: number
   /** Preserve toolUseResult on messages for subagents with viewable transcripts */
   preserveToolUseResults?: boolean
@@ -486,10 +534,7 @@ export async function* runAgent({
     }
 
     // Override effort level if agent defines one
-    const effortValue =
-      agentDefinition.effort !== undefined
-        ? agentDefinition.effort
-        : state.effortValue
+    const effortValue = effort !== undefined ? effort : state.effortValue
 
     if (
       toolPermissionContext === state.toolPermissionContext &&
@@ -765,6 +810,7 @@ export async function* runAgent({
 
     let terminalReason: string | null = null
     let agentMessageCount = 0
+    const agentMessages: Message[] = []
 
     while (true) {
       const step = await iterator.next()
@@ -802,6 +848,7 @@ export async function* runAgent({
 
       if (isRecordableMessage(message)) {
         agentMessageCount++
+        agentMessages.push(message)
         // Record only the new message with correct parent (O(1) per message)
         await recordSidechainTranscript(
           [message],
@@ -814,6 +861,83 @@ export async function* runAgent({
           lastRecordedUuid = message.uuid
         }
         yield message
+      }
+    }
+
+    if (shouldRequestBuiltInFinalResponse(agentDefinition, agentMessages)) {
+      const finalPrompt = createUserMessage({
+        content: getBuiltInFinalResponsePrompt(agentDefinition.agentType),
+        isMeta: true,
+      })
+      agentMessages.push(finalPrompt)
+      await recordSidechainTranscript(
+        [finalPrompt],
+        agentId,
+        lastRecordedUuid,
+      ).catch(err =>
+        logForDebugging(`Failed to record sidechain transcript: ${err}`),
+      )
+      lastRecordedUuid = finalPrompt.uuid
+
+      const finalTurnContext: ToolUseContext = {
+        ...agentToolUseContext,
+        options: {
+          ...agentToolUseContext.options,
+          tools: [],
+          mcpClients: [],
+        },
+      }
+
+      const finalIterator = query({
+        messages: [...initialMessages, ...agentMessages],
+        systemPrompt: agentSystemPrompt,
+        userContext: resolvedUserContext,
+        systemContext: resolvedSystemContext,
+        canUseTool: async () => false,
+        toolUseContext: finalTurnContext,
+        querySource,
+        maxTurns: 1,
+      })[Symbol.asyncIterator]()
+
+      while (true) {
+        const finalStep = await finalIterator.next()
+        if (finalStep.done) {
+          break
+        }
+
+        const finalMessage = finalStep.value
+        onQueryProgress?.()
+        if (
+          finalMessage.type === 'stream_event' &&
+          finalMessage.event.type === 'message_start' &&
+          finalMessage.ttftMs != null
+        ) {
+          toolUseContext.pushApiMetricsEntry?.(finalMessage.ttftMs)
+          continue
+        }
+
+        if (finalMessage.type === 'attachment') {
+          yield finalMessage
+          continue
+        }
+
+        if (!isRecordableMessage(finalMessage)) {
+          continue
+        }
+
+        agentMessageCount++
+        agentMessages.push(finalMessage)
+        await recordSidechainTranscript(
+          [finalMessage],
+          agentId,
+          lastRecordedUuid,
+        ).catch(err =>
+          logForDebugging(`Failed to record sidechain transcript: ${err}`),
+        )
+        if (finalMessage.type !== 'progress') {
+          lastRecordedUuid = finalMessage.uuid
+        }
+        yield finalMessage
       }
     }
 

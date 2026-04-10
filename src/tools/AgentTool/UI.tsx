@@ -23,7 +23,6 @@ import { getSearchOrReadFromContent, getSearchReadSummaryText } from '../../util
 import { getDisplayPath } from '../../utils/file.js';
 import { formatDuration, formatNumber } from '../../utils/format.js';
 import { buildSubagentLookups, CANCEL_MESSAGE, createAssistantMessage, EMPTY_LOOKUPS, INTERRUPT_MESSAGE_FOR_TOOL_USE, REJECT_MESSAGE } from '../../utils/messages.js';
-import type { ModelAlias } from '../../utils/model/aliases.js';
 import { getMainLoopModel } from '../../utils/model/model.js';
 import type { Theme, ThemeName } from '../../utils/theme.js';
 import type { outputSchema, Progress, RemoteLaunchedOutput } from './AgentTool.js';
@@ -476,7 +475,7 @@ export function renderToolUseTag(input: Partial<{
   description: string;
   prompt: string;
   subagent_type: string;
-  model?: ModelAlias;
+  model?: string;
 }>): React.ReactNode {
   const tags: React.ReactNode[] = [];
   const modelTag = getAgentToolUseModelTag(input, getMainLoopModel());
@@ -788,10 +787,10 @@ export function renderGroupedAgentToolUse(toolUses: Array<{
 
   // Check if all resolved agents are async (background)
   const allAsync = agentStats.every(stat => stat.isAsync);
-  return <Box flexDirection="column" marginTop={1}>
-      <Box flexDirection="row">
+  return <Box flexDirection="column" marginTop={1} width="100%">
+      <Box flexDirection="row" width="100%" gap={1}>
         <ToolUseLoader shouldAnimate={shouldAnimate && anyUnresolved} isUnresolved={anyUnresolved} isError={anyError} />
-        <Box flexShrink={1}>
+        <Box flexGrow={1} flexShrink={1} minWidth={0}>
           <Text wrap="truncate-end">
             {allComplete ? allAsync ? <>
                   <Text bold>{toolUses.length}</Text> background agents launched{' '}

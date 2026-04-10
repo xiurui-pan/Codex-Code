@@ -144,6 +144,18 @@ export class PaneBackendExecutor implements TeammateExecutor {
           ? `${inheritedFlags} --model ${quote([config.model])}`
           : `--model ${quote([config.model])}`
       }
+      if (config.effort) {
+        inheritedFlags = inheritedFlags
+          .split(' ')
+          .filter(
+            (flag, i, arr) =>
+              flag !== '--effort' && arr[i - 1] !== '--effort',
+          )
+          .join(' ')
+        inheritedFlags = inheritedFlags
+          ? `${inheritedFlags} --effort ${quote([String(config.effort)])}`
+          : `--effort ${quote([String(config.effort)])}`
+      }
 
       const flagsStr = inheritedFlags ? ` ${inheritedFlags}` : ''
       const workingDir = config.cwd
