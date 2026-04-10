@@ -30,6 +30,7 @@ import { isEnvTruthy } from '../utils/envUtils.js';
 import { isFullscreenEnvEnabled } from '../utils/fullscreen.js';
 import { applyGrouping } from '../utils/groupToolUses.js';
 import { buildMessageLookups, createAssistantMessage, deriveUUID, getMessagesAfterCompactBoundary, getToolUseID, getToolUseIDs, hasUnresolvedHooksFromLookup, isNotEmptyMessage, normalizeMessages, reorderMessagesInUI, type StreamingThinking, type StreamingToolUse, shouldShowUserMessage } from '../utils/messages.js';
+import { isStreamingThinkingVisible as shouldShowStreamingThinking } from '../utils/streamingThinking.js';
 import { plural } from '../utils/stringUtils.js';
 import { renderableSearchText } from '../utils/transcriptSearch.js';
 import { Divider } from './design-system/Divider.js';
@@ -425,10 +426,10 @@ const MessagesImpl = ({
   const normalizedMessages = useMemo(() => normalizeMessages(messages).filter(isNotEmptyMessage), [messages]);
 
   // In prompt mode, live thinking may appear while it streams, but completed
-  // thinking should live in transcript-only assistant messages instead of
-  // lingering on the main screen.
+  // thinking should linger briefly so the first text block does not make the
+  // active reasoning indicator disappear immediately.
   const isStreamingThinkingVisible = useMemo(() => {
-    return streamingThinking?.isStreaming ?? false;
+    return shouldShowStreamingThinking(streamingThinking);
   }, [streamingThinking]);
 
   // Find the last thinking block (message UUID + content index) for hiding past thinking in transcript mode

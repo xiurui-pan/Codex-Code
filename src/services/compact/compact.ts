@@ -385,6 +385,52 @@ function extractResponsesCompactionMessageText(
   return text.length > 0 ? text : null
 }
 
+function extractResponsesCompactionLocalShellCommand(
+  item: ResponsesOutputItem,
+): string | null {
+  if (item.type !== 'local_shell_call' && item.type !== 'shell_call') {
+    return null
+  }
+
+  if (item.type === 'shell_call') {
+    const command = item.action?.commands
+    if (!Array.isArray(command)) {
+      return null
+    }
+
+    const joinedCommand = command
+      .filter(part => typeof part === 'string' && part.trim().length > 0)
+      .join(' && ')
+      .trim()
+    return joinedCommand.length > 0 ? joinedCommand : null
+  }
+
+  const command = item.action?.command
+  if (typeof command === 'string') {
+    const trimmedCommand = command.trim()
+    return trimmedCommand.length > 0 ? trimmedCommand : null
+  }
+
+  if (!Array.isArray(command)) {
+    return null
+  }
+
+  if (
+    command[0] === 'bash' &&
+    command[1] === '-lc' &&
+    typeof command[2] === 'string'
+  ) {
+    const trimmedCommand = command[2].trim()
+    return trimmedCommand.length > 0 ? trimmedCommand : null
+  }
+
+  const joinedCommand = command
+    .filter(part => typeof part === 'string' && part.trim().length > 0)
+    .join(' ')
+    .trim()
+  return joinedCommand.length > 0 ? joinedCommand : null
+}
+
 export function summarizeResponsesCompactionOutput(
   outputItems: readonly ResponsesOutputItem[],
 ): string {
@@ -400,6 +446,12 @@ export function summarizeResponsesCompactionOutput(
 
     if (item.type === 'compaction' || item.type === 'compaction_summary') {
       opaqueCompactionCount++
+      continue
+    }
+
+    const shellCommand = extractResponsesCompactionLocalShellCommand(item)
+    if (shellCommand) {
+      lines.push(`Shell: ${shellCommand}`)
       continue
     }
 

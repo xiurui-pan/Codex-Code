@@ -44,6 +44,7 @@ test('codex config centralizes base URL, model, reasoning, storage, and auth', a
       'model = "gpt-5.1-codex-mini"',
       'small_fast_model = "gpt-5.4-mini"',
       'model_reasoning_effort = "high"',
+      'model_reasoning_summary = "none"',
       'response_storage = false',
       '',
       '[model_providers.test-provider]',
@@ -72,6 +73,7 @@ test('codex config centralizes base URL, model, reasoning, storage, and auth', a
           getCodexConfiguredAuthEnvKey,
           getCodexConfiguredBaseUrl,
           getCodexConfiguredModel,
+          getCodexConfiguredReasoningSummary,
           getCodexConfiguredSmallFastModel,
           getCodexConfiguredReasoningEffort,
           getCodexConfiguredResponseStorage,
@@ -83,6 +85,7 @@ test('codex config centralizes base URL, model, reasoning, storage, and auth', a
         assert.equal(config.model, 'gpt-5.1-codex-mini')
         assert.equal(config.smallFastModel, 'gpt-5.4-mini')
         assert.equal(config.reasoningEffort, 'high')
+        assert.equal(config.reasoningSummary, 'none')
         assert.equal(config.responseStorage, false)
         assert.equal(config.modelContextWindow, undefined)
         assert.equal(config.modelAutoCompactTokenLimit, undefined)
@@ -95,6 +98,7 @@ test('codex config centralizes base URL, model, reasoning, storage, and auth', a
         assert.equal(getCodexConfiguredModel(), 'gpt-5.1-codex-mini')
         assert.equal(getCodexConfiguredSmallFastModel(), 'gpt-5.4-mini')
         assert.equal(getCodexConfiguredReasoningEffort(), 'high')
+        assert.equal(getCodexConfiguredReasoningSummary(), 'none')
         assert.equal(getCodexConfiguredResponseStorage(), false)
         assert.equal(getCodexConfiguredAuthEnvKey(), 'TEST_CODEX_API_KEY')
         assert.equal(getCodexConfiguredApiKey(), 'test-key')
@@ -159,6 +163,20 @@ test('codex config exposes reasoning effort as a default instead of a hard overr
         '../src/utils/codexConfig.ts'
       )
       assert.equal(getCodexConfiguredReasoningEffort(), 'medium')
+    },
+  )
+})
+
+test('codex config exposes reasoning summary as a default instead of a hard override', async () => {
+  await withEnv(
+    {
+      CODEX_CODE_DEFAULT_REASONING_SUMMARY: 'none',
+    },
+    async () => {
+      const { getCodexConfiguredReasoningSummary } = await import(
+        '../src/utils/codexConfig.ts'
+      )
+      assert.equal(getCodexConfiguredReasoningSummary(), 'none')
     },
   )
 })
@@ -243,6 +261,40 @@ test('codex config can update model_context_window in ~/.codex/config.toml', asy
     await writeCodexConfigModelContextWindow(undefined, configPath)
     config = await loadCodexConfig(configPath)
     assert.equal(config.modelContextWindow, undefined)
+  } finally {
+    await rm(tempDir, { recursive: true, force: true })
+  }
+})
+
+test('codex config can update model_reasoning_summary in ~/.codex/config.toml', async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), 'codex-config-summary-write-'))
+  const codexDir = join(tempDir, '.codex')
+  const configPath = join(codexDir, 'config.toml')
+  await mkdir(codexDir, { recursive: true })
+  await writeFile(
+    configPath,
+    [
+      'model_provider = "test-provider"',
+      '',
+      '[model_providers.test-provider]',
+      'base_url = "https://example.invalid/v1"',
+      '',
+    ].join('\n'),
+  )
+
+  try {
+    const {
+      loadCodexConfig,
+      writeCodexConfigModelReasoningSummary,
+    } = await import('../src/utils/codexConfig.ts')
+
+    await writeCodexConfigModelReasoningSummary('none', configPath)
+    let config = await loadCodexConfig(configPath)
+    assert.equal(config.reasoningSummary, 'none')
+
+    await writeCodexConfigModelReasoningSummary(undefined, configPath)
+    config = await loadCodexConfig(configPath)
+    assert.equal(config.reasoningSummary, undefined)
   } finally {
     await rm(tempDir, { recursive: true, force: true })
   }

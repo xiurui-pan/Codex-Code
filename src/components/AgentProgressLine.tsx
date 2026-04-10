@@ -7,6 +7,7 @@ type Props = {
   agentType: string
   description?: string
   name?: string
+  modelTag?: string | null
   descriptionColor?: keyof Theme
   taskDescription?: string
   toolUseCount: number
@@ -25,6 +26,7 @@ export function AgentProgressLine({
   agentType,
   description,
   name,
+  modelTag,
   descriptionColor,
   taskDescription,
   toolUseCount,
@@ -82,6 +84,7 @@ export function AgentProgressLine({
                 )}
               </>
             )}
+            {modelTag && <> · {modelTag}</>}
             {!isBackgrounded && (
               <>
                 {' · '}

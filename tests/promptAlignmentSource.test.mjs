@@ -42,6 +42,27 @@ test('system prompt restores brief milestone updates without command echoing', (
   )
 })
 
+test('codex mode reuses the stronger Claude-style communication section', () => {
+  const source = readSource('src/constants/prompts.ts')
+
+  assert.match(
+    source,
+    /process\.env\.USER_TYPE === 'ant'[\s\S]*isCurrentPhaseCustomCodexProvider\(\)/,
+  )
+  assert.match(
+    source,
+    /Assume users can't see most tool calls or thinking - only your text output\./,
+  )
+  assert.match(
+    source,
+    /Before your first tool call, briefly state what you're about to do\./,
+  )
+  assert.doesNotMatch(
+    source,
+    /After a few consecutive tool-only turns, pause and send one short progress update before continuing\./,
+  )
+})
+
 test('system prompt now prefers shell ripgrep for simple local searches', () => {
   const source = readSource('src/constants/prompts.ts')
 

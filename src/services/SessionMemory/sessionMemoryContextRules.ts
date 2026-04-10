@@ -63,7 +63,12 @@ export function getCurrentSessionMemoryInheritance(
 export function shouldIncludeCurrentSessionMemory(
   querySource: QuerySource | undefined,
 ): boolean {
-  return getCurrentSessionMemoryInheritance(querySource) === 'inherit'
+  void querySource
+  // Keep current session memory on disk and in compaction flows, but do not
+  // inject it back into live requests. Upstream Claude Code does not do this,
+  // and in Codex mode it can override the user's freshest turn with stale
+  // summary text.
+  return false
 }
 
 export function createCurrentSessionMemoryContextItem(params: {

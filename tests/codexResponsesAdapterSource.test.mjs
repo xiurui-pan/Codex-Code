@@ -38,7 +38,7 @@ test('codex responses stream normalizes status-less web search done events to co
 
   assert.match(
     source,
-    /event\.item\.type === 'web_search_call' && !event\.item\.status/,
+    /normalizedDoneItem\.type === 'web_search_call' &&\s*!normalizedDoneItem\.status/,
   )
   assert.match(source, /status: 'completed'/)
 })
@@ -53,9 +53,43 @@ test('codex responses stream extends timeouts when WebSearch or WebFetch is expo
 test('codex responses adapter replaces local WebSearch function tool with native web_search', async () => {
   const source = await readFile(SOURCE_PATH, 'utf8')
 
-  assert.match(source, /tools\.filter\(tool => tool\.name !== 'WebSearch'\)/)
+  assert.match(
+    source,
+    /tool\.name !== 'WebSearch'/,
+  )
   assert.match(source, /type: 'web_search'/)
   assert.match(source, /external_web_access: mode === 'live'/)
+})
+
+test('codex responses adapter exposes Bash as the local_shell function tool', async () => {
+  const source = await readFile(SOURCE_PATH, 'utf8')
+
+  assert.match(source, /CODEX_SHELL_TOOL_NAME = 'local_shell'/)
+  assert.match(source, /tool\.name === BASH_TOOL_NAME/)
+  assert.match(source, /type: 'function'/)
+  assert.match(source, /name: CODEX_SHELL_TOOL_NAME/)
+  assert.match(source, /buildResponsesFunctionCallInputItem/)
+  assert.match(source, /command: \['bash', '-lc', command\]/)
+})
+
+test('codex responses adapter rewrites persisted shell history onto the local_shell function path', async () => {
+  const source = await readFile(SOURCE_PATH, 'utf8')
+
+  assert.match(source, /normalizeResponsesReplayInputItem/)
+  assert.match(source, /mapResponsesToolNameToInternalToolName/)
+  assert.match(source, /payload\.type === 'shell_call'/)
+  assert.match(source, /payload\.type === 'local_shell_call'/)
+  assert.match(source, /BASH_TOOL_NAME/)
+  assert.match(source, /buildResponsesFunctionCallInputItem/)
+})
+
+test('codex responses adapter fills function call arguments from delta and done events', async () => {
+  const source = await readFile(SOURCE_PATH, 'utf8')
+
+  assert.match(source, /event\.type === 'response\.function_call_arguments\.delta'/)
+  assert.match(source, /event\.type === 'response\.function_call_arguments\.done'/)
+  assert.match(source, /pendingFunctionCallArgumentsByItemId/)
+  assert.match(source, /applyPendingFunctionCallArguments/)
 })
 
 test('codex responses adapter sends function_call_output as plain text output', async () => {

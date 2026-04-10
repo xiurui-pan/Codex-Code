@@ -127,6 +127,14 @@ export const SUPPORTED_SETTINGS: Record<string, SettingConfig> = {
       return { valid: true }
     },
   },
+  modelReasoningSummary: {
+    source: 'codex',
+    type: 'string',
+    description:
+      'Override Codex Responses reasoning summary mode in ~/.codex/config.toml',
+    options: ['auto', 'none'],
+    formatOnRead: v => (v === undefined ? 'default' : v),
+  },
   alwaysThinkingEnabled: {
     source: 'settings',
     type: 'boolean',

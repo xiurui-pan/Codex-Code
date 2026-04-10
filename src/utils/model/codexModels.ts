@@ -9,12 +9,18 @@ export type CodexPublicModelInfo = {
   supportedEffortLevels: readonly EffortLevel[]
 }
 
+export type CodexReasoningSummaryMode = 'auto' | 'none'
+export type CodexVerbosityMode = 'low' | 'medium' | 'high'
+
 export type CodexModelCapability = {
   value: string
   displayName: string
   description: string
   defaultEffort: EffortLevel
   supportedEffortLevels: readonly EffortLevel[]
+  defaultReasoningSummary?: CodexReasoningSummaryMode
+  defaultVerbosity?: CodexVerbosityMode
+  supportsParallelToolCalls?: boolean
   aliases?: readonly string[]
 }
 
@@ -30,6 +36,7 @@ const CODEX_MODEL_CAPABILITIES = [
     description: 'Fast Codex model for routine coding work.',
     defaultEffort: 'medium',
     supportedEffortLevels: ['low', 'medium', 'high', 'xhigh'],
+    supportsParallelToolCalls: true,
     aliases: ['mini', 'haiku'],
   },
   {
@@ -38,6 +45,9 @@ const CODEX_MODEL_CAPABILITIES = [
     description: 'Latest frontier agentic coding model.',
     defaultEffort: 'medium',
     supportedEffortLevels: ['low', 'medium', 'high', 'xhigh'],
+    defaultReasoningSummary: 'none',
+    defaultVerbosity: 'low',
+    supportsParallelToolCalls: true,
     aliases: [
       'codex',
       'sonnet',
@@ -51,6 +61,9 @@ const CODEX_MODEL_CAPABILITIES = [
     description: 'Frontier agentic coding model.',
     defaultEffort: 'medium',
     supportedEffortLevels: ['low', 'medium', 'high', 'xhigh'],
+    defaultReasoningSummary: 'none',
+    defaultVerbosity: 'low',
+    supportsParallelToolCalls: true,
     aliases: ['best', 'max', 'opus'],
   },
   {
@@ -59,6 +72,7 @@ const CODEX_MODEL_CAPABILITIES = [
     description: 'Latest general-purpose Codex model.',
     defaultEffort: 'medium',
     supportedEffortLevels: ['low', 'medium', 'high', 'xhigh'],
+    supportsParallelToolCalls: true,
   },
   {
     value: 'gpt-5.1-codex-mini',
@@ -66,6 +80,7 @@ const CODEX_MODEL_CAPABILITIES = [
     description: 'Legacy fast Codex model.',
     defaultEffort: 'medium',
     supportedEffortLevels: ['medium', 'high'],
+    supportsParallelToolCalls: true,
   },
   {
     value: 'gpt-5.1-codex',
@@ -73,6 +88,7 @@ const CODEX_MODEL_CAPABILITIES = [
     description: 'Legacy balanced Codex model.',
     defaultEffort: 'medium',
     supportedEffortLevels: ['low', 'medium', 'high'],
+    supportsParallelToolCalls: true,
   },
   {
     value: 'gpt-5.1-codex-max',
@@ -80,6 +96,7 @@ const CODEX_MODEL_CAPABILITIES = [
     description: 'Legacy deepest-reasoning Codex model.',
     defaultEffort: 'medium',
     supportedEffortLevels: ['low', 'medium', 'high', 'xhigh'],
+    supportsParallelToolCalls: true,
   },
 ] as const satisfies readonly CodexModelCapability[]
 
@@ -155,6 +172,24 @@ export function codexModelSupportsMaxEffort(
     getCodexSupportedEffortLevels(model).includes('xhigh') ||
     getCodexSupportedEffortLevels(model).includes('max')
   )
+}
+
+export function getCodexDefaultReasoningSummaryForModel(
+  model: string | null | undefined,
+): CodexReasoningSummaryMode | undefined {
+  return findCodexModelCapability(model)?.defaultReasoningSummary
+}
+
+export function getCodexDefaultVerbosityForModel(
+  model: string | null | undefined,
+): CodexVerbosityMode | undefined {
+  return findCodexModelCapability(model)?.defaultVerbosity
+}
+
+export function codexModelSupportsParallelToolCalls(
+  model: string | null | undefined,
+): boolean {
+  return findCodexModelCapability(model)?.supportsParallelToolCalls ?? false
 }
 
 

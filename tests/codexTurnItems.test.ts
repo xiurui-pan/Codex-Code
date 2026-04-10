@@ -83,6 +83,32 @@ test('protocol leak text without a valid shell payload is filtered', () => {
   )
 })
 
+test('native shell_call text leak is filtered out of the execution path by default', () => {
+  const items = normalizeResponsesOutputToTurnItems([
+    {
+      type: 'message',
+      role: 'assistant',
+      content: [
+        {
+          type: 'output_text',
+          text: '{"type":"shell_call","call_id":"shell-text-1","action":{"commands":["pwd"]}}',
+        },
+      ],
+    },
+  ])
+
+  assert.equal(items.some(item => item.kind === 'tool_call'), false)
+  assert.equal(items.some(item => item.kind === 'local_shell_call'), false)
+  assert.equal(
+    items.some(
+      item =>
+        item.kind === 'ui_message' &&
+        item.source === 'text_fallback_filtered',
+    ),
+    true,
+  )
+})
+
 test('text fallback does not execute when tool payload is embedded in normal prose', () => {
   const items = normalizeResponsesOutputToTurnItems([
     {
@@ -235,6 +261,177 @@ test('commentary messages stay visible without becoming final answers', () => {
         item.level === 'info' &&
         item.source === 'commentary' &&
         item.text.includes('inspect the current directory'),
+    ),
+    true,
+  )
+})
+
+test('shell function_call is bridged back into the existing Bash execution chain', () => {
+  const items = normalizeResponsesOutputToTurnItems([
+    {
+      type: 'function_call',
+      id: 'fc-shell-1',
+      call_id: 'shell-fn-1',
+      name: 'shell',
+      arguments: JSON.stringify({
+        command: ['bash', '-lc', 'pwd'],
+        workdir: '/tmp/project',
+        timeout_ms: 1200,
+      }),
+    },
+  ])
+
+  assert.equal(
+    items.some(
+      item =>
+        item.kind === 'tool_call' &&
+        item.toolUseId === 'shell-fn-1' &&
+        item.toolName === 'Bash' &&
+        item.input.command === 'cd /tmp/project && pwd' &&
+        item.input.timeout === 1200,
+    ),
+    true,
+  )
+  assert.equal(
+    items.some(
+      item =>
+        item.kind === 'local_shell_call' &&
+        item.toolUseId === 'shell-fn-1' &&
+        item.command === 'cd /tmp/project && pwd' &&
+        item.phase === 'requested',
+    ),
+    true,
+  )
+})
+
+test('native local_shell_call is bridged back into the existing Bash execution chain', () => {
+  const items = normalizeResponsesOutputToTurnItems([
+    {
+      type: 'local_shell_call',
+      call_id: 'shell-1',
+      status: 'completed',
+      action: {
+        type: 'exec',
+        command: ['bash', '-lc', 'pwd'],
+        timeout_ms: 1200,
+      },
+    },
+  ])
+
+  assert.equal(
+    items.some(
+      item =>
+        item.kind === 'tool_call' &&
+        item.toolUseId === 'shell-1' &&
+        item.toolName === 'Bash' &&
+        item.input.command === 'pwd' &&
+        item.input.timeout === 1200,
+    ),
+    true,
+  )
+  assert.equal(
+    items.some(
+      item =>
+        item.kind === 'local_shell_call' &&
+        item.toolUseId === 'shell-1' &&
+        item.command === 'pwd' &&
+        item.phase === 'requested',
+    ),
+    true,
+  )
+})
+
+test('native shell_call and shell_call_output are bridged into the existing Bash execution chain', () => {
+  const items = normalizeResponsesOutputToTurnItems([
+    {
+      type: 'shell_call',
+      call_id: 'shell-2',
+      status: 'completed',
+      action: {
+        commands: ['pwd'],
+        timeout_ms: 1200,
+      },
+    },
+    {
+      type: 'shell_call_output',
+      call_id: 'shell-2',
+      output: [
+        {
+          stdout: '/tmp/workspace',
+          stderr: '',
+          outcome: {
+            type: 'exit',
+            exit_code: 0,
+          },
+        },
+      ],
+    },
+  ])
+
+  assert.equal(
+    items.some(
+      item =>
+        item.kind === 'tool_call' &&
+        item.toolUseId === 'shell-2' &&
+        item.toolName === 'Bash' &&
+        item.input.command === 'pwd' &&
+        item.input.timeout === 1200,
+    ),
+    true,
+  )
+  assert.equal(
+    items.some(
+      item =>
+        item.kind === 'execution_result' &&
+        item.toolUseId === 'shell-2' &&
+        item.toolName === 'Bash' &&
+        item.status === 'success' &&
+        item.outputText === '/tmp/workspace',
+    ),
+    true,
+  )
+})
+
+test('native local_shell_call validates missing call_id and unsupported actions', () => {
+  const missingCallIdItems = normalizeResponsesOutputToTurnItems([
+    {
+      type: 'local_shell_call',
+      status: 'completed',
+      action: {
+        type: 'exec',
+        command: ['bash', '-lc', 'pwd'],
+      },
+    },
+  ])
+
+  assert.equal(
+    missingCallIdItems.some(
+      item =>
+        item.kind === 'ui_message' &&
+        item.source === 'invalid_local_shell_call_filtered' &&
+        item.text.includes('missing call_id'),
+    ),
+    true,
+  )
+
+  const unsupportedActionItems = normalizeResponsesOutputToTurnItems([
+    {
+      type: 'local_shell_call',
+      call_id: 'shell-bad-1',
+      status: 'completed',
+      action: {
+        type: 'exec',
+        command: [],
+      },
+    },
+  ])
+
+  assert.equal(
+    unsupportedActionItems.some(
+      item =>
+        item.kind === 'ui_message' &&
+        item.source === 'invalid_local_shell_call_filtered' &&
+        item.text.includes('unsupported action'),
     ),
     true,
   )

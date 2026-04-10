@@ -304,9 +304,7 @@ export class QueryEngine {
 
     const initialThinkingConfig: ThinkingConfig = thinkingConfig
       ? thinkingConfig
-      : currentPhaseCustomCodexProvider
-        ? { type: 'adaptive' }
-        : shouldEnableThinkingByDefault() !== false
+      : shouldEnableThinkingByDefault(initialMainLoopModel) !== false
         ? { type: 'adaptive' }
         : { type: 'disabled' }
 

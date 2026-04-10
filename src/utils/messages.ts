@@ -5233,6 +5233,53 @@ export function ensureToolResultPairing(
   const result: (UserMessage | AssistantMessage)[] = []
   let repaired = false
 
+  const isToolUseOnlyAssistantMessage = (
+    message: UserMessage | AssistantMessage,
+  ): message is AssistantMessage =>
+    message.type === 'assistant' &&
+    message.message.content.length > 0 &&
+    message.message.content.every(
+      block =>
+        block.type === 'tool_use' ||
+        block.type === 'server_tool_use' ||
+        block.type === 'mcp_tool_use',
+    )
+
+  const isToolResultMessage = (
+    message: UserMessage | AssistantMessage | undefined,
+  ): message is UserMessage =>
+    message?.type === 'user' &&
+    Array.isArray(message.message.content) &&
+    message.message.content.some(
+      block =>
+        typeof block === 'object' &&
+        'type' in block &&
+        block.type === 'tool_result',
+    )
+
+  const isSkippableBetweenToolUseAndResult = (
+    message: UserMessage | AssistantMessage | undefined,
+  ): boolean => {
+    const type = (message as { type?: string } | undefined)?.type
+    return (
+      type === 'system' ||
+      type === 'attachment' ||
+      type === 'progress' ||
+      type === 'file-history-snapshot'
+    )
+  }
+
+  const hasTrailingToolUseBatch = (): boolean => {
+    for (let idx = result.length - 1; idx >= 0; idx--) {
+      const previous = result[idx]!
+      if (isToolResultMessage(previous)) {
+        continue
+      }
+      return isToolUseOnlyAssistantMessage(previous)
+    }
+    return false
+  }
+
   // Cross-message tool_use ID tracking. The per-message seenToolUseIds below
   // only caught duplicates within a single assistant's content array (the
   // normalizeMessagesForAPI-merged case). When two assistants with DIFFERENT
@@ -5258,7 +5305,7 @@ export function ensureToolResultPairing(
       if (
         msg.type === 'user' &&
         Array.isArray(msg.message.content) &&
-        result.at(-1)?.type !== 'assistant'
+        !hasTrailingToolUseBatch()
       ) {
         const stripped = msg.message.content.filter(
           block =>
@@ -5361,43 +5408,71 @@ export function ensureToolResultPairing(
 
     result.push(assistantMsg)
 
-    // Collect tool_use IDs from this assistant message
-    const toolUseIds = [...seenToolUseIds]
-
-    // Check the next message for matching tool_results. Also track duplicate
-    // tool_result blocks (same tool_use_id appearing twice) — for transcripts
-    // corrupted before Fix 1 shipped, the orphan handler ran to completion
-    // multiple times, producing [asst(X), user(tr_X), asst(X), user(tr_X)] which
-    // normalizeMessagesForAPI merges to [asst([X,X]), user([tr_X,tr_X])]. The
-    // tool_use dedup above strips the second X; without also stripping the
-    // second tr_X, the API rejects with a duplicate-tool_result 400 and the
-    // session stays stuck.
+    // If another tool_use-only assistant message follows immediately, defer
+    // pairing until we reach the final assistant in this batch. Codex-mode
+    // transcripts can serialize one parallel tool call per assistant message:
+    // [assistant(tool_use A), assistant(tool_use B), ..., user(tr_A), user(tr_B)].
+    // Pairing each assistant against only the next message falsely treats A as
+    // missing because the next message is assistant(tool_use B), not user(tr_A).
     const nextMsg = messages[i + 1]
-    const existingToolResultIds = new Set<string>()
-    let hasDuplicateToolResults = false
+    if (isToolUseOnlyAssistantMessage(nextMsg)) {
+      continue
+    }
 
-    if (nextMsg?.type === 'user') {
-      const content = nextMsg.message.content
-      if (Array.isArray(content)) {
-        for (const block of content) {
-          if (
-            typeof block === 'object' &&
-            'type' in block &&
-            block.type === 'tool_result'
-          ) {
-            const trId = (block as ToolResultBlockParam).tool_use_id
-            if (existingToolResultIds.has(trId)) {
-              hasDuplicateToolResults = true
-            }
-            existingToolResultIds.add(trId)
-          }
+    // Collect tool_use IDs from the trailing assistant batch we just emitted.
+    const batchToolUseIds: string[] = []
+    for (let batchIndex = result.length - 1; batchIndex >= 0; batchIndex--) {
+      const batchMessage = result[batchIndex]!
+      if (!isToolUseOnlyAssistantMessage(batchMessage)) {
+        break
+      }
+      for (const block of batchMessage.message.content) {
+        if (block.type === 'tool_use') {
+          batchToolUseIds.unshift(block.id)
         }
       }
     }
 
+    // Scan the contiguous user tool_result batch that follows this assistant
+    // run. This covers both parallel tool calls and denials/interruption flows
+    // where the matching tool_result is not immediately adjacent to the tool_use.
+    const existingToolResultIds = new Set<string>()
+    let hasDuplicateToolResults = false
+    let userBatchEnd = i
+    for (let lookahead = i + 1; lookahead < messages.length; lookahead++) {
+      const candidate = messages[lookahead]!
+      if (isSkippableBetweenToolUseAndResult(candidate)) {
+        continue
+      }
+      if (!isToolResultMessage(candidate)) {
+        break
+      }
+      for (const block of candidate.message.content) {
+        if (
+          typeof block === 'object' &&
+          'type' in block &&
+          block.type === 'tool_result'
+        ) {
+          const trId = (block as ToolResultBlockParam).tool_use_id
+          if (existingToolResultIds.has(trId)) {
+            hasDuplicateToolResults = true
+          }
+          existingToolResultIds.add(trId)
+        }
+      }
+    }
+
+    for (let lookahead = i + 1; lookahead < messages.length; lookahead++) {
+      const candidate = messages[lookahead]!
+      if (!isToolResultMessage(candidate)) {
+        break
+      }
+      userBatchEnd = lookahead
+    }
+
     // Find missing tool_result IDs (forward direction: tool_use without tool_result)
-    const toolUseIdSet = new Set(toolUseIds)
-    const missingIds = toolUseIds.filter(id => !existingToolResultIds.has(id))
+    const toolUseIdSet = new Set(batchToolUseIds)
+    const missingIds = batchToolUseIds.filter(id => !existingToolResultIds.has(id))
 
     // Find orphaned tool_result IDs (reverse direction: tool_result without tool_use)
     const orphanedIds = [...existingToolResultIds].filter(
@@ -5422,60 +5497,62 @@ export function ensureToolResultPairing(
       is_error: true,
     }))
 
-    if (nextMsg?.type === 'user') {
-      // Next message is already a user message - patch it
-      let content: (ContentBlockParam | ContentBlock)[] = Array.isArray(
-        nextMsg.message.content,
-      )
-        ? nextMsg.message.content
-        : [{ type: 'text' as const, text: nextMsg.message.content }]
+    if (userBatchEnd > i) {
+      const orphanedSet = new Set(orphanedIds)
+      const seenTrIds = new Set<string>()
+      const patchedUserMessages: UserMessage[] = []
 
-      // Strip orphaned tool_results and dedupe duplicate tool_result IDs
-      if (orphanedIds.length > 0 || hasDuplicateToolResults) {
-        const orphanedSet = new Set(orphanedIds)
-        const seenTrIds = new Set<string>()
-        content = content.filter(block => {
-          if (
-            typeof block === 'object' &&
-            'type' in block &&
-            block.type === 'tool_result'
-          ) {
-            const trId = (block as ToolResultBlockParam).tool_use_id
-            if (orphanedSet.has(trId)) return false
-            if (seenTrIds.has(trId)) return false
-            seenTrIds.add(trId)
-          }
-          return true
+      for (let lookahead = i + 1; lookahead <= userBatchEnd; lookahead++) {
+        const batchMessage = messages[lookahead] as UserMessage
+        let content: (ContentBlockParam | ContentBlock)[] = Array.isArray(
+          batchMessage.message.content,
+        )
+          ? batchMessage.message.content
+          : [{ type: 'text' as const, text: batchMessage.message.content }]
+
+        if (orphanedIds.length > 0 || hasDuplicateToolResults) {
+          content = content.filter(block => {
+            if (
+              typeof block === 'object' &&
+              'type' in block &&
+              block.type === 'tool_result'
+            ) {
+              const trId = (block as ToolResultBlockParam).tool_use_id
+              if (orphanedSet.has(trId)) return false
+              if (seenTrIds.has(trId)) return false
+              seenTrIds.add(trId)
+            }
+            return true
+          })
+        }
+
+        const patchedContent =
+          lookahead === i + 1 ? [...syntheticBlocks, ...content] : content
+        if (patchedContent.length === 0) {
+          continue
+        }
+
+        patchedUserMessages.push({
+          ...batchMessage,
+          message: {
+            ...batchMessage.message,
+            content: patchedContent,
+          },
         })
       }
 
-      const patchedContent = [...syntheticBlocks, ...content]
-
-      // If content is now empty after stripping orphans, skip the user message
-      if (patchedContent.length > 0) {
-        const patchedNext: UserMessage = {
-          ...nextMsg,
-          message: {
-            ...nextMsg.message,
-            content: patchedContent,
-          },
-        }
-        i++
-        // Prepending synthetics to existing content can produce a
-        // [tool_result, text] sibling the smoosh inside normalize never saw
-        // (pairing runs after normalize). Re-smoosh just this one message.
+      i = userBatchEnd
+      if (patchedUserMessages.length > 0) {
         result.push(
-          checkStatsigFeatureGate_CACHED_MAY_BE_STALE('tengu_chair_sermon')
-            ? smooshSystemReminderSiblings([patchedNext])[0]!
-            : patchedNext,
+          ...(checkStatsigFeatureGate_CACHED_MAY_BE_STALE('tengu_chair_sermon')
+            ? (smooshSystemReminderSiblings(
+                patchedUserMessages,
+              ) as UserMessage[])
+            : patchedUserMessages),
         )
       } else {
-        // Content is empty after stripping orphaned tool_results. We still
-        // need a user message here to maintain role alternation — otherwise
-        // the assistant placeholder we just pushed would be immediately
-        // followed by the NEXT assistant message, which the API rejects with
-        // a role-alternation 400 (not the duplicate-id 400 we handle).
-        i++
+        // If every tool_result in the batch was stripped as orphaned/duplicate,
+        // keep a placeholder user turn so role alternation remains valid.
         result.push(
           createUserMessage({
             content: NO_CONTENT_MESSAGE,

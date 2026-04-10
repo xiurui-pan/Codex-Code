@@ -393,7 +393,10 @@ function getSessionSpecificGuidanceSection(
 
 // @[MODEL LAUNCH]: Remove this section when we launch numbat.
 function getOutputEfficiencySection(): string {
-  if (process.env.USER_TYPE === 'ant') {
+  if (
+    process.env.USER_TYPE === 'ant' ||
+    isCurrentPhaseCustomCodexProvider()
+  ) {
     return `# Communicating with the user
 When sending user-facing text, you're writing for a person, not logging to a console. Assume users can't see most tool calls or thinking - only your text output. Before your first tool call, briefly state what you're about to do. While working, give short updates at key moments: when you find something load-bearing (a bug, a root cause), when changing direction, when you've made progress without an update.
 

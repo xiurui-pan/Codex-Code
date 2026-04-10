@@ -40,6 +40,16 @@ test('codex config exposes context window and auto compact helpers', async () =>
   assert.match(source, /export async function writeCodexConfigModelContextWindow/)
 })
 
+test('codex config exposes reasoning summary helpers', async () => {
+  const source = await readFile(SOURCE_PATH, 'utf8')
+
+  assert.match(source, /key === 'model_reasoning_summary'/)
+  assert.match(source, /reasoningSummary:/)
+  assert.match(source, /CODEX_CODE_DEFAULT_REASONING_SUMMARY/)
+  assert.match(source, /export function getCodexConfiguredReasoningSummary/)
+  assert.match(source, /export async function writeCodexConfigModelReasoningSummary/)
+})
+
 test('codex config exposes provider retry and stream timeout helpers', async () => {
   const source = await readFile(SOURCE_PATH, 'utf8')
 

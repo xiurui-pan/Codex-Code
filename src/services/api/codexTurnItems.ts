@@ -3,6 +3,7 @@ import { dirname } from 'path'
 import type { ModelTurnItem } from './modelTurnItems.js'
 import { getOriginalCwd } from '../../bootstrap/state.js'
 import { BASH_TOOL_NAME } from '../../tools/BashTool/toolName.js'
+import { tryQuoteShellArgs } from '../../utils/bash/shellQuote.js'
 import { getFsImplementation } from '../../utils/fsOperations.js'
 import { buildToolCallItemsForLocalExecution } from './localExecutionItems.js'
 
@@ -18,6 +19,7 @@ type ResponsesEncryptedContentItem = {
 
 type ResponsesMessageItem = {
   type: 'message'
+  id?: string
   role?: string
   phase?: 'commentary' | 'final_answer'
   content?: ResponsesMessageText[]
@@ -25,7 +27,9 @@ type ResponsesMessageItem = {
 
 type ResponsesFunctionCallItem = {
   type: 'function_call'
+  id?: string
   call_id?: string
+  status?: string
   name?: string
   arguments?: string | Record<string, unknown>
 }
@@ -34,6 +38,52 @@ type ResponsesFunctionCallOutputItem = {
   type: 'function_call_output'
   call_id?: string
   output?: string
+}
+
+type ResponsesShellAction = {
+  commands?: string[]
+  timeout_ms?: number
+  max_output_length?: number
+  working_directory?: string
+}
+
+type ResponsesShellCallItem = {
+  type: 'shell_call'
+  id?: string
+  call_id?: string
+  status?: string
+  action?: ResponsesShellAction
+}
+
+type ResponsesShellCallOutputResult = {
+  stdout?: string
+  stderr?: string
+  outcome?: {
+    type?: 'exit' | 'timeout'
+    exit_code?: number
+  }
+}
+
+type ResponsesShellCallOutputItem = {
+  type: 'shell_call_output'
+  call_id?: string
+  max_output_length?: number
+  output?: ResponsesShellCallOutputResult[]
+}
+
+type ResponsesLocalShellExecAction = {
+  type?: 'exec'
+  command?: string[] | string
+  timeout_ms?: number
+  working_directory?: string
+}
+
+type ResponsesLocalShellCallItem = {
+  type: 'local_shell_call'
+  id?: string
+  call_id?: string
+  status?: string
+  action?: ResponsesLocalShellExecAction
 }
 
 type ResponsesWebSearchAction =
@@ -71,6 +121,9 @@ export type ResponsesOutputItem =
   | ResponsesMessageItem
   | ResponsesFunctionCallItem
   | ResponsesFunctionCallOutputItem
+  | ResponsesShellCallItem
+  | ResponsesShellCallOutputItem
+  | ResponsesLocalShellCallItem
   | ResponsesWebSearchCallItem
   | ResponsesReasoningItem
   | ResponsesCompactionItem
@@ -88,6 +141,10 @@ const TOOL_PROTOCOL_LEAK_MARKERS = [
   'to=shell',
   'recipient_name',
   'functions.Bash',
+  '"type":"shell_call"',
+  '"type": "shell_call"',
+  '"type":"local_shell_call"',
+  '"type": "local_shell_call"',
   'with_escalated_permissions',
   'justification',
   'sandbox_permissions',
@@ -99,10 +156,14 @@ const PATH_LIKE_ARGUMENT_KEYS = new Set([
   'file_path',
   'path',
   'cwd',
+  'workdir',
   'directory',
+  'working_directory',
   'notebook_path',
 ])
 const COMMAND_LIKE_ARGUMENT_KEYS = new Set(['command', 'cmd'])
+const CODEX_SHELL_TOOL_NAME = 'local_shell'
+const LEGACY_CODEX_SHELL_TOOL_NAME = 'shell'
 
 function shouldRewriteCodexWorkspacePaths(): boolean {
   return (
@@ -284,6 +345,16 @@ function normalizeShellCommandFromPayload(
   payload: Record<string, unknown>,
 ): ParsedToolCall | null {
   const commandValue = payload.command ?? payload.cmd
+  const workdirValue =
+    typeof payload.workdir === 'string'
+      ? payload.workdir
+      : typeof payload.working_directory === 'string'
+        ? payload.working_directory
+        : typeof payload.cwd === 'string'
+          ? payload.cwd
+          : typeof payload.directory === 'string'
+            ? payload.directory
+            : null
   let command: string | null = null
 
   if (typeof commandValue === 'string' && commandValue.trim()) {
@@ -300,12 +371,22 @@ function normalizeShellCommandFromPayload(
     ) {
       command = commandParts.slice(2).join(' ').trim()
     } else if (commandParts.length > 0) {
-      command = commandParts.join(' ').trim()
+      const quoted = tryQuoteShellArgs(commandParts)
+      command = (quoted.success ? quoted.quoted : commandParts.join(' ')).trim()
     }
   }
 
   if (!command) {
     return null
+  }
+
+  const workdir = workdirValue?.trim()
+  if (workdir) {
+    const quotedWorkdir = tryQuoteShellArgs([workdir])
+    const normalizedWorkdir = quotedWorkdir.success
+      ? quotedWorkdir.quoted
+      : workdir
+    command = `cd ${normalizedWorkdir} && ${command}`
   }
 
   const input: Record<string, unknown> = { command }
@@ -317,6 +398,124 @@ function normalizeShellCommandFromPayload(
   return {
     toolName: BASH_TOOL_NAME,
     input,
+  }
+}
+
+function normalizeLocalShellAction(
+  action: ResponsesLocalShellExecAction | undefined,
+): ParsedToolCall | null {
+  if (!action || action.type !== 'exec') {
+    return null
+  }
+
+  const command = Array.isArray(action.command)
+    ? action.command.filter(part => typeof part === 'string')
+    : action.command
+
+  if (
+    Array.isArray(command) &&
+    command.length > 0 &&
+    command.every(part => typeof part === 'string')
+  ) {
+    return normalizeShellCommandFromPayload({
+      command,
+      timeout_ms: action.timeout_ms,
+      cwd: action.working_directory,
+    })
+  }
+
+  if (typeof command === 'string' && command.trim().length > 0) {
+    return normalizeShellCommandFromPayload({
+      command,
+      timeout_ms: action.timeout_ms,
+      cwd: action.working_directory,
+    })
+  }
+
+  return null
+}
+
+function normalizeShellAction(
+  action: ResponsesShellAction | undefined,
+): ParsedToolCall | null {
+  if (!action || !Array.isArray(action.commands) || action.commands.length === 0) {
+    return null
+  }
+
+  const commands = action.commands.filter(
+    command => typeof command === 'string' && command.trim().length > 0,
+  )
+  if (commands.length === 0) {
+    return null
+  }
+
+  return normalizeShellCommandFromPayload({
+    command: commands.join(' && '),
+    timeout_ms: action.timeout_ms,
+    cwd: action.working_directory,
+  })
+}
+
+function stringifyLocalShellCommand(
+  command: string[] | string | undefined,
+): string {
+  if (typeof command === 'string') {
+    return command.trim()
+  }
+
+  if (!Array.isArray(command) || command.length === 0) {
+    return ''
+  }
+
+  const parts = command.filter(part => typeof part === 'string')
+  if (parts.length === 0) {
+    return ''
+  }
+
+  const quoted = tryQuoteShellArgs(parts)
+  return quoted.success ? quoted.quoted : parts.join(' ')
+}
+
+function stringifyShellCommands(commands: string[] | undefined): string {
+  if (!Array.isArray(commands) || commands.length === 0) {
+    return ''
+  }
+
+  return commands
+    .filter(command => typeof command === 'string' && command.trim().length > 0)
+    .join(' && ')
+}
+
+function normalizeShellCallOutput(
+  item: ResponsesShellCallOutputItem,
+): {
+  outputText: string
+  status: 'success' | 'error'
+} | null {
+  if (!item.call_id || !Array.isArray(item.output) || item.output.length === 0) {
+    return null
+  }
+
+  const outputText = item.output
+    .map(result => {
+      const parts = [result.stdout, result.stderr].filter(
+        text => typeof text === 'string' && text.length > 0,
+      )
+      return parts.join('\n')
+    })
+    .filter(text => text.length > 0)
+    .join('\n')
+
+  const status = item.output.every(result => {
+    const outcome = result.outcome
+    return outcome?.type === 'exit' ? outcome.exit_code === 0 : false
+  })
+    ? 'success'
+    : 'error'
+
+  return {
+    outputText,
+    status,
   }
 }
 
@@ -335,6 +534,31 @@ function extractShellCommandFromQuotedCode(text: string): ParsedToolCall | null 
 
 function extractTextFallbackToolCall(text: string): ParsedToolCall | null {
   const trimmedText = text.trim()
+  if (trimmedText.startsWith('{')) {
+    try {
+      const payload = JSON.parse(trimmedText) as unknown
+      if (
+        payload &&
+        typeof payload === 'object' &&
+        !Array.isArray(payload)
+      ) {
+        const payloadType = (payload as { type?: unknown }).type
+        if (payloadType === 'shell_call') {
+          return normalizeShellAction(
+            (payload as { action?: ResponsesShellAction }).action,
+          )
+        }
+        if (payloadType === 'local_shell_call') {
+          return normalizeLocalShellAction(
+            (payload as { action?: ResponsesLocalShellExecAction }).action,
+          )
+        }
+      }
+    } catch {
+      return null
+    }
+  }
+
   if (!trimmedText.startsWith('to=shell') && !trimmedText.startsWith('code:')) {
     return null
   }
@@ -385,8 +609,12 @@ function isProtocolLeakText(text: string): boolean {
 
   if (
     normalized.startsWith('{') &&
-    normalized.includes('"parameters"') &&
-    normalized.includes('"command"')
+    ((normalized.includes('"parameters"') &&
+      normalized.includes('"command"')) ||
+      normalized.includes('"type":"shell_call"') ||
+      normalized.includes('"type": "shell_call"') ||
+      normalized.includes('"type":"local_shell_call"') ||
+      normalized.includes('"type": "local_shell_call"'))
   ) {
     return true
   }
@@ -461,6 +689,127 @@ export function normalizeResponsesOutputToTurnItems(
       payload: item,
     })
 
+    if (item.type === 'shell_call') {
+      const toolUseId = item.call_id ?? item.id
+      if (!toolUseId) {
+        turnItems.push({
+          kind: 'ui_message',
+          provider: 'custom',
+          level: 'warn',
+          text: 'Invalid shell_call received: missing call_id',
+          source: 'invalid_local_shell_call_filtered',
+        })
+        continue
+      }
+
+      const parsedToolCall = normalizeShellAction(item.action)
+      if (!parsedToolCall) {
+        const commandText = stringifyShellCommands(item.action?.commands)
+        turnItems.push({
+          kind: 'ui_message',
+          provider: 'custom',
+          level: 'warn',
+          text:
+            commandText.length > 0
+              ? `Invalid shell_call received: unsupported action for ${commandText}`
+              : 'Invalid shell_call received: unsupported action',
+          source: 'invalid_local_shell_call_filtered',
+        })
+        continue
+      }
+
+      turnItems.push(
+        ...buildToolCallItemsForLocalExecution(
+          toolUseId,
+          parsedToolCall.toolName,
+          parsedToolCall.input,
+          'structured',
+        ),
+      )
+      continue
+    }
+
+    if (item.type === 'local_shell_call') {
+      const toolUseId = item.call_id ?? item.id
+      if (!toolUseId) {
+        turnItems.push({
+          kind: 'ui_message',
+          provider: 'custom',
+          level: 'warn',
+          text: 'Invalid local_shell_call received: missing call_id',
+          source: 'invalid_local_shell_call_filtered',
+        })
+        continue
+      }
+
+      const parsedToolCall = normalizeLocalShellAction(item.action)
+      if (!parsedToolCall) {
+        const commandText = stringifyLocalShellCommand(item.action?.command)
+        turnItems.push({
+          kind: 'ui_message',
+          provider: 'custom',
+          level: 'warn',
+          text:
+            commandText.length > 0
+              ? `Invalid local_shell_call received: unsupported action for ${commandText}`
+              : 'Invalid local_shell_call received: unsupported action',
+          source: 'invalid_local_shell_call_filtered',
+        })
+        continue
+      }
+
+      turnItems.push(
+        ...buildToolCallItemsForLocalExecution(
+          toolUseId,
+          parsedToolCall.toolName,
+          parsedToolCall.input,
+          'structured',
+        ),
+      )
+      continue
+    }
+
+    if (item.type === 'shell_call_output') {
+      const normalizedOutput = normalizeShellCallOutput(item)
+      if (!item.call_id || !normalizedOutput) {
+        turnItems.push({
+          kind: 'ui_message',
+          provider: 'custom',
+          level: 'warn',
+          text: 'Invalid shell_call_output received: missing call_id or output',
+          source: 'invalid_local_shell_call_filtered',
+        })
+        continue
+      }
+
+      turnItems.push({
+        kind: 'tool_output',
+        provider: 'custom',
+        toolUseId: item.call_id,
+        outputText: normalizedOutput.outputText,
+        source: 'tool_execution',
+      })
+      turnItems.push({
+        kind: 'local_shell_call',
+        provider: 'custom',
+        toolUseId: item.call_id,
+        toolName: BASH_TOOL_NAME,
+        command: '',
+        phase: 'completed',
+        source: 'tool_execution',
+      })
+      turnItems.push({
+        kind: 'execution_result',
+        provider: 'custom',
+        toolUseId: item.call_id,
+        toolName: BASH_TOOL_NAME,
+        status: normalizedOutput.status,
+        outputText: normalizedOutput.outputText,
+        source: 'tool_execution',
+      })
+      continue
+    }
+
     if (item.type === 'function_call') {
       // Validate function_call has required fields
       if (!item.call_id || !item.name || item.name.trim() === '') {
@@ -474,6 +823,36 @@ export function normalizeResponsesOutputToTurnItems(
         })
         continue
       }
+
+      if (
+        item.name === CODEX_SHELL_TOOL_NAME ||
+        item.name === LEGACY_CODEX_SHELL_TOOL_NAME
+      ) {
+        const parsedToolCall = normalizeShellCommandFromPayload(
+          normalizeToolArguments(item.arguments),
+        )
+        if (!parsedToolCall) {
+          turnItems.push({
+            kind: 'ui_message',
+            provider: 'custom',
+            level: 'warn',
+            text: 'Invalid function_call received: unsupported shell arguments',
+            source: 'invalid_function_call_filtered',
+          })
+          continue
+        }
+
+        turnItems.push(
+          ...buildToolCallItemsForLocalExecution(
+            item.call_id,
+            parsedToolCall.toolName,
+            parsedToolCall.input,
+            'structured',
+          ),
+        )
+        continue
+      }
+
       turnItems.push(
         ...buildToolCallItemsForLocalExecution(
           item.call_id,

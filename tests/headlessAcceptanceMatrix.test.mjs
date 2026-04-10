@@ -29,6 +29,20 @@ function responseDoneItem(item) {
   )
 }
 
+function responseAddedItem(item) {
+  return (
+    'event: response.output_item.added\n' +
+    `data: ${JSON.stringify({ type: 'response.output_item.added', item })}\n\n`
+  )
+}
+
+function responseTextDelta(itemId, delta) {
+  return (
+    'event: response.output_text.delta\n' +
+    `data: ${JSON.stringify({ type: 'response.output_text.delta', item_id: itemId, delta })}\n\n`
+  )
+}
+
 function responseCompleted(id) {
   return (
     'event: response.completed\n' +
@@ -975,4 +989,73 @@ test('matrix: output format stream-json emits assistant then result', async () =
   assert.notEqual(assistantIndex, -1)
   assert.notEqual(resultIndex, -1)
   assert.ok(assistantIndex < resultIndex)
+})
+
+test('matrix: bare stream-json preserves a delta-only preamble before a Read tool turn', async () => {
+  const preamble = '我先看一下 package.json 里的 scripts。'
+  const result = await runStructuredHeadlessSession({
+    responseBatches: [
+      [
+        { block: responseTextDelta('msg-read-preamble', preamble) },
+        {
+          block: responseAddedItem({
+            type: 'function_call',
+            call_id: 'read-1',
+            name: 'Read',
+            arguments: '{"file_path":"package.json"}',
+          }),
+        },
+        {
+          block: responseDoneItem({
+            type: 'function_call',
+            call_id: 'read-1',
+            name: 'Read',
+            arguments: '{"file_path":"package.json"}',
+          }),
+        },
+        { block: responseCompleted('resp-read-turn-1') },
+        { block: responseDone() },
+      ],
+      [
+        {
+          block: responseDoneItem({
+            type: 'message',
+            role: 'assistant',
+            content: [{ type: 'output_text', text: 'read done' }],
+          }),
+        },
+        { block: responseCompleted('resp-read-turn-2') },
+        { block: responseDone() },
+      ],
+    ],
+    initialMessages: [
+      {
+        type: 'user',
+        session_id: '',
+        parent_tool_use_id: null,
+        message: { role: 'user', content: '看一下 package.json 里的 scripts。' },
+        uuid: 'user-read-preamble',
+      },
+    ],
+  })
+
+  assert.equal(result.code, 0, result.stderr)
+
+  const preambleAssistantIndex = result.messages.findIndex(
+    message =>
+      message.type === 'assistant' &&
+      message.message?.content?.some?.(
+        part => part.type === 'text' && part.text === preamble,
+      ),
+  )
+  const firstToolOutputIndex = result.messages.findIndex(
+    message =>
+      message.type === 'system' &&
+      message.subtype === 'model_turn_item' &&
+      message.item_kind === 'tool_output',
+  )
+
+  assert.notEqual(preambleAssistantIndex, -1)
+  assert.notEqual(firstToolOutputIndex, -1)
+  assert.ok(preambleAssistantIndex < firstToolOutputIndex)
 })

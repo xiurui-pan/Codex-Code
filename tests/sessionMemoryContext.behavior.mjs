@@ -633,7 +633,7 @@ const DONE_RESPONSE = [
   'data: [DONE]\n\n',
 ]
 
-test('main query injects current session memory into the codex request body', async () => {
+test('main query does not inject current session memory into the codex request body', async () => {
   const result = await runSession({
     responseBatches: [DONE_RESPONSE, DONE_RESPONSE],
     queries: [
@@ -650,7 +650,7 @@ test('main query injects current session memory into the codex request body', as
           })
         },
         async afterResult({ requestBodies }) {
-          assert.match(
+          assert.doesNotMatch(
             JSON.stringify(requestBodies[1]),
             /Carry session memory into the main query/,
           )
@@ -933,7 +933,7 @@ test('cross-project resume compact prefers the resumed transcript project summar
   }
 })
 
-test('session memory writer path does not recurse back through provider injection', async () => {
+test('session memory writer path also skips live provider injection', async () => {
   const result = await runSession({
     responseBatches: [DONE_RESPONSE, DONE_RESPONSE],
     queries: [
@@ -952,7 +952,7 @@ test('session memory writer path does not recurse back through provider injectio
         },
         async afterResult({ requestBodies }) {
           assert.equal(requestBodies.length, 2)
-          assert.match(
+          assert.doesNotMatch(
             JSON.stringify(requestBodies[1]),
             /Do not inject this into the session memory writer/,
           )
@@ -964,7 +964,7 @@ test('session memory writer path does not recurse back through provider injectio
   assert.equal(result.code, 0, result.stderr)
 })
 
-test('querySource session_memory never injects current session memory back into its own writer path', async () => {
+test('current session memory items are disabled for live codex queries', async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'codex-session-memory-module-'))
   const originalHome = process.env.HOME
   const originalCodexProvider = process.env.CODEX_CODE_USE_CODEX_PROVIDER
@@ -993,11 +993,7 @@ test('querySource session_memory never injects current session memory back into 
     })
 
     assert.equal(sessionMemoryItems.length, 0)
-    assert.equal(sdkItems.length, 1)
-    assert.match(
-      JSON.stringify(sdkItems[0]),
-      /This should never loop back into session_memory/,
-    )
+    assert.equal(sdkItems.length, 0)
   } finally {
     if (originalHome === undefined) {
       delete process.env.HOME

@@ -308,7 +308,7 @@ export function filterToolsByDenyRules<
 }
 
 export const getTools = (permissionContext: ToolPermissionContext): Tools => {
-  // Simple mode: only Bash, Read, and Edit tools
+  // Simple mode: keep the core local tools plus built-in web search.
   if (isEnvTruthy(process.env.CODEX_CODE_SIMPLE)) {
     // --bare + REPL mode: REPL wraps Bash/Read/Edit/etc inside the VM, so
     // return REPL instead of the raw primitives. Matches the non-bare path
@@ -323,7 +323,12 @@ export const getTools = (permissionContext: ToolPermissionContext): Tools => {
       }
       return filterToolsByDenyRules(replSimple, permissionContext)
     }
-    const simpleTools: Tool[] = [BashTool, FileReadTool, FileEditTool]
+    const simpleTools: Tool[] = [
+      WebSearchTool,
+      BashTool,
+      FileReadTool,
+      FileEditTool,
+    ]
     // When coordinator mode is also active, include AgentTool and TaskStopTool
     // so the coordinator gets Task+TaskStop (via useMergedTools filtering) and
     // workers get Bash/Read/Edit (via filterToolsForAgent filtering).

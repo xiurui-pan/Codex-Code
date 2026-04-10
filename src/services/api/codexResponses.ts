@@ -3,8 +3,12 @@ import type {
   ContentBlockParam,
   ToolResultBlockParam,
 } from '@anthropic-ai/sdk/resources/index.mjs'
-import type { Tool, Tools } from '../../Tool.js'
+import {
+  type Tool,
+  type Tools,
+} from '../../Tool.js'
 import type { AgentDefinition } from '../../tools/AgentTool/loadAgentsDir.js'
+import { BASH_TOOL_NAME } from '../../tools/BashTool/toolName.js'
 import type { Message } from '../../types/message.js'
 import type { PermissionMode } from '../../utils/permissions/PermissionMode.js'
 import {
@@ -17,18 +21,24 @@ import {
   getCodexConfiguredWebSearchContextSize,
   getCodexConfiguredWebSearchLocation,
   getCodexConfiguredModel,
+  getCodexConfiguredReasoningSummary,
   getCodexConfiguredWebSearchMode,
   getCodexConfiguredResponseStorage,
 } from '../../utils/codexConfig.js'
 import { errorMessage } from '../../utils/errors.js'
 import { resolveAppliedEffort } from '../../utils/effort.js'
 import { sleep } from '../../utils/sleep.js'
+import { getCwd } from '../../utils/cwd.js'
 import {
   ensureToolResultPairing,
   normalizeMessagesForAPI,
 } from '../../utils/messages.js'
 import {
   DEFAULT_CODEX_MODEL,
+  codexModelSupportsParallelToolCalls,
+  findCodexModelCapability,
+  getCodexDefaultReasoningSummaryForModel,
+  getCodexDefaultVerbosityForModel,
   getCodexSupportedEffortLevels,
 } from '../../utils/model/codexModels.js'
 import type { SystemPrompt } from '../../utils/systemPromptType.js'
@@ -40,6 +50,7 @@ import {
   buildToolCallItemsForLocalExecution,
   buildToolResultItemsForLocalExecution,
   getLocalExecutionOutputText,
+  isLocalShellToolName,
 } from './localExecutionItems.js'
 import {
   normalizeResponsesOutputToTurnItems,
@@ -49,8 +60,16 @@ import { buildCodexRequestIdentity } from './codexRequestIdentity.js'
 import { getSessionId } from '../../bootstrap/state.js'
 import { getCodexProviderProfile } from './providerProfiles.js'
 import { API_ERROR_MESSAGE_PREFIX } from './errors.js'
+import { NO_CONTENT_MESSAGE } from '../../constants/messages.js'
 
 type CodexResponsesEffort = 'low' | 'medium' | 'high' | 'xhigh' | 'max'
+type CodexResponsesReasoningSummary = 'auto'
+type CodexResponsesVerbosity = 'low' | 'medium' | 'high'
+
+type AssistantMessageSeed = {
+  id?: string
+  text: string
+}
 
 type CodexRequestOptions = {
   model?: string
@@ -121,12 +140,90 @@ export type CodexCompactResponseResult = {
   turnItems: ModelTurnItem[]
 }
 
+type ResponsesAssistantMessageItem = ResponsesOutputItem & {
+  type: 'message'
+  role: 'assistant'
+  id: string
+}
+
 function isRetryUnsafeTurnItem(item: ModelTurnItem): boolean {
   return (
     item.kind !== 'raw_model_output' &&
     item.kind !== 'final_answer' &&
     item.kind !== 'ui_message'
   )
+}
+
+function extractAssistantMessageSeed(
+  item: ResponsesOutputItem | undefined,
+): AssistantMessageSeed | null {
+  if (!item || item.type !== 'message' || item.role !== 'assistant') {
+    return null
+  }
+
+  const text = (item.content ?? [])
+    .filter(
+      part => part.type === 'output_text' && typeof part.text === 'string',
+    )
+    .map(part => part.text ?? '')
+    .join('')
+
+  if (!text) {
+    return null
+  }
+
+  return {
+    id: item.id,
+    text,
+  }
+}
+
+function isResponsesAssistantMessageItem(
+  item: ResponsesOutputItem | undefined,
+): item is ResponsesAssistantMessageItem {
+  return (
+    !!item &&
+    item.type === 'message' &&
+    item.role === 'assistant' &&
+    typeof item.id === 'string' &&
+    item.id.length > 0
+  )
+}
+
+function cloneAssistantMessageItem(
+  item: ResponsesAssistantMessageItem,
+): ResponsesAssistantMessageItem {
+  return {
+    ...item,
+    content: (item.content ?? []).map(part => ({ ...part })),
+  }
+}
+
+function setAssistantMessageItemText(
+  item: ResponsesAssistantMessageItem,
+  text: string,
+): ResponsesAssistantMessageItem {
+  return {
+    ...item,
+    content: [
+      {
+        type: 'output_text',
+        text,
+      },
+    ],
+  }
+}
+
+function createPendingAssistantMessageItem(
+  itemId: string,
+): ResponsesAssistantMessageItem {
+  return {
+    type: 'message',
+    id: itemId,
+    role: 'assistant',
+    phase: 'commentary',
+    content: [],
+  }
 }
 
 type ResponsesOutputText = {
@@ -138,6 +235,8 @@ type ResponsesInputText = {
   type: 'input_text'
   text: string
 }
+
+type ResponsesMessageRole = 'developer' | 'user' | 'assistant'
 
 type ResponsesCompletedUsage = {
   input_tokens: number
@@ -179,6 +278,20 @@ type ResponsesOutputTextDeltaEvent = {
   type: 'response.output_text.delta'
   content_index?: number
   delta?: string
+  item_id?: string
+  output_index?: number
+}
+
+type ResponsesFunctionCallArgumentsDeltaEvent = {
+  type: 'response.function_call_arguments.delta'
+  delta?: string
+  item_id?: string
+  output_index?: number
+}
+
+type ResponsesFunctionCallArgumentsDoneEvent = {
+  type: 'response.function_call_arguments.done'
+  arguments?: string
   item_id?: string
   output_index?: number
 }
@@ -239,6 +352,8 @@ type ResponsesStreamEvent =
   | ResponsesCompletedEvent
   | ResponsesOutputDoneEvent
   | ResponsesContentPartAddedEvent
+  | ResponsesFunctionCallArgumentsDeltaEvent
+  | ResponsesFunctionCallArgumentsDoneEvent
   | ResponsesOutputTextDeltaEvent
   | ResponsesOutputAddedEvent
   | ResponsesFailureEvent
@@ -253,10 +368,30 @@ type ResponsesEncryptedInputItem = {
   encrypted_content: string
 }
 
+type ResponsesShellAction = {
+  commands: string[]
+  timeout_ms?: number
+  max_output_length?: number
+  working_directory?: string
+}
+
+type ResponsesShellCommandOutput = {
+  stdout: string
+  stderr: string
+  outcome:
+    | {
+        type: 'exit'
+        exit_code: number
+      }
+    | {
+        type: 'timeout'
+      }
+}
+
 type ResponsesInputItem =
   | {
       type: 'message'
-      role: 'user'
+      role: 'developer' | 'user'
       content: ResponsesInputText[]
     }
   | {
@@ -274,6 +409,30 @@ type ResponsesInputItem =
       type: 'function_call_output'
       call_id: string
       output: string
+    }
+  | {
+      type: 'shell_call'
+      call_id: string
+      status: 'completed'
+      action: ResponsesShellAction
+    }
+  | {
+      type: 'shell_call_output'
+      call_id: string
+      max_output_length?: number
+      output: ResponsesShellCommandOutput[]
+    }
+  | {
+      type: 'local_shell_call'
+      id?: string
+      call_id: string
+      status: 'completed'
+      action: {
+        type: 'exec'
+        command: string[]
+        timeout_ms?: number
+        working_directory?: string
+      }
     }
   | ResponsesEncryptedInputItem
 
@@ -299,6 +458,37 @@ type ResponsesNativeWebSearchTool = {
     timezone?: string
   }
   search_context_size?: string
+}
+
+type ResponsesRequestTool =
+  | ResponsesFunctionTool
+  | ResponsesNativeWebSearchTool
+
+const CODEX_SHELL_TOOL_NAME = 'local_shell'
+const LEGACY_CODEX_SHELL_TOOL_NAME = 'shell'
+const CODEX_SHELL_TOOL_DESCRIPTION =
+  'Runs a shell command and returns its output.\n' +
+  '- The arguments to `local_shell` will be passed to execvp(). Most terminal commands should be prefixed with ["bash", "-lc"].\n' +
+  '- Always set the `workdir` param when using the shell function. Do not use `cd` unless absolutely necessary.'
+const CODEX_SHELL_TOOL_PARAMETERS: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    command: {
+      type: 'array',
+      items: { type: 'string' },
+      description: 'The command to execute',
+    },
+    workdir: {
+      type: 'string',
+      description: 'The working directory to execute the command in',
+    },
+    timeout_ms: {
+      type: 'number',
+      description: 'The timeout for the command in milliseconds',
+    },
+  },
+  required: ['command'],
+  additionalProperties: false,
 }
 
 function getResponsesBaseUrl(): string {
@@ -364,7 +554,7 @@ function normalizeToolResultText(
 
 function pushMessageInput(
   items: ResponsesInputItem[],
-  role: 'user' | 'assistant',
+  role: ResponsesMessageRole,
   text: string,
 ): void {
   const normalizedText = text.trim()
@@ -387,6 +577,137 @@ function pushMessageInput(
           },
     ],
   })
+}
+
+function pushUserMessageInputSections(
+  items: ResponsesInputItem[],
+  texts: readonly string[],
+): void {
+  const content = texts
+    .map(text => text.trim())
+    .filter(text => text.length > 0)
+    .map(text => ({
+      type: 'input_text' as const,
+      text,
+    }))
+
+  if (content.length === 0) {
+    return
+  }
+
+  items.push({
+    type: 'message',
+    role: 'user',
+    content,
+  })
+}
+
+const CONTEXTUAL_USER_TEXT_WRAPPERS = [
+  ['<system-reminder>', '</system-reminder>'],
+  ['<user_instructions>', '</user_instructions>'],
+  ['<environment_context>', '</environment_context>'],
+  ['<user_shell_command>', '</user_shell_command>'],
+  ['<turn_aborted>', '</turn_aborted>'],
+  ['<subagent_notification>', '</subagent_notification>'],
+] as const
+
+function isContextualUserText(text: string): boolean {
+  const trimmed = text.trim()
+  if (!trimmed) {
+    return false
+  }
+
+  return CONTEXTUAL_USER_TEXT_WRAPPERS.some(
+    ([openTag, closeTag]) =>
+      trimmed.startsWith(openTag) && trimmed.endsWith(closeTag),
+  )
+}
+
+const PREPENDED_USER_CONTEXT_PREFIX =
+  "<system-reminder>\nAs you answer the user's questions, you can use the following context:\n"
+const PREPENDED_USER_CONTEXT_SUFFIX_PATTERN =
+  /\n+\s*IMPORTANT: this context may or may not be relevant to your tasks\. You should not respond to this context unless it is highly relevant to your task\.\n<\/system-reminder>\s*$/s
+
+function wrapCodexUserInstructions(text: string): string {
+  return `# AGENTS.md instructions for ${getCwd()}\n\n<INSTRUCTIONS>\n${text}\n</INSTRUCTIONS>`
+}
+
+function escapeXml(text: string): string {
+  return text
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+}
+
+function normalizeCurrentDateText(text: string): string {
+  const trimmed = text.trim()
+  const prefix = "Today's date is "
+  if (trimmed.startsWith(prefix)) {
+    return trimmed.slice(prefix.length).replace(/\.$/, '')
+  }
+  return trimmed
+}
+
+function buildEnvironmentContextText(currentDateText: string): string {
+  const lines = [`  <cwd>${escapeXml(getCwd())}</cwd>`]
+  const shellPath = process.env.SHELL?.trim()
+  if (shellPath) {
+    const shellName = shellPath.split('/').at(-1)
+    if (shellName) {
+      lines.push(`  <shell>${escapeXml(shellName)}</shell>`)
+    }
+  }
+  const normalizedDateText = normalizeCurrentDateText(currentDateText)
+  if (normalizedDateText) {
+    lines.push(`  <current_date>${escapeXml(normalizedDateText)}</current_date>`)
+  }
+  return `<environment_context>\n${lines.join('\n')}\n</environment_context>`
+}
+
+function extractCodexContextualUserSections(
+  text: string,
+): string[] | null {
+  const trimmed = text.trim()
+  if (!trimmed.startsWith(PREPENDED_USER_CONTEXT_PREFIX)) {
+    return null
+  }
+
+  const suffixMatch = trimmed.match(PREPENDED_USER_CONTEXT_SUFFIX_PATTERN)
+  if (!suffixMatch || suffixMatch.index === undefined) {
+    return null
+  }
+
+  const inner = trimmed
+    .slice(
+      PREPENDED_USER_CONTEXT_PREFIX.length,
+      suffixMatch.index,
+    )
+    .trim()
+
+  if (!inner.startsWith('# claudeMd\n')) {
+    return null
+  }
+
+  const currentDateMarker = '\n# currentDate\n'
+  const currentDateIndex = inner.lastIndexOf(currentDateMarker)
+  const claudeMdBody =
+    currentDateIndex >= 0
+      ? inner.slice('# claudeMd\n'.length, currentDateIndex).trim()
+      : inner.slice('# claudeMd\n'.length).trim()
+  const currentDateBody =
+    currentDateIndex >= 0
+      ? inner.slice(currentDateIndex + currentDateMarker.length).trim()
+      : ''
+
+  const sections: string[] = []
+  if (claudeMdBody) {
+    sections.push(wrapCodexUserInstructions(claudeMdBody))
+  }
+  if (currentDateBody) {
+    sections.push(buildEnvironmentContextText(currentDateBody))
+  }
+
+  return sections.length > 0 ? sections : null
 }
 
 function formatCodexProviderApiError(message: string): string {
@@ -413,8 +734,209 @@ function isResponsesCompactionType(type: string | null): boolean {
   return type === 'compaction' || type === 'compaction_summary'
 }
 
+function mapInternalToolNameToResponsesToolName(toolName: string): string {
+  return toolName === BASH_TOOL_NAME ? CODEX_SHELL_TOOL_NAME : toolName
+}
+
+function mapResponsesToolNameToInternalToolName(toolName: string): string {
+  return toolName === CODEX_SHELL_TOOL_NAME ||
+    toolName === LEGACY_CODEX_SHELL_TOOL_NAME
+    ? BASH_TOOL_NAME
+    : toolName
+}
+
+function normalizeResponsesFunctionCallArguments(
+  argumentsValue: string | Record<string, unknown> | undefined,
+): Record<string, unknown> {
+  if (!argumentsValue) {
+    return {}
+  }
+
+  if (typeof argumentsValue !== 'string') {
+    return argumentsValue
+  }
+
+  try {
+    const parsed = JSON.parse(argumentsValue) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+  } catch {
+    // Ignore malformed payloads and let downstream validation handle them.
+  }
+
+  return {}
+}
+
+function mapInternalToolInputToResponsesArguments(
+  toolName: string,
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  if (toolName !== BASH_TOOL_NAME) {
+    return input
+  }
+
+  const command =
+    typeof input.command === 'string' ? input.command.trim() : ''
+  if (!command) {
+    return input
+  }
+
+  const mapped: Record<string, unknown> = {
+    command: ['bash', '-lc', command],
+  }
+
+  if (typeof input.timeout === 'number' && Number.isFinite(input.timeout)) {
+    mapped.timeout_ms = input.timeout
+  }
+
+  return mapped
+}
+
+function buildResponsesFunctionCallInputItem(
+  toolUseId: string,
+  toolName: string,
+  input: Record<string, unknown>,
+): Extract<ResponsesInputItem, { type: 'function_call' }> {
+  return {
+    type: 'function_call',
+    call_id: toolUseId,
+    name: mapInternalToolNameToResponsesToolName(toolName),
+    arguments: JSON.stringify(
+      mapInternalToolInputToResponsesArguments(toolName, input),
+    ),
+  }
+}
+
+function extractShellInputFromLegacyPayload(
+  payload: Extract<ResponsesInputItem, { type: 'local_shell_call' }>,
+): Record<string, unknown> | null {
+  const legacyCommand = payload.action.command
+  const command =
+    Array.isArray(legacyCommand) &&
+    legacyCommand[0] === 'bash' &&
+    legacyCommand[1] === '-lc' &&
+    typeof legacyCommand[2] === 'string'
+      ? legacyCommand[2]
+      : typeof legacyCommand === 'string'
+        ? legacyCommand
+        : ''
+  const timeout =
+    typeof payload.action.timeout_ms === 'number' &&
+    Number.isFinite(payload.action.timeout_ms)
+      ? payload.action.timeout_ms
+      : undefined
+  const workingDirectory =
+    typeof payload.action.working_directory === 'string' &&
+    payload.action.working_directory.trim().length > 0
+      ? payload.action.working_directory
+      : undefined
+
+  return command.trim().length > 0
+    ? {
+        command,
+        ...(timeout !== undefined ? { timeout } : {}),
+        ...(workingDirectory ? { workdir: workingDirectory } : {}),
+      }
+    : null
+}
+
+function extractShellInputFromShellCall(
+  payload: Extract<ResponsesInputItem, { type: 'shell_call' }>,
+): Record<string, unknown> | null {
+  const commands = payload.action.commands.filter(
+    command => typeof command === 'string' && command.trim().length > 0,
+  )
+  if (commands.length === 0) {
+    return null
+  }
+
+  return {
+    command: commands.join(' && '),
+    ...(typeof payload.action.timeout_ms === 'number'
+      ? { timeout: payload.action.timeout_ms }
+      : {}),
+    ...(typeof payload.action.working_directory === 'string' &&
+    payload.action.working_directory.trim().length > 0
+      ? { workdir: payload.action.working_directory }
+      : {}),
+  }
+}
+
+function extractShellOutputText(
+  payload: Extract<ResponsesInputItem, { type: 'shell_call_output' }>,
+): string {
+  return payload.output
+    .map(result => {
+      const parts = [result.stdout, result.stderr].filter(
+        text => typeof text === 'string' && text.length > 0,
+      )
+      return parts.join('\n')
+    })
+    .filter(text => text.length > 0)
+    .join('\n')
+}
+
+function normalizeResponsesReplayInputItem(
+  payload: ResponsesInputItem,
+  toolNameByUseId: Map<string, string>,
+): ResponsesInputItem | null {
+  if (payload.type === 'function_call') {
+    const internalToolName = mapResponsesToolNameToInternalToolName(
+      payload.name,
+    )
+    toolNameByUseId.set(payload.call_id, internalToolName)
+    return buildResponsesFunctionCallInputItem(
+      payload.call_id,
+      internalToolName,
+      normalizeResponsesFunctionCallArguments(payload.arguments),
+    )
+  }
+
+  if (payload.type === 'function_call_output') {
+    return payload
+  }
+
+  if (payload.type === 'shell_call') {
+    toolNameByUseId.set(payload.call_id, BASH_TOOL_NAME)
+    const input = extractShellInputFromShellCall(payload)
+    return input
+      ? buildResponsesFunctionCallInputItem(
+          payload.call_id,
+          BASH_TOOL_NAME,
+          input,
+        )
+      : null
+  }
+
+  if (payload.type === 'shell_call_output') {
+    return {
+      type: 'function_call_output',
+      call_id: payload.call_id,
+      output: extractShellOutputText(payload),
+    }
+  }
+
+  if (payload.type === 'local_shell_call') {
+    toolNameByUseId.set(payload.call_id, BASH_TOOL_NAME)
+    const input = extractShellInputFromLegacyPayload(payload)
+    if (!input) {
+      return null
+    }
+
+    return buildResponsesFunctionCallInputItem(
+      payload.call_id,
+      BASH_TOOL_NAME,
+      input,
+    )
+  }
+
+  return payload
+}
+
 function buildResponsesInputFromTurnItems(
   turnItems: readonly ModelTurnItem[],
+  toolNameByUseId: Map<string, string>,
 ): ResponsesInputItem[] {
   const items: ResponsesInputItem[] = []
   const hasOpaqueReasoning = turnItems.some(
@@ -435,7 +957,13 @@ function buildResponsesInputFromTurnItems(
         continue
       }
       if (payloadType) {
-        items.push(payload as ResponsesInputItem)
+        const replayItem = normalizeResponsesReplayInputItem(
+          payload as ResponsesInputItem,
+          toolNameByUseId,
+        )
+        if (replayItem) {
+          items.push(replayItem)
+        }
       }
       continue
     }
@@ -446,7 +974,13 @@ function buildResponsesInputFromTurnItems(
     ) {
       const payload = item.payload
       if (getResponsesPayloadType(payload)) {
-        items.push(payload as ResponsesInputItem)
+        const replayItem = normalizeResponsesReplayInputItem(
+          payload as ResponsesInputItem,
+          toolNameByUseId,
+        )
+        if (replayItem) {
+          items.push(replayItem)
+        }
       }
     }
   }
@@ -468,8 +1002,9 @@ function buildResponsesInput(
   for (const message of normalizedMessages) {
     const replayItems = buildResponsesInputFromTurnItems(
       message.modelTurnItems ?? [],
+      toolNameByUseId,
     )
-    if (replayItems.length > 0) {
+    if (shouldPreferResponsesReplayItems(message, replayItems)) {
       items.push(...replayItems)
       continue
     }
@@ -500,12 +1035,13 @@ function buildResponsesInput(
           )
           if (toolCall?.kind === 'tool_call') {
             toolNameByUseId.set(toolCall.toolUseId, toolCall.toolName)
-            items.push({
-              type: 'function_call',
-              call_id: toolCall.toolUseId,
-              name: toolCall.toolName,
-              arguments: JSON.stringify(toolCall.input),
-            })
+            items.push(
+              buildResponsesFunctionCallInputItem(
+                toolCall.toolUseId,
+                toolCall.toolName,
+                toolCall.input,
+              ),
+            )
           }
         }
       }
@@ -515,15 +1051,32 @@ function buildResponsesInput(
     }
 
     let pendingUserText = ''
+    const flushPendingUserText = () => {
+      pushMessageInput(items, 'user', pendingUserText)
+      pendingUserText = ''
+    }
     for (const block of message.message.content) {
       if (block.type === 'text' && typeof block.text === 'string') {
+        const codexContextSections = extractCodexContextualUserSections(
+          block.text,
+        )
+        if (codexContextSections) {
+          flushPendingUserText()
+          pushUserMessageInputSections(items, codexContextSections)
+          continue
+        }
+
+        if (isContextualUserText(block.text)) {
+          flushPendingUserText()
+          pushUserMessageInputSections(items, [block.text])
+          continue
+        }
         pendingUserText += block.text
         continue
       }
 
       if (block.type === 'tool_result') {
-        pushMessageInput(items, 'user', pendingUserText)
-        pendingUserText = ''
+        flushPendingUserText()
         const turnItems = buildToolResultItemsForLocalExecution(
           block.tool_use_id,
           toolNameByUseId.get(block.tool_use_id),
@@ -542,35 +1095,79 @@ function buildResponsesInput(
       continue
     }
 
-    pushMessageInput(items, 'user', pendingUserText)
+    flushPendingUserText()
   }
 
   return items
 }
 
+function shouldPreferResponsesReplayItems(
+  message: Message,
+  replayItems: readonly ResponsesInputItem[],
+): boolean {
+  if (replayItems.length === 0) {
+    return false
+  }
+
+  if (typeof message.message.content === 'string') {
+    const content = message.message.content.trim()
+    return content.length === 0 || content === NO_CONTENT_MESSAGE
+  }
+
+  const hasRenderableContent = message.message.content.some(block => {
+    if (block.type !== 'text' || typeof block.text !== 'string') {
+      return true
+    }
+    const text = block.text.trim()
+    return text.length > 0 && text !== NO_CONTENT_MESSAGE
+  })
+
+  if (!hasRenderableContent) {
+    return true
+  }
+
+  // Keep replay-only meta entries such as native Responses compaction history
+  // on the raw item path. Ordinary turns should flow back through the
+  // Claude-style message content so the request looks like a conversation,
+  // not a fully expanded execution log.
+  return message.type === 'user' && message.isMeta === true
+}
+
 async function buildResponsesTools(
   tools: Tools,
   options: CodexRequestOptions,
-): Promise<ResponsesFunctionTool[]> {
+): Promise<ResponsesRequestTool[]> {
   const scopedTools = tools.filter(tool => tool.name !== 'WebSearch')
 
   return Promise.all(
-    scopedTools.map(async tool => ({
-      type: 'function' as const,
-      name: tool.name,
-      description: await tool.prompt({
-        getToolPermissionContext:
-          options.getToolPermissionContext ?? (async () => ({})),
-        tools: scopedTools,
-        agents: options.agents ?? [],
-        allowedAgentTypes: options.allowedAgentTypes,
-      }),
-      strict: false as const,
-      parameters:
-        'inputJSONSchema' in tool && tool.inputJSONSchema
-          ? tool.inputJSONSchema
-          : zodToJsonSchema(tool.inputSchema),
-    })),
+    scopedTools.map(async tool => {
+      if (tool.name === BASH_TOOL_NAME) {
+        return {
+          type: 'function' as const,
+          name: CODEX_SHELL_TOOL_NAME,
+          description: CODEX_SHELL_TOOL_DESCRIPTION,
+          strict: false as const,
+          parameters: CODEX_SHELL_TOOL_PARAMETERS,
+        }
+      }
+
+      return {
+        type: 'function' as const,
+        name: tool.name,
+        description: await tool.prompt({
+          getToolPermissionContext:
+            options.getToolPermissionContext ?? (async () => ({})),
+          tools: scopedTools,
+          agents: options.agents ?? [],
+          allowedAgentTypes: options.allowedAgentTypes,
+        }),
+        strict: false as const,
+        parameters:
+          'inputJSONSchema' in tool && tool.inputJSONSchema
+            ? tool.inputJSONSchema
+            : zodToJsonSchema(tool.inputSchema),
+      }
+    }),
   )
 }
 
@@ -676,6 +1273,24 @@ function toResponsesReasoningEffort(
   return supportedLevels.includes(effortValue) ? effortValue : undefined
 }
 
+function getResponsesReasoningSummary(
+  model: string,
+): CodexResponsesReasoningSummary | undefined {
+  const configuredSummary = getCodexConfiguredReasoningSummary()
+  if (configuredSummary) {
+    return configuredSummary === 'none' ? undefined : configuredSummary
+  }
+  const summary = getCodexDefaultReasoningSummaryForModel(model)
+  return summary === 'none' ? undefined : summary
+}
+
+function getResponsesTextControls(
+  model: string,
+): { verbosity: CodexResponsesVerbosity } | undefined {
+  const verbosity = getCodexDefaultVerbosityForModel(model)
+  return verbosity ? { verbosity } : undefined
+}
+
 function applyResponsesBodyDefaults({
   body,
   systemPrompt,
@@ -711,11 +1326,20 @@ function applyResponsesBodyDefaults({
     resolvedEffortValue,
   )
   if (profile.reasoningEffort && effort) {
-    body.reasoning = {
-      effort,
-      summary: 'auto',
-    }
+    const summary = getResponsesReasoningSummary(resolvedModel)
+    body.reasoning =
+      summary === undefined
+        ? { effort }
+        : {
+            effort,
+            summary,
+          }
     body.include = ['reasoning.encrypted_content']
+  }
+
+  const textControls = getResponsesTextControls(resolvedModel)
+  if (textControls) {
+    body.text = textControls
   }
 
   if (profile.instructionsField && systemPrompt.length > 0) {
@@ -743,10 +1367,21 @@ export async function buildResponsesCompactBody({
   const body: Record<string, unknown> = {
     model: resolvedModel,
     input: buildResponsesInput(messages, []),
-    instructions: systemPrompt.join('\n\n'),
   }
 
   const profile = getCodexProviderProfile()
+  if (profile.instructionsField) {
+    body.instructions = systemPrompt.join('\n\n')
+  } else if (systemPrompt.length > 0) {
+    body.input = [
+      {
+        type: 'message',
+        role: 'developer',
+        content: [{ type: 'input_text', text: systemPrompt.join('\n\n') }],
+      },
+      ...((body.input as ResponsesInputItem[]) ?? []),
+    ]
+  }
   const resolvedEffortValue = resolveAppliedEffort(
     resolvedModel,
     options.resolvedEffortValue ?? options.effortValue ?? undefined,
@@ -757,11 +1392,20 @@ export async function buildResponsesCompactBody({
     resolvedEffortValue,
   )
   if (profile.reasoningEffort && effort) {
-    body.reasoning = {
-      effort,
-      summary: 'auto',
-    }
+    const summary = getResponsesReasoningSummary(resolvedModel)
+    body.reasoning =
+      summary === undefined
+        ? { effort }
+        : {
+            effort,
+            summary,
+          }
     body.include = ['reasoning.encrypted_content']
+  }
+
+  const textControls = getResponsesTextControls(resolvedModel)
+  if (textControls) {
+    body.text = textControls
   }
 
   return body
@@ -776,12 +1420,19 @@ export async function buildResponsesBody({
   const profile = getCodexProviderProfile()
   const requestIdentity = buildCodexRequestIdentity()
   const resolvedTools = options.tools ?? tools ?? []
-  const resolvedModel = options.model ?? getCodexConfiguredModel() ?? DEFAULT_CODEX_MODEL
+  const resolvedModel =
+    options.model ?? getCodexConfiguredModel() ?? DEFAULT_CODEX_MODEL
+  let input = buildResponsesInput(messages, resolvedTools)
+  if (!profile.instructionsField && systemPrompt.length > 0) {
+    const developerInput: ResponsesInputItem[] = []
+    pushMessageInput(developerInput, 'developer', systemPrompt.join('\n\n'))
+    input = [...developerInput, ...input]
+  }
   const body: Record<string, unknown> = applyResponsesBodyDefaults({
     body: {
       model: resolvedModel,
       stream: true,
-      input: buildResponsesInput(messages, resolvedTools),
+      input,
     },
     systemPrompt,
     tools: resolvedTools,
@@ -789,7 +1440,7 @@ export async function buildResponsesBody({
     requestIdentity,
     resolvedModel,
   })
-  const responseTools = [
+  const responseTools: ResponsesRequestTool[] = [
     ...(() => {
       const nativeWebSearchTool = buildNativeWebSearchTool(
         resolvedTools,
@@ -810,6 +1461,12 @@ export async function buildResponsesBody({
     body.tools = responseTools
     if (profile.toolChoice !== 'none') {
       body.tool_choice = profile.toolChoice
+    }
+    if (
+      codexModelSupportsParallelToolCalls(resolvedModel) ||
+      findCodexModelCapability(resolvedModel) === undefined
+    ) {
+      body.parallel_tool_calls = true
     }
   }
 
@@ -1221,13 +1878,141 @@ export async function* queryCodexResponsesStream({
       options,
     }),
   )
-
   let streamRetryCount = 0
 
   while (true) {
     const startedTextBlocks = new Set<string>()
     const startedThinkingBlocks = new Set<string>()
+    const seededAssistantTextByItemId = new Map<string, string>()
+    const flushedAssistantTextByItemId = new Map<string, string>()
+    const pendingFunctionCallArgumentsByItemId = new Map<string, string>()
+    const pendingAssistantMessageById = new Map<
+      string,
+      ResponsesAssistantMessageItem
+    >()
+    const pendingAssistantMessageOrder: string[] = []
     let yieldedRetryUnsafeOutput = false
+
+    const consumePendingAssistantTurnItems = (
+      keepId?: string,
+    ): ModelTurnItem[] => {
+      if (pendingAssistantMessageOrder.length === 0) {
+        return []
+      }
+
+      const turnItems: ModelTurnItem[] = []
+      let writeIndex = 0
+
+      for (const itemId of pendingAssistantMessageOrder) {
+        const item = pendingAssistantMessageById.get(itemId)
+        if (!item) {
+          continue
+        }
+
+        if (keepId === itemId) {
+          pendingAssistantMessageOrder[writeIndex] = itemId
+          writeIndex += 1
+          continue
+        }
+
+        pendingAssistantMessageById.delete(itemId)
+        const assistantSeed = extractAssistantMessageSeed(item)
+        if (!assistantSeed?.text) {
+          continue
+        }
+        flushedAssistantTextByItemId.set(itemId, assistantSeed.text)
+        turnItems.push(...normalizeResponsesOutputToTurnItems([item]))
+      }
+
+      pendingAssistantMessageOrder.length = writeIndex
+      return turnItems
+    }
+
+    const ensurePendingAssistantMessage = (
+      itemId: string,
+    ): ResponsesAssistantMessageItem => {
+      const existing = pendingAssistantMessageById.get(itemId)
+      if (existing) {
+        return existing
+      }
+
+      const synthetic = createPendingAssistantMessageItem(itemId)
+      pendingAssistantMessageOrder.push(itemId)
+      pendingAssistantMessageById.set(itemId, synthetic)
+      return synthetic
+    }
+
+    const updatePendingAssistantMessageText = (
+      itemId: string,
+      textFragment: string,
+    ): void => {
+      if (textFragment.length === 0) {
+        return
+      }
+
+      const currentItem = ensurePendingAssistantMessage(itemId)
+
+      const currentText = extractAssistantMessageSeed(currentItem)?.text ?? ''
+      const nextText = textFragment.startsWith(currentText)
+        ? textFragment
+        : `${currentText}${textFragment}`
+
+      pendingAssistantMessageById.set(
+        itemId,
+        setAssistantMessageItemText(currentItem, nextText),
+      )
+    }
+
+    const appendPendingFunctionCallArguments = (
+      itemId: string,
+      delta: string,
+    ): void => {
+      if (delta.length === 0) {
+        return
+      }
+
+      pendingFunctionCallArgumentsByItemId.set(
+        itemId,
+        `${pendingFunctionCallArgumentsByItemId.get(itemId) ?? ''}${delta}`,
+      )
+    }
+
+    const setPendingFunctionCallArguments = (
+      itemId: string,
+      argumentsText: string,
+    ): void => {
+      pendingFunctionCallArgumentsByItemId.set(itemId, argumentsText)
+    }
+
+    const applyPendingFunctionCallArguments = (
+      item: ResponsesOutputItem,
+    ): ResponsesOutputItem => {
+      if (
+        item.type !== 'function_call' ||
+        typeof item.id !== 'string' ||
+        item.id.length === 0
+      ) {
+        return item
+      }
+
+      const pendingArguments = pendingFunctionCallArgumentsByItemId.get(item.id)
+      if (!pendingArguments) {
+        return item
+      }
+
+      if (
+        typeof item.arguments !== 'string' ||
+        item.arguments.length === 0 ||
+        pendingArguments.length >= item.arguments.length
+      ) {
+        return {
+          ...item,
+          arguments: pendingArguments,
+        }
+      }
+
+      return item
+    }
 
     try {
       const response = await fetchWithRequestRetries(
@@ -1358,6 +2143,23 @@ export async function* queryCodexResponsesStream({
 
         if (event.type === 'response.output_text.delta') {
           if (typeof event.delta === 'string' && event.delta.length > 0) {
+            let deltaText = event.delta
+            if (typeof event.item_id === 'string') {
+              updatePendingAssistantMessageText(event.item_id, event.delta)
+              const seededText = seededAssistantTextByItemId.get(event.item_id)
+              if (
+                typeof seededText === 'string' &&
+                deltaText.startsWith(seededText)
+              ) {
+                deltaText = deltaText.slice(seededText.length)
+                seededAssistantTextByItemId.set(event.item_id, event.delta)
+              }
+            }
+
+            if (!deltaText) {
+              continue
+            }
+
             const outputIndex =
               typeof event.output_index === 'number' ? event.output_index : 0
             const contentIndex =
@@ -1385,7 +2187,7 @@ export async function* queryCodexResponsesStream({
                 index: contentIndex,
                 delta: {
                   type: 'text_delta',
-                  text: event.delta,
+                  text: deltaText,
                 },
               },
             }
@@ -1393,10 +2195,108 @@ export async function* queryCodexResponsesStream({
           continue
         }
 
+        if (event.type === 'response.function_call_arguments.delta') {
+          if (
+            typeof event.item_id === 'string' &&
+            typeof event.delta === 'string'
+          ) {
+            appendPendingFunctionCallArguments(event.item_id, event.delta)
+          }
+          continue
+        }
+
+        if (event.type === 'response.function_call_arguments.done') {
+          if (
+            typeof event.item_id === 'string' &&
+            typeof event.arguments === 'string'
+          ) {
+            setPendingFunctionCallArguments(event.item_id, event.arguments)
+          }
+          continue
+        }
+
         if (event.type === 'response.output_item.added' && event.item) {
+          if (
+            event.item.type === 'function_call' &&
+            typeof event.item.id === 'string' &&
+            typeof event.item.arguments === 'string' &&
+            event.item.arguments.length > 0
+          ) {
+            setPendingFunctionCallArguments(event.item.id, event.item.arguments)
+          }
+
+          if (!isResponsesAssistantMessageItem(event.item)) {
+            const pendingTurnItems = consumePendingAssistantTurnItems()
+            if (pendingTurnItems.length > 0) {
+              yield {
+                kind: 'turn_items',
+                turnItems: pendingTurnItems,
+              }
+            }
+          }
+
+          const assistantSeed = extractAssistantMessageSeed(event.item)
+          if (isResponsesAssistantMessageItem(event.item)) {
+            if (!pendingAssistantMessageById.has(event.item.id)) {
+              pendingAssistantMessageOrder.push(event.item.id)
+            }
+            const pendingSeed = extractAssistantMessageSeed(
+              pendingAssistantMessageById.get(event.item.id),
+            )
+            const nextItem =
+              !assistantSeed?.text && pendingSeed?.text
+                ? setAssistantMessageItemText(
+                    cloneAssistantMessageItem(event.item),
+                    pendingSeed.text,
+                  )
+                : cloneAssistantMessageItem(event.item)
+            pendingAssistantMessageById.set(
+              event.item.id,
+              nextItem,
+            )
+          }
+          if (assistantSeed) {
+            if (assistantSeed.id) {
+              seededAssistantTextByItemId.set(
+                assistantSeed.id,
+                assistantSeed.text,
+              )
+            }
+            yield {
+              kind: 'stream_event',
+              event: {
+                type: 'content_block_start',
+                index: 0,
+                output_index: 0,
+                content_block: {
+                  type: 'text',
+                  text: '',
+                },
+              },
+            }
+            yield {
+              kind: 'stream_event',
+              event: {
+                type: 'content_block_delta',
+                index: 0,
+                output_index: 0,
+                delta: {
+                  type: 'text_delta',
+                  text: assistantSeed.text,
+                },
+              },
+            }
+          }
+
           const turnItems =
             event.item.type === 'web_search_call'
-              ? normalizeResponsesOutputToTurnItems([event.item])
+              ? (() => {
+                  const pendingTurnItems = consumePendingAssistantTurnItems()
+                  return [
+                    ...pendingTurnItems,
+                    ...normalizeResponsesOutputToTurnItems([event.item]),
+                  ]
+                })()
               : []
           if (turnItems.length > 0) {
             if (turnItems.some(isRetryUnsafeTurnItem)) {
@@ -1411,10 +2311,64 @@ export async function* queryCodexResponsesStream({
         }
 
         if (event.type === 'response.output_item.done' && event.item) {
+          const normalizedDoneItem = applyPendingFunctionCallArguments(
+            event.item,
+          )
+          const flushedAssistantText =
+            isResponsesAssistantMessageItem(normalizedDoneItem)
+              ? flushedAssistantTextByItemId.get(normalizedDoneItem.id)
+              : undefined
+          if (isResponsesAssistantMessageItem(normalizedDoneItem)) {
+            const pendingTurnItems = consumePendingAssistantTurnItems(
+              normalizedDoneItem.id,
+            )
+            if (pendingTurnItems.length > 0) {
+              yield {
+                kind: 'turn_items',
+                turnItems: pendingTurnItems,
+              }
+            }
+            pendingAssistantMessageById.delete(normalizedDoneItem.id)
+            const pendingIndex = pendingAssistantMessageOrder.indexOf(
+              normalizedDoneItem.id,
+            )
+            if (pendingIndex !== -1) {
+              pendingAssistantMessageOrder.splice(pendingIndex, 1)
+            }
+          } else {
+            const pendingTurnItems = consumePendingAssistantTurnItems()
+            if (pendingTurnItems.length > 0) {
+              yield {
+                kind: 'turn_items',
+                turnItems: pendingTurnItems,
+              }
+            }
+          }
+
+          const assistantSeed = extractAssistantMessageSeed(normalizedDoneItem)
+          if (assistantSeed?.id) {
+            seededAssistantTextByItemId.delete(assistantSeed.id)
+          }
+          if (isResponsesAssistantMessageItem(normalizedDoneItem)) {
+            flushedAssistantTextByItemId.delete(normalizedDoneItem.id)
+            if (
+              typeof flushedAssistantText === 'string' &&
+              assistantSeed?.text === flushedAssistantText
+            ) {
+              continue
+            }
+          }
           const normalizedItem =
-            event.item.type === 'web_search_call' && !event.item.status
-              ? { ...event.item, status: 'completed' }
-              : event.item
+            normalizedDoneItem.type === 'web_search_call' &&
+            !normalizedDoneItem.status
+              ? { ...normalizedDoneItem, status: 'completed' }
+              : normalizedDoneItem
+          if (
+            normalizedItem.type === 'function_call' &&
+            typeof normalizedItem.id === 'string'
+          ) {
+            pendingFunctionCallArgumentsByItemId.delete(normalizedItem.id)
+          }
           const turnItems = normalizeResponsesOutputToTurnItems([normalizedItem])
           if (turnItems.length > 0) {
             if (turnItems.some(isRetryUnsafeTurnItem)) {
@@ -1429,6 +2383,13 @@ export async function* queryCodexResponsesStream({
         }
 
         if (event.type === 'response.completed') {
+          const pendingTurnItems = consumePendingAssistantTurnItems()
+          if (pendingTurnItems.length > 0) {
+            yield {
+              kind: 'turn_items',
+              turnItems: pendingTurnItems,
+            }
+          }
           if (event.response?.usage) {
             yield {
               kind: 'usage',
@@ -1439,6 +2400,13 @@ export async function* queryCodexResponsesStream({
         }
 
         if (event.type === 'response.incomplete') {
+          const pendingTurnItems = consumePendingAssistantTurnItems()
+          if (pendingTurnItems.length > 0) {
+            yield {
+              kind: 'turn_items',
+              turnItems: pendingTurnItems,
+            }
+          }
           const reason =
             event.response?.incomplete_details?.reason?.trim() || 'unknown'
           yield {
@@ -1451,6 +2419,13 @@ export async function* queryCodexResponsesStream({
         }
 
         if (event.type === 'response.failed' || event.type === 'error') {
+          const pendingTurnItems = consumePendingAssistantTurnItems()
+          if (pendingTurnItems.length > 0) {
+            yield {
+              kind: 'turn_items',
+              turnItems: pendingTurnItems,
+            }
+          }
           const failure = classifyResponsesFailureEvent(event)
           if (
             failure.retryable &&
@@ -1565,7 +2540,8 @@ export async function queryCodexResponsesCompact({
     const turnItems = normalizeResponsesOutputToTurnItems(payload.output)
     if (
       turnItems.some(
-        item => item.kind === 'tool_call' || item.kind === 'tool_output',
+        item =>
+          item.kind === 'tool_call' && !isLocalShellToolName(item.toolName),
       )
     ) {
       throw new Error(

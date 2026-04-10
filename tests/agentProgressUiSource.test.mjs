@@ -14,6 +14,7 @@ test('Agent progress rows stay on one line and truncate long text', () => {
   assert.match(source, /<Box paddingLeft=\{3\} flexDirection="row">/)
   assert.match(source, /<Box flexShrink=\{1\}>/)
   assert.match(source, /wrap="truncate-end"/)
+  assert.match(source, /modelTag && <> · \{modelTag\}<\/>/)
 })
 
 test('Agent summary row truncates instead of wrapping shortcut fragments', () => {
@@ -22,4 +23,6 @@ test('Agent summary row truncates instead of wrapping shortcut fragments', () =>
   assert.match(source, /<Box flexShrink=\{1\}>/)
   assert.match(source, /<Text wrap="truncate-end">/)
   assert.match(source, /<KeyboardShortcutHint shortcut="↓" action="manage" parens \/>/)
+  assert.match(source, /getAgentToolUseModelTag\(parsedInput\.data, getMainLoopModel\(\)\)/)
+  assert.match(source, /modelTag=\{stat\.modelTag\}/)
 })

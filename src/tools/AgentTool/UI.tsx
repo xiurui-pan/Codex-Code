@@ -24,12 +24,13 @@ import { getDisplayPath } from '../../utils/file.js';
 import { formatDuration, formatNumber } from '../../utils/format.js';
 import { buildSubagentLookups, CANCEL_MESSAGE, createAssistantMessage, EMPTY_LOOKUPS, INTERRUPT_MESSAGE_FOR_TOOL_USE, REJECT_MESSAGE } from '../../utils/messages.js';
 import type { ModelAlias } from '../../utils/model/aliases.js';
-import { getMainLoopModel, parseUserSpecifiedModel, renderModelName } from '../../utils/model/model.js';
+import { getMainLoopModel } from '../../utils/model/model.js';
 import type { Theme, ThemeName } from '../../utils/theme.js';
 import type { outputSchema, Progress, RemoteLaunchedOutput } from './AgentTool.js';
 import { inputSchema } from './AgentTool.js';
 import { getAgentColor } from './agentColorManager.js';
 import { GENERAL_PURPOSE_AGENT } from './built-in/generalPurposeAgent.js';
+import { getAgentToolUseModelTag } from './toolUseModel.js';
 const MAX_PROGRESS_MESSAGES_TO_SHOW = 3;
 
 /**
@@ -478,14 +479,11 @@ export function renderToolUseTag(input: Partial<{
   model?: ModelAlias;
 }>): React.ReactNode {
   const tags: React.ReactNode[] = [];
-  if (input.model) {
-    const mainModel = getMainLoopModel();
-    const agentModel = parseUserSpecifiedModel(input.model);
-    if (agentModel !== mainModel) {
-      tags.push(<Box key="model" flexWrap="nowrap" marginLeft={1}>
-          <Text dimColor>{renderModelName(agentModel)}</Text>
-        </Box>);
-    }
+  const modelTag = getAgentToolUseModelTag(input, getMainLoopModel());
+  if (modelTag) {
+    tags.push(<Box key="model" flexWrap="nowrap" marginLeft={1}>
+        <Text dimColor>{modelTag}</Text>
+      </Box>);
   }
   if (tags.length === 0) {
     return null;
@@ -760,10 +758,14 @@ export function renderGroupedAgentToolUse(toolUses: Array<{
     const backgroundedMidExecution = outputStatus === 'async_launched' || outputStatus === 'remote_launched';
     const isAsync = launchedAsAsync || backgroundedMidExecution || isTeammateSpawn;
     const name = parsedInput.success ? parsedInput.data.name : undefined;
+    const modelTag = parsedInput.success
+      ? getAgentToolUseModelTag(parsedInput.data, getMainLoopModel())
+      : null;
     return {
       id: param.id,
       agentType,
       description,
+      modelTag,
       toolUseCount: stats.toolUseCount,
       tokens: stats.tokens,
       isResolved,
@@ -807,7 +809,7 @@ export function renderGroupedAgentToolUse(toolUses: Array<{
         </Box>
         {!allAsync && <Box flexShrink={0}><CtrlOToExpand /></Box>}
       </Box>
-      {agentStats.map((stat, index) => <AgentProgressLine key={stat.id} agentType={stat.agentType} description={stat.description} descriptionColor={stat.descriptionColor} taskDescription={stat.taskDescription} toolUseCount={stat.toolUseCount} tokens={stat.tokens} color={stat.color} isLast={index === agentStats.length - 1} isResolved={stat.isResolved} isError={stat.isError} isAsync={stat.isAsync} shouldAnimate={shouldAnimate} lastToolInfo={stat.lastToolInfo} hideType={allSameType} name={stat.name} />)}
+      {agentStats.map((stat, index) => <AgentProgressLine key={stat.id} agentType={stat.agentType} description={stat.description} modelTag={stat.modelTag} descriptionColor={stat.descriptionColor} taskDescription={stat.taskDescription} toolUseCount={stat.toolUseCount} tokens={stat.tokens} color={stat.color} isLast={index === agentStats.length - 1} isResolved={stat.isResolved} isError={stat.isError} isAsync={stat.isAsync} shouldAnimate={shouldAnimate} lastToolInfo={stat.lastToolInfo} hideType={allSameType} name={stat.name} />)}
     </Box>;
 }
 export function userFacingName(input: Partial<{

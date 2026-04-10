@@ -47,6 +47,7 @@ export type LoadedCodexConfig = {
   modelContextWindow?: number
   modelAutoCompactTokenLimit?: number
   reasoningEffort?: string
+  reasoningSummary?: 'auto' | 'none'
   responseStorage?: boolean
   webSearchMode?: string
   webSearch?: MinimalCodexWebSearchConfig
@@ -231,6 +232,7 @@ function parseMinimalToml(source: string): {
   model_context_window?: number
   model_auto_compact_token_limit?: number
   model_reasoning_effort?: string
+  model_reasoning_summary?: string
   response_storage?: boolean
   disable_response_storage?: boolean
   web_search?: string
@@ -246,6 +248,7 @@ function parseMinimalToml(source: string): {
     model_context_window?: number
     model_auto_compact_token_limit?: number
     model_reasoning_effort?: string
+    model_reasoning_summary?: string
     response_storage?: boolean
     disable_response_storage?: boolean
     web_search?: string
@@ -349,6 +352,8 @@ function parseMinimalToml(source: string): {
         root.model_auto_compact_token_limit = value
       } else if (key === 'model_reasoning_effort') {
         root.model_reasoning_effort = String(value)
+      } else if (key === 'model_reasoning_summary') {
+        root.model_reasoning_summary = String(value)
       } else if (key === 'web_search' && typeof value === 'string') {
         root.web_search = value
       } else if (key === 'response_storage' && typeof value === 'boolean') {
@@ -404,6 +409,11 @@ export async function loadCodexConfig(
     modelContextWindow: parsed.model_context_window,
     modelAutoCompactTokenLimit: parsed.model_auto_compact_token_limit,
     reasoningEffort: parsed.model_reasoning_effort,
+    reasoningSummary:
+      parsed.model_reasoning_summary === 'auto' ||
+      parsed.model_reasoning_summary === 'none'
+        ? parsed.model_reasoning_summary
+        : undefined,
     responseStorage,
     webSearchMode: parsed.web_search,
     webSearch: parsed.tools.web_search,
@@ -432,6 +442,11 @@ function updateTopLevelScalarLine(
   key: string,
   value: number | string | boolean | undefined,
 ): string {
+  const formatTomlScalar = (scalar: number | string | boolean) =>
+    typeof scalar === 'string'
+      ? JSON.stringify(scalar)
+      : String(scalar)
+
   const lines = source.split('\n')
   const nextLines: string[] = []
   let replaced = false
@@ -443,7 +458,7 @@ function updateTopLevelScalarLine(
     const isSectionHeader = /^\[.+\]$/.test(trimmed)
 
     if (!inserted && isSectionHeader && value !== undefined && !replaced) {
-      nextLines.push(`${key} = ${String(value)}`)
+      nextLines.push(`${key} = ${formatTomlScalar(value)}`)
       inserted = true
     }
 
@@ -451,7 +466,7 @@ function updateTopLevelScalarLine(
     if (!isSectionHeader && keyValueMatch?.[1] === key) {
       if (!replaced) {
         if (value !== undefined) {
-          nextLines.push(`${key} = ${String(value)}`)
+          nextLines.push(`${key} = ${formatTomlScalar(value)}`)
           inserted = true
         }
         replaced = true
@@ -463,7 +478,7 @@ function updateTopLevelScalarLine(
   }
 
   if (!inserted && value !== undefined) {
-    nextLines.push(`${key} = ${String(value)}`)
+    nextLines.push(`${key} = ${formatTomlScalar(value)}`)
   }
 
   return nextLines.join('\n')
@@ -477,6 +492,22 @@ export async function writeCodexConfigModelContextWindow(
   const updated = updateTopLevelScalarLine(
     source,
     'model_context_window',
+    value,
+  )
+
+  if (updated !== source) {
+    await writeFile(configPath, updated, 'utf8')
+  }
+}
+
+export async function writeCodexConfigModelReasoningSummary(
+  value: 'auto' | 'none' | undefined,
+  configPath = getDefaultCodexConfigPath(),
+): Promise<void> {
+  const source = await readFile(configPath, 'utf8')
+  const updated = updateTopLevelScalarLine(
+    source,
+    'model_reasoning_summary',
     value,
   )
 
@@ -513,6 +544,10 @@ export function applyCodexConfigToEnv(config: LoadedCodexConfig): void {
 
   if (config.reasoningEffort) {
     process.env.CODEX_CODE_DEFAULT_REASONING_EFFORT = config.reasoningEffort
+  }
+
+  if (config.reasoningSummary) {
+    process.env.CODEX_CODE_DEFAULT_REASONING_SUMMARY = config.reasoningSummary
   }
 
   if (typeof config.responseStorage === 'boolean') {
@@ -611,6 +646,14 @@ export function getCodexAutoCompactTokenLimit(): number {
 
 export function getCodexConfiguredReasoningEffort(): string | undefined {
   return process.env.CODEX_CODE_DEFAULT_REASONING_EFFORT
+}
+
+export function getCodexConfiguredReasoningSummary():
+  | 'auto'
+  | 'none'
+  | undefined {
+  const summary = process.env.CODEX_CODE_DEFAULT_REASONING_SUMMARY
+  return summary === 'auto' || summary === 'none' ? summary : undefined
 }
 
 export function getCodexConfiguredResponseStorage(): boolean | undefined {

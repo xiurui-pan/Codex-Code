@@ -635,6 +635,87 @@ test('model and effort TUI: XhighPlan keeps gpt-5.4 status stable and can enter 
   })
 })
 
+test('model and effort TUI: switching to XhighPlan mid-session raises effort in plan mode', SERIAL_TEST, async () => {
+  await withResponsesServer(async ({ port, requestBodies }) => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-xhighplan-switch-'))
+    try {
+      await writeCodexConfig(tempHome, port, [], { model: 'gpt-5.4-mini' })
+      const result = await runTuiFlow({
+        tempHome,
+        envOverrides: {
+          CODEX_CODE_USE_CODEX_PROVIDER: '1',
+          CODEX_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+        },
+        actions: [
+          { name: 'set-xhighplan', waitFor: ['❯'], send: '/model xhighplan\r' },
+          {
+            name: 'check-switched-model',
+            waitFor: ['Set model to XhighPlan'],
+            waitForFresh: true,
+            send: '/model status\r',
+          },
+          {
+            name: 'enter-plan',
+            waitFor: ['Current model: XhighPlan (gpt-5.4)', 'reasoning: medium'],
+            waitForFresh: true,
+            send: '/plan\r',
+          },
+          {
+            name: 'check-plan-model',
+            waitFor: ['Enabled plan mode'],
+            waitForFresh: true,
+            preDelayMs: 300,
+            send: '/model status\r',
+          },
+          {
+            name: 'check-plan-effort',
+            waitFor: ['Current model: XhighPlan (gpt-5.4)', 'reasoning: xhigh'],
+            waitForFresh: true,
+            send: '/effort status\r',
+          },
+          {
+            name: 'ask-plan',
+            waitFor: ['Current effort level: xhigh'],
+            waitForFresh: true,
+            send: '切到 xhighplan 后进入 plan 再回答一次\r',
+          },
+          {
+            name: 'exit',
+            waitFor: ['UNEXPECTED_PROVIDER_REPLY'],
+            waitForFresh: true,
+            send: '/exit\r',
+            settleMs: 800,
+          },
+        ],
+      })
+
+      assert.ok(result.code === 0 || result.code === -15, JSON.stringify(result))
+      assert.deepEqual(
+        result.sent,
+        [
+          'set-xhighplan',
+          'check-switched-model',
+          'enter-plan',
+          'check-plan-model',
+          'check-plan-effort',
+          'ask-plan',
+          'exit',
+        ],
+        JSON.stringify(result),
+      )
+      assert.match(
+        result.normalizedTranscript,
+        /Currentmodel:XhighPlan\(gpt-5\.4\)·reasoning:xhigh/,
+      )
+      assert.ok(requestBodies.length >= 1, JSON.stringify(requestBodies))
+      assert.equal(requestBodies.at(-1)?.model, 'gpt-5.4')
+      assert.equal(requestBodies.at(-1)?.reasoning?.effort, 'xhigh')
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  })
+})
+
 test('model and effort TUI: session effort changes do not leak into the next session', SERIAL_TEST, async () => {
   await withResponsesServer(async ({ port, requestBodies }) => {
     const tempHome = await mkdtemp(join(tmpdir(), 'codex-effort-session-scope-'))

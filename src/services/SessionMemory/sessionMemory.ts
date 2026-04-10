@@ -161,17 +161,23 @@ export function shouldExtractMemory(messages: Message[]): boolean {
   // Check if the last assistant turn has no tool calls (safe to extract)
   const hasToolCallsInLastTurn = hasToolCallsInLastAssistantTurn(messages)
 
-  // Trigger extraction when:
-  // 1. Both thresholds are met (tokens AND tool calls), OR
-  // 2. No tool calls in last turn AND token threshold is met
-  //    (to ensure we extract at natural conversation breaks)
+  // Only extract at a stable turn boundary. If the latest assistant turn still
+  // contains tool calls, extracting now can summarize an incomplete tool chain
+  // before its results land.
+  if (hasToolCallsInLastTurn) {
+    return false
+  }
+
+  // Trigger extraction when the token threshold is met and either:
+  // 1. enough tool calls have happened since the last update, or
+  // 2. we reached a natural non-tool conversation break.
   //
   // IMPORTANT: The token threshold (minimumTokensBetweenUpdate) is ALWAYS required.
   // Even if the tool call threshold is met, extraction won't happen until the
   // token threshold is also satisfied. This prevents excessive extractions.
   const shouldExtract =
-    (hasMetTokenThreshold && hasMetToolCallThreshold) ||
-    (hasMetTokenThreshold && !hasToolCallsInLastTurn)
+    hasMetTokenThreshold &&
+    (hasMetToolCallThreshold || !hasToolCallsInLastTurn)
 
   if (shouldExtract) {
     const lastMessage = messages[messages.length - 1]

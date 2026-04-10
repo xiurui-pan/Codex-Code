@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { resetStateForTests, setOriginalCwd, switchSession } from '../src/bootstrap/state.js'
-import { createSystemMessageFromModelTurnItem } from '../src/services/api/modelTurnItems.js'
+import { buildAssistantMessageFromTurnItems } from '../src/services/api/assistantEnvelope.js'
 import { asSessionId } from '../src/types/ids.js'
 import { createAssistantMessage, createSystemMessage, createUserMessage } from '../src/utils/messages.js'
 import {
@@ -130,7 +130,7 @@ test('getLastSessionLog resumes from the latest visible leaf instead of a later 
   ])
 })
 
-test('recordTranscript preserves resumed chain across commentary ui messages', async () => {
+test('recordTranscript preserves resumed chain across commentary assistant messages', async () => {
   tempDir = await mkdtemp(join(tmpdir(), 'codex-session-restore-'))
   originalHome = process.env.HOME
   originalClaudeConfigDir = process.env.CLAUDE_CONFIG_DIR
@@ -173,15 +173,15 @@ test('recordTranscript preserves resumed chain across commentary ui messages', a
 
   adoptResumedSessionFile()
 
-  const commentary = createSystemMessageFromModelTurnItem({
-    kind: 'ui_message',
-    provider: 'custom',
-    level: 'info',
-    text: 'commentary bridge',
-    source: 'commentary',
-  })
-  assert.notEqual(commentary, null)
-  assert.ok(typeof commentary.uuid === 'string' && commentary.uuid.length > 0)
+  const commentary = buildAssistantMessageFromTurnItems([
+    {
+      kind: 'ui_message',
+      provider: 'custom',
+      level: 'info',
+      text: 'commentary bridge',
+      source: 'commentary',
+    },
+  ])
   commentary.timestamp = '2026-04-05T00:00:02.000Z'
 
   const resumedAssistant = {
@@ -206,9 +206,12 @@ test('recordTranscript preserves resumed chain across commentary ui messages', a
     .map(line => JSON.parse(line) as Record<string, unknown>)
   const persistedCommentary = persistedEntries.find(
     entry =>
-      entry.type === 'system' &&
-      entry.subtype === 'informational' &&
-      entry.content === 'commentary bridge',
+      entry.type === 'assistant' &&
+      Array.isArray(entry.message?.content) &&
+      entry.message.content.some(
+        (block: { type?: string; text?: string }) =>
+          block.type === 'text' && block.text === 'commentary bridge',
+      ),
   )
   assert.ok(persistedCommentary)
   assert.equal(persistedCommentary.parentUuid, assistant1.uuid)
@@ -227,7 +230,7 @@ test('recordTranscript preserves resumed chain across commentary ui messages', a
   assert.deepEqual(log?.messages.map(message => `${message.type}:${message.uuid}`), [
     `user:${user1.uuid}`,
     `assistant:${assistant1.uuid}`,
-    `system:${persistedCommentary.uuid}`,
+    `assistant:${persistedCommentary.uuid}`,
     `assistant:${resumedAssistant.uuid}`,
   ])
 })

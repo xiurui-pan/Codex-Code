@@ -249,25 +249,30 @@ print(json.dumps({
     stderr += chunk
   })
 
-  const [code] = await Promise.race([
-    once(child, 'close'),
-    new Promise((_, reject) => {
-      setTimeout(() => {
-        child.kill('SIGKILL')
-        reject(
-          new Error(
-            `thinking transcript TUI timed out\nstdout=${stdout}\nstderr=${stderr}`,
-          ),
-        )
-      }, 95000)
-    }),
-  ])
+  let timeoutId
+  try {
+    const [code] = await Promise.race([
+      once(child, 'close'),
+      new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          child.kill('SIGKILL')
+          reject(
+            new Error(
+              `thinking transcript TUI timed out\nstdout=${stdout}\nstderr=${stderr}`,
+            ),
+          )
+        }, 95000)
+      }),
+    ])
 
-  if (!stdout.trim()) {
-    throw new Error(stderr || `python TUI driver exited with ${code}`)
+    if (!stdout.trim()) {
+      throw new Error(stderr || `python TUI driver exited with ${code}`)
+    }
+
+    return JSON.parse(stdout)
+  } finally {
+    clearTimeout(timeoutId)
   }
-
-  return JSON.parse(stdout)
 }
 
 test(

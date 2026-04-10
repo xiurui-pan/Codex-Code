@@ -2587,7 +2587,7 @@ async function run(): Promise<CommanderCommand> {
     const mcpClients: Awaited<typeof mcpPromise>['clients'] = [];
     const mcpTools: Awaited<typeof mcpPromise>['tools'] = [];
     const mcpCommands: Awaited<typeof mcpPromise>['commands'] = [];
-    let thinkingEnabled = shouldEnableThinkingByDefault();
+    let thinkingEnabled = shouldEnableThinkingByDefault(initialMainLoopModel);
     let thinkingConfig: ThinkingConfig = thinkingEnabled !== false ? {
       type: 'adaptive'
     } : {

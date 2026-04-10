@@ -22,6 +22,23 @@ test('ConfigTool exposes modelContextWindow as a codex config setting', () => {
   assert.match(prompt, /~\/\.codex\/config\.toml/)
 })
 
+test('ConfigTool exposes modelReasoningSummary as a codex config setting', () => {
+  const supportedSettings = readFileSync(
+    join(projectRoot, 'src/tools/ConfigTool/supportedSettings.ts'),
+    'utf8',
+  )
+  const prompt = readFileSync(
+    join(projectRoot, 'src/tools/ConfigTool/prompt.ts'),
+    'utf8',
+  )
+
+  assert.match(supportedSettings, /modelReasoningSummary:/)
+  assert.match(supportedSettings, /source: 'codex'/)
+  assert.match(supportedSettings, /options: \['auto', 'none'\]/)
+  assert.match(prompt, /Change reasoning summary mode: \{ "setting": "modelReasoningSummary", "value": "none" \}/)
+  assert.match(prompt, /~\/\.codex\/config\.toml/)
+})
+
 test('ConfigTool exposes compactionMode as a global config setting', () => {
   const supportedSettings = readFileSync(
     join(projectRoot, 'src/tools/ConfigTool/supportedSettings.ts'),

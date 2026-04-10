@@ -293,12 +293,34 @@ async function runStreamingAssertions() {
   assert.equal(result.requestBodies[0]?.store, false)
   assert.equal('metadata' in (result.requestBodies[0] ?? {}), false)
   assert.equal(Array.isArray(result.requestBodies[0]?.input), true)
+  assert.equal('instructions' in (result.requestBodies[0] ?? {}), false)
+  assert.equal(result.requestBodies[0]?.input?.[0]?.role, 'developer')
+  assert.match(
+    result.requestBodies[0]?.input?.[0]?.content?.[0]?.text ?? '',
+    /You are Codex Code, an AI-powered coding assistant\./,
+  )
+  assert.equal(
+    result.requestBodies[0]?.tools?.some?.(tool => tool?.type === 'web_search'),
+    true,
+  )
+  assert.equal(
+    result.requestBodies[0]?.tools?.some?.(
+      tool => tool?.type === 'function' && tool?.name === 'local_shell',
+    ),
+    true,
+  )
   // The CLI may prepend a system-reminder context block; find the user message
   // that contains the actual prompt text.
   const userInput = result.requestBodies[0]?.input?.find(
     item => item?.content?.some?.(part => part?.text?.includes('请处理这个测试请求。')),
   )
   assert.ok(userInput, 'user prompt should appear in request input')
+  assert.equal(
+    result.requestBodies[1]?.input?.some?.(
+      item => item?.type === 'function_call' && item?.name === 'local_shell',
+    ),
+    true,
+  )
   assert.equal(result.requestHeaders[0]?.authorization, 'Bearer test-key')
   assert.equal(result.requestHeaders[0]?.['x-app'], 'cli')
   assert.match(result.requestHeaders[0]?.['user-agent'] ?? '', /^codex-code\//)

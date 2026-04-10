@@ -118,6 +118,29 @@ test('preferred response payload keeps empty distinct from an empty assistant sh
   )
 })
 
+test('commentary ui messages become assistant text instead of empty payloads', () => {
+  const payload = createPreferredAssistantResponsePayloadFromTurnItems([
+    {
+      kind: 'ui_message',
+      provider: 'custom',
+      level: 'info',
+      text: 'I am checking the project structure before editing.',
+      source: 'commentary',
+    },
+  ])
+
+  assert.equal(payload.kind, 'synthetic_payload')
+  if (payload.kind !== 'synthetic_payload') {
+    assert.fail('expected commentary payload to be synthetic')
+  }
+  assert.deepEqual(payload.payload.content, [
+    {
+      type: 'text',
+      text: 'I am checking the project structure before editing.',
+    },
+  ])
+})
+
 test('warning ui messages are surfaced as system messages for TUI visibility', () => {
   const message = createSystemMessageFromModelTurnItem({
     kind: 'ui_message',
@@ -175,7 +198,7 @@ test('commentary info ui messages are emitted into SDK execution item stream', (
   )
 })
 
-test('commentary info ui messages that render in the transcript get their own uuid', () => {
+test('commentary info ui messages no longer render as standalone system messages', () => {
   const message = createSystemMessageFromModelTurnItem({
     kind: 'ui_message',
     provider: 'custom',
@@ -184,8 +207,40 @@ test('commentary info ui messages that render in the transcript get their own uu
     source: 'commentary',
   })
 
-  assert.equal(typeof message?.uuid, 'string')
-  assert.equal(typeof message?.timestamp, 'string')
+  assert.equal(message, null)
+})
+
+test('commentary ui messages stay ahead of tool calls inside one assistant message', () => {
+  const message = buildAssistantMessageFromTurnItems([
+    {
+      kind: 'ui_message',
+      provider: 'custom',
+      level: 'info',
+      text: 'I am checking the project structure before editing.',
+      source: 'commentary',
+    },
+    {
+      kind: 'tool_call',
+      provider: 'custom',
+      toolUseId: 'tool-1',
+      toolName: 'Read',
+      input: { file_path: 'package.json' },
+      source: 'structured',
+    },
+  ])
+
+  assert.deepEqual(message.message.content, [
+    {
+      type: 'text',
+      text: 'I am checking the project structure before editing.',
+    },
+    {
+      type: 'tool_use',
+      id: 'tool-1',
+      name: 'Read',
+      input: { file_path: 'package.json' },
+    },
+  ])
 })
 
 test('buildAssistantMessageFromTurnItems follows the same direct preferred path for plain text turn items', () => {

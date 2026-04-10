@@ -24,9 +24,15 @@ test('Message.tsx drops assistant and user wrapper boxes when every child render
   assert.match(source, /if \(!hasRenderableNode\(t3\)\) \{\s*return null;/);
 });
 
-test('prompt mode only renders live streaming thinking, not completed leftovers', () => {
+test('prompt mode keeps streaming thinking visible through the short post-thinking grace window', () => {
   const source = readSource('src/components/Messages.tsx');
 
-  assert.match(source, /return streamingThinking\?\.isStreaming \?\? false;/);
-  assert.doesNotMatch(source, /30000/);
+  assert.match(source, /shouldShowStreamingThinking\(streamingThinking\)/);
+});
+
+test('prompt footer keeps the status bar visible while retained thinking is still shown', () => {
+  const source = readSource('src/screens/REPL.tsx');
+
+  assert.match(source, /const isStreamingThinkingVisible = shouldShowStreamingThinking\(streamingThinking\);/);
+  assert.match(source, /!visibleStreamingText \|\| isBriefOnly \|\| isStreamingThinkingVisible/);
 });

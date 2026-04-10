@@ -6,15 +6,26 @@ import { randomUUID } from 'crypto'
 import { NO_CONTENT_MESSAGE } from '../../constants/messages.js'
 import type { SystemMessage } from '../../types/message.js'
 
+function isRenderableCommentaryUiMessage(
+  item: ModelTurnItem,
+): item is ModelUiMessageItem {
+  return (
+    item.kind === 'ui_message' &&
+    item.level === 'info' &&
+    item.source === 'commentary' &&
+    item.text.trim().length > 0
+  )
+}
+
 export function getRenderableModelTurnItems(
   items: ModelTurnItem[],
 ): ModelTurnItem[] {
   return items.filter(
     item =>
       item.kind !== 'raw_model_output' &&
-      item.kind !== 'ui_message' &&
       item.kind !== 'opaque_reasoning' &&
-      item.kind !== 'opaque_compaction',
+      item.kind !== 'opaque_compaction' &&
+      (item.kind !== 'ui_message' || isRenderableCommentaryUiMessage(item)),
   )
 }
 
@@ -52,6 +63,9 @@ export function createSystemMessageFromModelTurnItem(
       return null
     case 'ui_message':
       if (item.level === 'info') {
+        if (isRenderableCommentaryUiMessage(item)) {
+          return null
+        }
         if (!shouldRenderInfoUiMessage(item)) {
           return null
         }
@@ -301,18 +315,35 @@ export function resolvePreferredAssistantTurnContent(
   }
 
   const hasToolCall = renderableItems.some(item => item.kind === 'tool_call')
-  const finalAnswerText = extractFinalAnswerTextFromTurnItems(renderableItems)
+  const textParts = renderableItems.flatMap(item => {
+    if (item.kind === 'final_answer' && item.text) {
+      return [item.text]
+    }
+    if (isRenderableCommentaryUiMessage(item)) {
+      return [item.text]
+    }
+    return []
+  })
+  const renderableText = textParts.join('')
 
-  if (!hasToolCall && finalAnswerText) {
+  if (!hasToolCall && renderableText.trim().length > 0) {
     return {
       kind: 'text',
       renderableItems,
-      text: finalAnswerText,
+      text: renderableText,
     }
   }
 
   const contentBlocks: ContentBlock[] = []
   for (const item of renderableItems) {
+    if (isRenderableCommentaryUiMessage(item)) {
+      contentBlocks.push({
+        type: 'text',
+        text: item.text,
+      } as ContentBlock)
+      continue
+    }
+
     if (item.kind === 'final_answer' && item.text) {
       contentBlocks.push({
         type: 'text',

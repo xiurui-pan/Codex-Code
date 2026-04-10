@@ -13,6 +13,7 @@ import {
 } from '../../utils/config.js'
 import {
   loadCodexConfigIfPresent,
+  writeCodexConfigModelReasoningSummary,
   writeCodexConfigModelContextWindow,
 } from '../../utils/codexConfig.js'
 import { errorMessage } from '../../utils/errors.js'
@@ -143,6 +144,8 @@ export const ConfigTool = buildTool({
         const currentValue =
           setting === 'modelContextWindow'
             ? codexConfig?.modelContextWindow
+            : setting === 'modelReasoningSummary'
+              ? codexConfig?.reasoningSummary
             : undefined
         const displayValue = config.formatOnRead
           ? config.formatOnRead(currentValue)
@@ -201,6 +204,15 @@ export const ConfigTool = buildTool({
     if (
       config.source === 'codex' &&
       setting === 'modelContextWindow' &&
+      typeof value === 'string' &&
+      value.toLowerCase().trim() === 'default'
+    ) {
+      finalValue = undefined
+    }
+
+    if (
+      config.source === 'codex' &&
+      setting === 'modelReasoningSummary' &&
       typeof value === 'string' &&
       value.toLowerCase().trim() === 'default'
     ) {
@@ -358,6 +370,8 @@ export const ConfigTool = buildTool({
       config.source === 'codex'
         ? setting === 'modelContextWindow'
           ? (await loadCodexConfigIfPresent())?.modelContextWindow
+          : setting === 'modelReasoningSummary'
+            ? (await loadCodexConfigIfPresent())?.reasoningSummary
           : undefined
         : getValue(config.source, path)
 
@@ -398,6 +412,15 @@ export const ConfigTool = buildTool({
           delete process.env.CODEX_CODE_MODEL_CONTEXT_WINDOW
         } else {
           process.env.CODEX_CODE_MODEL_CONTEXT_WINDOW = String(finalValue)
+        }
+      } else if (setting === 'modelReasoningSummary') {
+        await writeCodexConfigModelReasoningSummary(
+          finalValue as 'auto' | 'none' | undefined,
+        )
+        if (finalValue === undefined) {
+          delete process.env.CODEX_CODE_DEFAULT_REASONING_SUMMARY
+        } else {
+          process.env.CODEX_CODE_DEFAULT_REASONING_SUMMARY = String(finalValue)
         }
       }
 

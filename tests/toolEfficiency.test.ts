@@ -34,7 +34,7 @@ function createToolResult(toolUseId: string, content = 'ok', isError = false) {
   })
 }
 
-test('blocks repeated current-branch checks inside the same user request', () => {
+test('does not host-block repeated current-branch checks inside the same user request', () => {
   const messages = [
     createUserMessage({ content: 'tell me the branch' }),
     createBashAssistant('git branch --show-current', 'branch-1'),
@@ -47,10 +47,10 @@ test('blocks repeated current-branch checks inside the same user request', () =>
     { messages },
   )
 
-  assert.match(message ?? '', /already checked the current git branch/i)
+  assert.equal(message, null)
 })
 
-test('blocks repeated equivalent search commands inside the same user request', () => {
+test('does not host-block repeated equivalent search commands inside the same user request', () => {
   const messages = [
     createUserMessage({ content: 'find the marker' }),
     createBashAssistant('rg -n "MARKER" src', 'search-1'),
@@ -63,7 +63,7 @@ test('blocks repeated equivalent search commands inside the same user request', 
     { messages },
   )
 
-  assert.match(message ?? '', /equivalent search or read command/i)
+  assert.equal(message, null)
 })
 
 test('does not block rerunning non-search commands like tests', () => {
@@ -82,7 +82,7 @@ test('does not block rerunning non-search commands like tests', () => {
   assert.equal(message, null)
 })
 
-test('blocks inline scripts that mainly dump file contents', () => {
+test('does not host-block inline scripts that mainly dump file contents', () => {
   const message = detectRedundantToolCall(
     BASH_TOOL_NAME,
     {
@@ -94,5 +94,5 @@ PY`,
     { messages: [] },
   )
 
-  assert.match(message ?? '', /inline script whose main job is dumping file contents/i)
+  assert.equal(message, null)
 })

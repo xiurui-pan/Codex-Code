@@ -37,6 +37,7 @@ import { isEnvTruthy } from '../utils/envUtils.js';
 import { formatTokens, truncateToWidth } from '../utils/format.js';
 import { consumeEarlyInput } from '../utils/earlyInput.js';
 import { getVisibleStreamingText } from '../utils/streamingText.js';
+import { getStreamingThinkingHideDelay, isStreamingThinkingVisible as shouldShowStreamingThinking } from '../utils/streamingThinking.js';
 import { setMemberActive } from '../utils/swarm/teamHelpers.js';
 import { isSwarmWorker, generateSandboxRequestId, sendSandboxPermissionRequestViaMailbox, sendSandboxPermissionResponseViaMailbox } from '../utils/swarm/permissionSync.js';
 import { registerSandboxPermissionCallback } from '../hooks/useSwarmPermissionPoller.js';
@@ -862,6 +863,23 @@ export function REPL({
   streamModeRef.current = streamMode;
   const [streamingToolUses, setStreamingToolUses] = useState<StreamingToolUse[]>([]);
   const [streamingThinking, setStreamingThinking] = useState<StreamingThinking | null>(null);
+
+  // Keep the last completed thinking block on screen briefly so the first
+  // assistant text does not immediately clear the reasoning indicator.
+  useEffect(() => {
+    const hideDelay = getStreamingThinkingHideDelay(streamingThinking);
+    if (hideDelay === null) {
+      return
+    }
+
+    if (hideDelay === 0) {
+      setStreamingThinking(null)
+      return
+    }
+
+    const timer = setTimeout(setStreamingThinking, hideDelay, null)
+    return () => clearTimeout(timer)
+  }, [streamingThinking]);
 
   const [abortController, setAbortController] = useState<AbortController | null>(null);
   // Ref that always points to the current abort controller, used by the
@@ -1699,6 +1717,7 @@ export function REPL({
     setInputValue,
     setToolJSX
   });
+  const isStreamingThinkingVisible = shouldShowStreamingThinking(streamingThinking);
   const showSpinner = (!toolJSX || toolJSX.showSpinner === true) && toolUseConfirmQueue.length === 0 && promptQueue.length === 0 && (
   // Show spinner during input processing, API call, while teammates are running,
   // or while pending task notifications are queued (prevents spinner bounce between consecutive notifications)
@@ -1710,9 +1729,9 @@ export function REPL({
   getCommandQueueLength() > 0) &&
   // Hide spinner when waiting for leader to approve permission request
   !pendingWorkerRequest && !onlySleepToolActive && (
-  // Hide spinner when streaming text is visible (the text IS the feedback),
-  // but keep it when isBriefOnly suppresses the streaming text display
-  !visibleStreamingText || isBriefOnly);
+  // Keep the status bar visible while retained thinking is still on screen.
+  // Otherwise the first streamed sentence hides the bar until the next tool call.
+  !visibleStreamingText || isBriefOnly || isStreamingThinkingVisible);
 
   // Check if any permission or ask question prompt is currently visible
   // This is used to prevent the survey from opening while prompts are active

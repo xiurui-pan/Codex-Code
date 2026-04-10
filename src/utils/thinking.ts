@@ -1,16 +1,9 @@
 // biome-ignore-all assist/source/organizeImports: ANT-ONLY import markers must not be reordered
 import type { Theme } from './theme.js'
 import { feature } from 'bun:bundle'
-import { createRequire } from 'node:module'
 import { get3PModelCapabilityOverride } from './model/modelSupportOverrides.js'
 import { getAPIProvider } from './model/providers.js'
 import { getSettingsWithErrors } from './settings/settings.js'
-
-const require = createRequire(import.meta.url)
-
-function getCanonicalName(model: string): string {
-  return (require('./model/model.js') as typeof import('./model/model.js')).getCanonicalName(model)
-}
 
 function getFeatureValue_CACHED_MAY_BE_STALE(feature: string, fallback: boolean): boolean {
   return (
@@ -22,6 +15,24 @@ export type ThinkingConfig =
   | { type: 'adaptive' }
   | { type: 'enabled'; budgetTokens: number }
   | { type: 'disabled' }
+
+function getCodexRsAlignedDefaultThinking(model: string): boolean | undefined {
+  const canonical = model.toLowerCase()
+
+  if (canonical.includes('gpt-5.4')) {
+    return false
+  }
+
+  if (canonical.includes('gpt-5.3-codex')) {
+    return false
+  }
+
+  if (canonical.includes('gpt-5.1-codex')) {
+    return true
+  }
+
+  return undefined
+}
 
 /**
  * Build-time gate (feature) + runtime gate (GrowthBook). The build flag
@@ -154,7 +165,7 @@ export function modelSupportsAdaptiveThinking(model: string): boolean {
   return provider === 'firstParty' || provider === 'foundry'
 }
 
-export function shouldEnableThinkingByDefault(): boolean {
+export function shouldEnableThinkingByDefault(model?: string | null): boolean {
   if (process.env.MAX_THINKING_TOKENS) {
     return parseInt(process.env.MAX_THINKING_TOKENS, 10) > 0
   }
@@ -162,6 +173,16 @@ export function shouldEnableThinkingByDefault(): boolean {
   const { settings } = getSettingsWithErrors()
   if (settings.alwaysThinkingEnabled === false) {
     return false
+  }
+
+  const defaultModel =
+    typeof model === 'string' && model.length > 0 ? model : settings.model
+  if (typeof defaultModel === 'string' && defaultModel.length > 0) {
+    const codexRsAlignedDefault =
+      getCodexRsAlignedDefaultThinking(defaultModel)
+    if (codexRsAlignedDefault !== undefined) {
+      return codexRsAlignedDefault
+    }
   }
 
   // IMPORTANT: Do not change default thinking enabled value without notifying

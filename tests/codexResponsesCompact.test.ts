@@ -93,6 +93,53 @@ test('responses request builder keeps replay-only compact history separate from 
   assert.equal(body.input[2]?.type, 'message')
 })
 
+test('responses request builder rewrites leading user context into Codex-style contextual input sections', async () => {
+  const body = await buildResponsesBody({
+    messages: [
+      createUserMessage({
+        content:
+          "<system-reminder>\nAs you answer the user's questions, you can use the following context:\n# claudeMd\nProject guidance\n# currentDate\nToday's date is 2026-04-10.\n\n      IMPORTANT: this context may or may not be relevant to your tasks. You should not respond to this context unless it is highly relevant to your task.\n</system-reminder>",
+        isMeta: true,
+      }),
+      createUserMessage({
+        content: '请只读分析当前仓库。',
+      }),
+    ],
+    systemPrompt: [],
+    options: {
+      model: 'gpt-5.4',
+    },
+  })
+
+  assert.deepEqual(
+    body.input.map(item => item.type),
+    ['message', 'message'],
+  )
+  assert.equal(body.input[0]?.type, 'message')
+  assert.equal(body.input[0]?.role, 'user')
+  assert.equal(body.input[0]?.content?.length, 2)
+  assert.equal(
+    body.input[0]?.content?.[0]?.text,
+    `# AGENTS.md instructions for ${process.cwd()}\n\n<INSTRUCTIONS>\nProject guidance\n</INSTRUCTIONS>`,
+  )
+  assert.match(
+    body.input[0]?.content?.[1]?.text ?? '',
+    new RegExp(
+      String.raw`^<environment_context>\n  <cwd>${process.cwd().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}</cwd>\n(?:  <shell>[^<]+</shell>\n)?  <current_date>2026-04-10</current_date>\n</environment_context>$`,
+    ),
+  )
+  assert.deepEqual(body.input[1], {
+    type: 'message',
+    role: 'user',
+    content: [
+      {
+        type: 'input_text',
+        text: '请只读分析当前仓库。',
+      },
+    ],
+  })
+})
+
 test('responses compact body uses the dedicated compact request shape', async () => {
   const body = await buildResponsesCompactBody({
     messages: [
@@ -111,10 +158,17 @@ test('responses compact body uses the dedicated compact request shape', async ()
   assert.equal('tool_choice' in body, false)
   assert.equal('tools' in body, false)
   assert.equal('parallel_tool_calls' in body, false)
-  assert.equal(body.instructions, 'You are the developer instruction.')
+  assert.equal('instructions' in body, false)
+  assert.equal(body.input?.[0]?.role, 'developer')
+  assert.equal(
+    body.input?.[0]?.content?.[0]?.text,
+    'You are the developer instruction.',
+  )
   assert.deepEqual(body.reasoning, {
     effort: 'high',
-    summary: 'auto',
+  })
+  assert.deepEqual(body.text, {
+    verbosity: 'low',
   })
   assert.deepEqual(body.include, ['reasoning.encrypted_content'])
 })
@@ -225,6 +279,111 @@ test('responses compaction summary keeps readable text but hides encrypted paylo
   assert.match(summary, /opaque reasoning item/)
   assert.doesNotMatch(summary, /SECRET_COMPACTION_PAYLOAD/)
   assert.doesNotMatch(summary, /SECRET_REASONING_PAYLOAD/)
+})
+
+test('responses compaction summary keeps preserved local shell commands readable', () => {
+  const summary = summarizeResponsesCompactionOutput([
+    {
+      type: 'shell_call',
+      call_id: 'shell-1',
+      status: 'completed',
+      action: {
+        commands: ['pwd'],
+      },
+    } as never,
+  ])
+
+  assert.match(summary, /Shell: pwd/)
+})
+
+test('responses compact transport preserves native local shell history', async () => {
+  const server = http.createServer((req, res) => {
+    req.resume()
+    req.on('end', () => {
+      res.writeHead(200, {
+        'content-type': 'application/json',
+      })
+      res.end(
+        JSON.stringify({
+          output: [
+            {
+              type: 'shell_call',
+              call_id: 'shell-1',
+              status: 'completed',
+              action: {
+                commands: ['pwd'],
+              },
+            },
+            {
+              type: 'shell_call_output',
+              call_id: 'shell-1',
+              output: [
+                {
+                  stdout: '/tmp/workspace',
+                  stderr: '',
+                  outcome: {
+                    type: 'exit',
+                    exit_code: 0,
+                  },
+                },
+              ],
+            },
+          ],
+        }),
+      )
+    })
+  })
+
+  server.listen(0, '127.0.0.1')
+  await once(server, 'listening')
+  const address = server.address()
+  if (!address || typeof address === 'string') {
+    throw new Error('failed to bind compact test server')
+  }
+
+  process.env.ANTHROPIC_BASE_URL = `http://127.0.0.1:${address.port}`
+  process.env.ANTHROPIC_API_KEY = 'test-key'
+  process.env.ANTHROPIC_MODEL = 'gpt-5.4'
+
+  try {
+    const result = await queryCodexResponsesCompact({
+      messages: [
+        createUserMessage({
+          content: 'Please compact this history.',
+        }),
+      ],
+      systemPrompt: ['You are the developer instruction.'],
+      options: {
+        model: 'gpt-5.4',
+      },
+      signal: new AbortController().signal,
+    })
+
+    assert.deepEqual(
+      result.outputItems.map(item => item.type),
+      ['shell_call', 'shell_call_output'],
+    )
+    assert.equal(
+      result.turnItems.some(
+        item =>
+          item.kind === 'tool_call' &&
+          item.toolName === 'Bash' &&
+          item.input.command === 'pwd',
+      ),
+      true,
+    )
+    assert.equal(
+      result.turnItems.some(
+        item =>
+          item.kind === 'tool_output' &&
+          item.toolUseId === 'shell-1' &&
+          item.outputText === '/tmp/workspace',
+      ),
+      true,
+    )
+  } finally {
+    await new Promise(resolve => server.close(resolve))
+  }
 })
 
 test('responses compact transport rejects tool execution items', async () => {
