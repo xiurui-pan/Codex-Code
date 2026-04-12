@@ -327,12 +327,112 @@ test(
           })
 
           assert.deepEqual(result.sent, ['prompt'])
-          assert.match(result.normalizedTranscript, /Letmeinspect/i)
+          assert.match(result.normalizedTranscript, /Letm.*inspect/i)
           assert.match(result.normalizedTranscript, /that/i)
           assert.match(
             result.normalizedTranscript,
             /(thinking|thoughtfor[0-9]+s)/i,
           )
+        },
+      )
+    } finally {
+      await rm(tempHome, { recursive: true, force: true })
+    }
+  },
+)
+
+test(
+  'full TUI keeps retained thinking visible between assistant text and the next tool call',
+  SERIAL_TEST,
+  async () => {
+    const tempHome = await mkdtemp(join(tmpdir(), 'codex-tui-thinking-gap-'))
+
+    try {
+      await withResponsesServer(
+        async ({ res, requestIndex }) => {
+          res.writeHead(200, {
+            'content-type': 'text/event-stream',
+            connection: 'keep-alive',
+            'cache-control': 'no-cache',
+          })
+
+          if (requestIndex === 0) {
+            writeSseEvent(res, 'response.reasoning_summary_part.added', {
+              type: 'response.reasoning_summary_part.added',
+              output_index: 0,
+              summary_index: 0,
+            })
+            writeSseEvent(res, 'response.reasoning_summary_text.delta', {
+              type: 'response.reasoning_summary_text.delta',
+              output_index: 0,
+              summary_index: 0,
+              delta: 'Checking files',
+            })
+            writeSseEvent(res, 'response.reasoning_summary_part.done', {
+              type: 'response.reasoning_summary_part.done',
+              output_index: 0,
+              summary_index: 0,
+            })
+            writeSseEvent(res, 'response.output_text.delta', {
+              type: 'response.output_text.delta',
+              delta: 'Let me inspect that',
+            })
+            writeSseEvent(res, 'response.output_item.done', {
+              type: 'response.output_item.done',
+              item: {
+                type: 'message',
+                role: 'assistant',
+                content: [{ type: 'output_text', text: 'Let me inspect that' }],
+              },
+            })
+            writeSseEvent(res, 'response.completed', {
+              type: 'response.completed',
+              response: { id: 'resp-thinking-gap-1' },
+            })
+            writeSseDone(res)
+            return
+          }
+
+          writeSseEvent(res, 'response.output_item.done', {
+            type: 'response.output_item.done',
+            item: {
+              type: 'function_call',
+              call_id: 'tool-read-1',
+              name: 'Read',
+              arguments: JSON.stringify({ file_path: 'package.json' }),
+            },
+          })
+          writeSseEvent(res, 'response.completed', {
+            type: 'response.completed',
+            response: { id: 'resp-thinking-gap-2' },
+          })
+          writeSseDone(res)
+        },
+        async ({ port }) => {
+          await writeCodexConfig(tempHome, port)
+
+          const result = await runTuiFlow({
+            tempHome,
+            actions: [
+              {
+                name: 'prompt',
+                waitFor: ['❯'],
+                send: 'check footer\r',
+              },
+              {
+                name: 'continue',
+                waitFor: ['Let me inspect that'],
+                preDelayMs: 300,
+                send: 'continue\r',
+                settleMs: 1500,
+              },
+            ],
+          })
+
+          assert.deepEqual(result.sent, ['prompt', 'continue'])
+          assert.match(result.normalizedTranscript, /Letmeinspectthat/i)
+          assert.match(result.normalizedTranscript, /(thinking|Checkingfiles)/i)
+          assert.match(result.normalizedTranscript, /(Reading1file|package\.json)/i)
         },
       )
     } finally {

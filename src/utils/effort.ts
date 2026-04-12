@@ -150,6 +150,12 @@ export function toPersistableEffort(
 }
 
 export function getInitialEffortSetting(): EffortLevel | undefined {
+  if (isCurrentPhaseCustomCodexProvider()) {
+    // Codex-only sessions should not inherit Claude's persisted effort from
+    // ~/.claude/settings.json. Let the Codex config/model default chain apply.
+    return undefined
+  }
+
   // toPersistableEffort filters 'max' for non-ants on read, so a manually
   // edited settings.json doesn't leak session-scoped max into a fresh session.
   return toPersistableEffort(getInitialSettings().effortLevel)

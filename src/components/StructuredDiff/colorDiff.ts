@@ -4,8 +4,8 @@ import { isEnvDefinedFalsy } from '../../utils/envUtils.js'
 const require = createRequire(import.meta.url)
 
 type SyntaxTheme = unknown
-type ColorDiffType = unknown
-type ColorFileType = unknown
+type ColorDiffType = typeof import('../../native-ts/color-diff/index.js').ColorDiff
+type ColorFileType = typeof import('../../native-ts/color-diff/index.js').ColorFile
 
 type ColorDiffModuleUnavailableReason = 'env' | 'module'
 

@@ -249,7 +249,7 @@ export function ToolSelector(t0) {
   const toolsByBucket = buckets;
   let t9;
   if ($[22] !== selectedSet) {
-    t9 = bucketTools => {
+    t9 = (bucketTools: Tool[]) => {
       const selected = count(bucketTools, t_5 => selectedSet.has(t_5.name));
       const needsSelection = selected < bucketTools.length;
       return () => {
@@ -290,7 +290,11 @@ export function ToolSelector(t0) {
       action: t10
     });
     const toolBuckets_0 = getToolBuckets();
-    const bucketConfigs = [{
+    const bucketConfigs: Array<{
+      id: string;
+      name: string;
+      tools: Tool[];
+    }> = [{
       id: "bucket-readonly",
       name: toolBuckets_0.READ_ONLY.name,
       tools: toolsByBucket.readOnly

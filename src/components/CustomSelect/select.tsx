@@ -507,7 +507,7 @@ export function Select(t0) {
         } else {
           t19 = $[63];
         }
-        const maxLabelWidth = Math.max(...optionData.map(t19));
+        const maxLabelWidth = optionData.reduce((max, data) => Math.max(max, t19(data)), 0);
         let t20;
         if ($[64] !== hideIndexes || $[65] !== maxIndexWidth_1 || $[66] !== maxLabelWidth) {
           t20 = data_0 => {

@@ -145,20 +145,22 @@ function ResumeCommand({
 
     // Check if this conversation is from a different directory
     const crossProjectCheck = checkCrossProjectResume(fullLog, showAllProjects, worktreePaths);
-    if (crossProjectCheck.isCrossProject) {
-      if (crossProjectCheck.isSameRepoWorktree) {
-        // Same repo worktree - can resume directly
-        setResuming(true);
-        void onResume(sessionId, fullLog, 'slash_command_picker');
-        return;
-      }
+    if (crossProjectCheck.isCrossProject && crossProjectCheck.isSameRepoWorktree) {
+      // Same repo worktree - can resume directly
+      setResuming(true);
+      void onResume(sessionId, fullLog, 'slash_command_picker');
+      return;
+    }
+
+    if (crossProjectCheck.isCrossProject && crossProjectCheck.isSameRepoWorktree === false) {
+      const command = crossProjectCheck.command;
 
       // Different project - show command instead of resuming
-      const raw = await setClipboard(crossProjectCheck.command);
+      const raw = await setClipboard(command);
       if (raw) process.stdout.write(raw);
 
       // Format the output message
-      const message = ['', 'This conversation is from a different directory.', '', 'To resume, run:', `  ${crossProjectCheck.command}`, '', '(Command copied to clipboard)', ''].join('\n');
+      const message = ['', 'This conversation is from a different directory.', '', 'To resume, run:', `  ${command}`, '', '(Command copied to clipboard)', ''].join('\n');
       onDone(message, {
         display: 'user'
       });
@@ -207,7 +209,7 @@ export const call: LocalJSXCommandCall = async (onDone, context, args) => {
 
   // No argument provided - show picker
   if (!arg) {
-    return <ResumeCommand key={Date.now()} onDone={onDone} onResume={onResume} />;
+    return <ResumeCommand onDone={onDone} onResume={onResume} />;
   }
 
   // Load logs to search (includes same-repo worktrees)

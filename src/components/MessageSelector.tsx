@@ -13,6 +13,7 @@ import { Box, Text } from '../ink.js';
 import { useKeybinding, useKeybindings } from '../keybindings/useKeybinding.js';
 import type { Message, PartialCompactDirection, UserMessage } from '../types/message.js';
 import { stripDisplayTags } from '../utils/displayTags.js';
+import { validateUuid } from '../utils/uuid.js';
 import { selectableUserMessagesFilter } from '../utils/messageSelector.js';
 import { createUserMessage, extractTag, isEmptyMessageText, isSyntheticMessage, isToolUseResultMessage } from '../utils/messages.js';
 import { type OptionWithDescription, Select } from './CustomSelect/select.js';
@@ -59,7 +60,7 @@ export function MessageSelector({
   const isFileHistoryEnabled = fileHistoryEnabled();
 
   // Add current prompt as a virtual message
-  const currentUUID = useMemo(randomUUID, []);
+  const currentUUID = useMemo(() => randomUUID() as UUID, []);
   const messageOptions = useMemo(() => [...messages.filter(selectableUserMessagesFilter), {
     ...createUserMessage({
       content: ''
@@ -76,7 +77,9 @@ export function MessageSelector({
   useEffect(() => {
     if (!preselectedMessage || !isFileHistoryEnabled) return;
     let cancelled = false;
-    void fileHistoryGetDiffStats(fileHistory, preselectedMessage.uuid).then(stats => {
+    const preselectedMessageId = validateUuid(preselectedMessage.uuid);
+    if (!preselectedMessageId) return;
+    void fileHistoryGetDiffStats(fileHistory, preselectedMessageId).then(stats => {
       if (!cancelled) setDiffStatsForRestore(stats);
     });
     return () => {
@@ -120,7 +123,7 @@ export function MessageSelector({
       ...summarizeInputProps,
       onChange: setSummarizeFromFeedback
     });
-    if ("external" === 'ant') {
+    if (process.env.USER_TYPE === 'ant') {
       baseOptions.push({
         value: 'summarize_up_to',
         label: 'Summarize up to here',
@@ -172,7 +175,12 @@ export function MessageSelector({
       await restoreConversationDirectly(message_0);
       return;
     }
-    const diffStats = await fileHistoryGetDiffStats(fileHistory, message_0.uuid);
+    const messageId = validateUuid(message_0.uuid);
+    if (!messageId) {
+      setError('Message ID is invalid.');
+      return;
+    }
+    const diffStats = await fileHistoryGetDiffStats(fileHistory, messageId);
     setMessageToRestore(message_0);
     setDiffStatsForRestore(diffStats);
   }
@@ -194,8 +202,8 @@ export function MessageSelector({
       setRestoringOption(option);
       setError(undefined);
       try {
-        const direction = option === 'summarize_up_to' ? 'up_to' : 'from';
-        const feedback = (direction === 'up_to' ? summarizeUpToFeedback : summarizeFromFeedback).trim() || undefined;
+        const direction: PartialCompactDirection = option === 'summarize_up_to' ? 'to' : 'from';
+        const feedback = (direction === 'to' ? summarizeUpToFeedback : summarizeFromFeedback).trim() || undefined;
         await onSummarize(messageToRestore, feedback, direction);
         setIsRestoring(false);
         setRestoringOption(null);

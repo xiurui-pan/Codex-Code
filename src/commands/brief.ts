@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { feature } from 'bun:bundle'
 import { z } from 'zod/v4'
 import { getKairosActive, setUserMsgOptIn } from '../bootstrap/state.js'
@@ -60,7 +61,7 @@ const brief = {
       async call(
         onDone: LocalJSXCommandOnDone,
         context: ToolUseContext & LocalJSXCommandContext,
-      ): Promise<React.ReactNode> {
+      ): Promise<ReactNode> {
         const current = context.getAppState().isBriefOnly
         const newState = !current
 

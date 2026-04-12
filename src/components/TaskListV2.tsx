@@ -93,7 +93,10 @@ export function TaskListV2({
   // Build a map of teammate name -> theme color
   const teammateColors: Record<string, keyof Theme> = {};
   if (isAgentSwarmsEnabled() && teamContext?.teammates) {
-    for (const teammate of Object.values(teamContext.teammates)) {
+    for (const teammate of Object.values(teamContext.teammates) as Array<{
+      name: string;
+      color?: string;
+    }>) {
       if (teammate.color) {
         const themeColor = AGENT_COLOR_TO_THEME_COLOR[teammate.color as AgentColorName];
         if (themeColor) {
@@ -189,8 +192,8 @@ export function TaskListV2({
       {maxDisplay > 0 && hiddenSummary && <Text dimColor>{hiddenSummary}</Text>}
     </>;
   if (isStandalone) {
-    return <Box flexDirection="column" marginTop={1} marginLeft={2}>
-        <Box>
+    return <Box flexDirection="column" marginTop={1} marginLeft={2} width="100%">
+        <Box width="100%">
           <Text dimColor>
             <Text bold>{tasks.length}</Text>
             {' tasks ('}
@@ -207,7 +210,7 @@ export function TaskListV2({
         {content}
       </Box>;
   }
-  return <Box flexDirection="column">{content}</Box>;
+  return <Box flexDirection="column" width="100%">{content}</Box>;
 }
 type TaskItemProps = {
   task: Task;
@@ -340,7 +343,7 @@ function TaskItem(t0) {
   }
   let t10;
   if ($[26] !== t5 || $[27] !== t7 || $[28] !== t8 || $[29] !== t9) {
-    t10 = <Box>{t5}{t7}{t8}{t9}</Box>;
+    t10 = <Box width="100%">{t5}{t7}{t8}{t9}</Box>;
     $[26] = t5;
     $[27] = t7;
     $[28] = t8;
@@ -351,7 +354,7 @@ function TaskItem(t0) {
   }
   let t11;
   if ($[31] !== displayActivity || $[32] !== showActivity) {
-    t11 = showActivity && displayActivity && <Box><Text dimColor={true}>{"  "}{displayActivity}{figures.ellipsis}</Text></Box>;
+    t11 = showActivity && displayActivity && <Box width="100%"><Text dimColor={true} wrap="truncate-end">{"  "}{displayActivity}{figures.ellipsis}</Text></Box>;
     $[31] = displayActivity;
     $[32] = showActivity;
     $[33] = t11;
@@ -360,7 +363,7 @@ function TaskItem(t0) {
   }
   let t12;
   if ($[34] !== t10 || $[35] !== t11) {
-    t12 = <Box flexDirection="column">{t10}{t11}</Box>;
+    t12 = <Box flexDirection="column" width="100%">{t10}{t11}</Box>;
     $[34] = t10;
     $[35] = t11;
     $[36] = t12;

@@ -39,7 +39,7 @@ import {
   getMcpInstructionsDeltaAttachment,
 } from '../../utils/attachments.js'
 import {
-  getGlobalConfig,
+  getEffectiveCompactionMode,
   getMemoryPath,
   type CompactionMode,
 } from '../../utils/config.js'
@@ -334,7 +334,7 @@ export interface CompactionResult {
 }
 
 function getConfiguredCompactionMode(): CompactionMode {
-  return getGlobalConfig().compactionMode ?? 'summary'
+  return getEffectiveCompactionMode()
 }
 
 function assertResponsesCompactionAvailable(): void {

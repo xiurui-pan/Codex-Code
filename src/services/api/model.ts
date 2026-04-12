@@ -1,3 +1,4 @@
+import type { BetaJSONOutputFormat } from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import type { NonNullableUsage } from '../../entrypoints/sdk/sdkUtilityTypes.js'
 import type { AssistantMessage } from '../../types/message.js'
 import { getModelMaxOutputTokens as getContextMaxOutputTokens } from '../../utils/context.js'
@@ -46,6 +47,7 @@ export type SingleTurnModelCallArgs = {
   userPrompt: string
   signal: AbortSignal
   options: Record<string, unknown>
+  outputFormat?: BetaJSONOutputFormat
 }
 export type ModelCaller = (
   args: SingleTurnModelCallArgs,
@@ -87,6 +89,7 @@ function buildSingleTurnRequest(args: {
   userPrompt: string
   signal: AbortSignal
   options: Record<string, unknown>
+  outputFormat?: BetaJSONOutputFormat
 }) {
   return {
     messages: [
@@ -99,7 +102,10 @@ function buildSingleTurnRequest(args: {
       },
     ],
     systemPrompt: args.systemPrompt,
-    options: args.options,
+    options: {
+      ...args.options,
+      ...(args.outputFormat ? { outputFormat: args.outputFormat } : {}),
+    },
     signal: args.signal,
   }
 }
@@ -224,6 +230,7 @@ export const callModel: ModelCaller = async args =>
       systemPrompt: args.systemPrompt,
       userPrompt: args.userPrompt,
       options: args.options,
+      outputFormat: args.outputFormat,
       signal: args.signal,
     }),
   )
@@ -237,6 +244,7 @@ export const callSmallModelTurn: SmallModelTurnCaller = async args =>
         ...(args.options ?? {}),
         model: args.options?.model ?? getSmallFastModel(),
       },
+      outputFormat: args.outputFormat,
       signal: args.signal,
     }),
   )

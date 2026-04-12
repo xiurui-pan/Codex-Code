@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import {
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react'
 import type { ToolUseConfirm } from '../components/permissions/PermissionRequest.js'
 import type { RemotePermissionResponse } from '../remote/RemoteSessionManager.js'
 import {
@@ -32,9 +39,9 @@ type UseDirectConnectResult = {
 
 type UseDirectConnectProps = {
   config: DirectConnectConfig | undefined
-  setMessages: React.Dispatch<React.SetStateAction<MessageType[]>>
+  setMessages: Dispatch<SetStateAction<MessageType[]>>
   setIsLoading: (loading: boolean) => void
-  setToolUseConfirmQueue: React.Dispatch<React.SetStateAction<ToolUseConfirm[]>>
+  setToolUseConfirmQueue: Dispatch<SetStateAction<ToolUseConfirm[]>>
   tools: Tool[]
 }
 
@@ -116,7 +123,7 @@ export function useDirectConnect({
           behavior: 'ask',
           message:
             request.description ?? `${request.tool_name} requires permission`,
-          suggestions: request.permission_suggestions,
+          suggestions: request.permission_suggestions as PermissionAskDecision['suggestions'],
           blockedPath: request.blocked_path,
         }
 

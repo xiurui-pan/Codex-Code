@@ -562,7 +562,7 @@ export const FileEditTool = buildTool({
       filePath: file_path,
       oldString: actualOldString,
       newString: new_string,
-      originalFile: originalFileContents,
+      firstLine: originalFileContents.split('\n')[0] ?? null,
       structuredPatch: patch,
       userModified: userModified ?? false,
       replaceAll: replace_all,

@@ -27,6 +27,7 @@ import { CtrlOToExpand } from '../CtrlOToExpand.js';
 import { FilePathLink } from '../FilePathLink.js';
 import { feature } from 'bun:bundle';
 import { useSelectedMessageBg } from '../messageActions.js';
+import { formatHookNameForDisplay } from '../../utils/hooks/displayName.js';
 type Props = {
   addMargin: boolean;
   attachment: Attachment;
@@ -113,7 +114,7 @@ export function AttachmentMessage({
       // names — shortId is undefined outside ant builds anyway.
       const names = attachment.skills.map(s => s.shortId ? `${s.name} [${s.shortId}]` : s.name).join(', ');
       const firstId = attachment.skills[0]?.shortId;
-      const hint = "external" === 'ant' && !isDemoEnv && firstId ? ` · /skill-feedback ${firstId} 1=wrong 2=noisy 3=good [comment]` : '';
+      const hint = process.env.USER_TYPE === 'ant' && !isDemoEnv && firstId ? ` · /skill-feedback ${firstId} 1=wrong 2=noisy 3=good [comment]` : '';
       return <Line>
           <Text bold>{attachment.skills.length}</Text> relevant{' '}
           {plural(attachment.skills.length, 'skill')}: {names}
@@ -288,7 +289,7 @@ export function AttachmentMessage({
         const stderr = attachment.blockingError.blockingError.trim();
         return <>
           <Line color="error">
-            {attachment.hookName} hook returned blocking error
+            {formatHookNameForDisplay(attachment.hookName)} hook returned blocking error
           </Line>
           {stderr ? <Line color="error">{stderr}</Line> : null}
         </>;
@@ -300,7 +301,7 @@ export function AttachmentMessage({
           return null;
         }
         // Full hook output is logged to debug log via hookEvents.ts
-        return <Line color="error">{attachment.hookName} hook error</Line>;
+        return <Line color="error">{formatHookNameForDisplay(attachment.hookName)} hook error</Line>;
       }
     case 'hook_error_during_execution':
       // Stop hooks are rendered as a summary in SystemStopHookSummaryMessage
@@ -308,7 +309,7 @@ export function AttachmentMessage({
         return null;
       }
       // Full hook output is logged to debug log via hookEvents.ts
-      return <Line>{attachment.hookName} hook warning</Line>;
+      return <Line>{formatHookNameForDisplay(attachment.hookName)} hook warning</Line>;
     case 'hook_success':
       // Full hook output is logged to debug log via hookEvents.ts
       return null;
@@ -318,11 +319,11 @@ export function AttachmentMessage({
         return null;
       }
       return <Line color="warning">
-          {attachment.hookName} hook stopped continuation: {attachment.message}
+          {formatHookNameForDisplay(attachment.hookName)} hook stopped continuation: {attachment.message}
         </Line>;
     case 'hook_system_message':
       return <Line>
-          {attachment.hookName} says: {attachment.content}
+          {formatHookNameForDisplay(attachment.hookName)} says: {attachment.content}
         </Line>;
     case 'hook_permission_decision':
       {

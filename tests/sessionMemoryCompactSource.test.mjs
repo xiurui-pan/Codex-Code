@@ -37,3 +37,11 @@ test('manual compact refreshes session memory before using session-memory compac
     /const sessionMemoryResult = await trySessionMemoryCompaction\(/s,
   )
 })
+
+test('session-memory compaction checks the rebuilt context with the same estimator as autocompact', () => {
+  assert.match(source, /const postCompactMessages = buildPostCompactMessages\(compactionResult\)/)
+  assert.match(
+    source,
+    /const postCompactTokenCount = tokenCountWithEstimation\(postCompactMessages\)/,
+  )
+})

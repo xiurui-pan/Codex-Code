@@ -56,3 +56,20 @@ test('Assistant tool-use rows keep a full-width content column', () => {
     /<Box flexDirection="row" marginTop=\{t5\} width="100%" backgroundColor=\{bg\}><Box flexGrow=\{1\} flexShrink=\{1\} minWidth=\{0\}>\{t15\}<\/Box><\/Box>/,
   )
 })
+
+test('Message response rows pin a full-width shrinkable content column', () => {
+  const source = readSource('src/components/MessageResponse.tsx')
+
+  assert.match(source, /<Box flexShrink=\{1\} flexGrow=\{1\} minWidth=\{0\}>\{children\}<\/Box>/)
+  assert.match(source, /<Box flexDirection="row" height=\{height\} overflowY="hidden" width="100%">/)
+})
+
+test('Task list rows stay full-width so shrinking content clears stale glyphs', () => {
+  const source = readSource('src/components/TaskListV2.tsx')
+
+  assert.match(source, /return <Box flexDirection="column" marginTop=\{1\} marginLeft=\{2\} width="100%">/)
+  assert.match(source, /return <Box flexDirection="column" width="100%">\{content\}<\/Box>/)
+  assert.match(source, /t10 = <Box width="100%">\{t5\}\{t7\}\{t8\}\{t9\}<\/Box>;/)
+  assert.match(source, /t11 = showActivity && displayActivity && <Box width="100%"><Text dimColor=\{true\} wrap="truncate-end">/)
+  assert.match(source, /t12 = <Box flexDirection="column" width="100%">\{t10\}\{t11\}<\/Box>;/)
+})

@@ -172,8 +172,8 @@ export function ManageMarketplaces({
 
   // Get count of pending operations
   const getPendingCounts = () => {
-    const updateCount = count(marketplaceStates, s => s.pendingUpdate);
-    const removeCount = count(marketplaceStates, s => s.pendingRemove);
+    const updateCount = marketplaceStates.filter(state => state.pendingUpdate).length;
+    const removeCount = marketplaceStates.filter(state => state.pendingRemove).length;
     return {
       updateCount,
       removeCount

@@ -7,34 +7,28 @@
  * perf/extract-interactive-helpers and perf/launch-repl.
  */
 import React from 'react';
-import type { AssistantSession } from './assistant/sessionDiscovery.js';
 import type { StatsStore } from './context/stats.js';
 import type { Root } from './ink.js';
 import { renderAndRun, showSetupDialog } from './interactiveHelpers.js';
 import { KeybindingSetup } from './keybindings/KeybindingProviderSetup.js';
 import type { AppState } from './state/AppStateStore.js';
-import type { AgentMemoryScope } from './tools/AgentTool/agentMemory.js';
 import type { TeleportRemoteResponse } from './utils/conversationRecovery.js';
 import type { FpsMetrics } from './utils/fpsTracker.js';
 import type { ValidationError } from './utils/settings/validation.js';
+import { ResumeConversation } from './screens/ResumeConversation.js';
 
-// Type-only access to ResumeConversation's Props via the module type.
-// No runtime cost - erased at compile time.
-type ResumeConversationProps = React.ComponentProps<typeof import('./screens/ResumeConversation.js').ResumeConversation>;
+type ResumeConversationProps = React.ComponentProps<typeof ResumeConversation>;
 
 /**
  * Site ~3173: SnapshotUpdateDialog (agent memory snapshot update prompt).
  * Original callback wiring: onComplete={done}, onCancel={() => done('keep')}.
  */
-export async function launchSnapshotUpdateDialog(root: Root, props: {
+export async function launchSnapshotUpdateDialog(_root: Root, _props: {
   agentType: string;
-  scope: AgentMemoryScope;
+  scope: string;
   snapshotTimestamp: string;
 }): Promise<'merge' | 'keep' | 'replace'> {
-  const {
-    SnapshotUpdateDialog
-  } = await import('./components/agents/SnapshotUpdateDialog.js');
-  return showSetupDialog<'merge' | 'keep' | 'replace'>(root, done => <SnapshotUpdateDialog agentType={props.agentType} scope={props.scope} snapshotTimestamp={props.snapshotTimestamp} onComplete={done} onCancel={() => done('keep')} />);
+  return 'keep';
 }
 
 /**
@@ -55,13 +49,10 @@ export async function launchInvalidSettingsDialog(root: Root, props: {
  * Site ~4229: AssistantSessionChooser (pick a bridge session to attach to).
  * Original callback wiring: onSelect={id => done(id)}, onCancel={() => done(null)}.
  */
-export async function launchAssistantSessionChooser(root: Root, props: {
-  sessions: AssistantSession[];
+export async function launchAssistantSessionChooser(_root: Root, _props: {
+  sessions: unknown[];
 }): Promise<string | null> {
-  const {
-    AssistantSessionChooser
-  } = await import('./assistant/AssistantSessionChooser.js');
-  return showSetupDialog<string | null>(root, done => <AssistantSessionChooser sessions={props.sessions} onSelect={id => done(id)} onCancel={() => done(null)} />);
+  return null;
 }
 
 /**
@@ -70,18 +61,8 @@ export async function launchAssistantSessionChooser(root: Root, props: {
  * success, null on cancel. Rejects on install failure so the caller can
  * distinguish errors from user cancellation.
  */
-export async function launchAssistantInstallWizard(root: Root): Promise<string | null> {
-  const {
-    NewInstallWizard,
-    computeDefaultInstallDir
-  } = await import('./commands/assistant/assistant.js');
-  const defaultDir = await computeDefaultInstallDir();
-  let rejectWithError: (reason: Error) => void;
-  const errorPromise = new Promise<never>((_, reject) => {
-    rejectWithError = reject;
-  });
-  const resultPromise = showSetupDialog<string | null>(root, done => <NewInstallWizard defaultDir={defaultDir} onInstalled={dir => done(dir)} onCancel={() => done(null)} onError={message => rejectWithError(new Error(`Installation failed: ${message}`))} />);
-  return Promise.race([resultPromise, errorPromise]);
+export async function launchAssistantInstallWizard(_root: Root): Promise<string | null> {
+  return null;
 }
 
 /**
@@ -119,11 +100,10 @@ export async function launchResumeChooser(root: Root, appProps: {
   stats: StatsStore;
   initialState: AppState;
 }, worktreePathsPromise: Promise<string[]>, resumeProps: Omit<ResumeConversationProps, 'worktreePaths'>): Promise<void> {
-  const [worktreePaths, {
-    ResumeConversation
-  }, {
-    App
-  }] = await Promise.all([worktreePathsPromise, import('./screens/ResumeConversation.js'), import('./components/App.js')]);
+  const [{ App }, worktreePaths] = await Promise.all([
+    import('./components/App.js'),
+    worktreePathsPromise,
+  ]);
   await renderAndRun(root, <App getFpsMetrics={appProps.getFpsMetrics} stats={appProps.stats} initialState={appProps.initialState}>
       <KeybindingSetup>
         <ResumeConversation {...resumeProps} worktreePaths={worktreePaths} />

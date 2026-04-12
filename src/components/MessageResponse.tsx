@@ -26,7 +26,7 @@ export function MessageResponse(t0) {
   }
   let t2;
   if ($[1] !== children) {
-    t2 = <Box flexShrink={1} flexGrow={1}>{children}</Box>;
+    t2 = <Box flexShrink={1} flexGrow={1} minWidth={0}>{children}</Box>;
     $[1] = children;
     $[2] = t2;
   } else {
@@ -34,7 +34,7 @@ export function MessageResponse(t0) {
   }
   let t3;
   if ($[3] !== height || $[4] !== t2) {
-    t3 = <MessageResponseProvider><Box flexDirection="row" height={height} overflowY="hidden">{t1}{t2}</Box></MessageResponseProvider>;
+    t3 = <MessageResponseProvider><Box flexDirection="row" height={height} overflowY="hidden" width="100%">{t1}{t2}</Box></MessageResponseProvider>;
     $[3] = height;
     $[4] = t2;
     $[5] = t3;

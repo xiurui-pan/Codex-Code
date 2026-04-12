@@ -468,7 +468,7 @@ export const AgentTool = buildTool({
     // dead code elimination of the entire block for external builds.
     if ("external" === 'ant' && effectiveIsolation === 'remote') {
       const eligibility = await checkRemoteAgentEligibility();
-      if (!eligibility.eligible) {
+      if (eligibility.eligible === false) {
         const reasons = eligibility.errors.map(formatPreconditionError).join('\n');
         throw new Error(`Cannot launch remote agent:\n${reasons}`);
       }

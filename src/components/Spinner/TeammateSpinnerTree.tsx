@@ -1,7 +1,6 @@
 import { c as _c } from "react/compiler-runtime";
 import figures from 'figures';
-import * as React from 'react';
-import { Box, Text, type TextProps } from '../../ink.js';
+import { Box, Text } from '../../ink.js';
 import { useAppState } from '../../state/AppState.js';
 import { getRunningTeammatesSorted } from '../../tasks/InProcessTeammateTask/InProcessTeammateTask.js';
 import { formatNumber } from '../../utils/format.js';
@@ -49,7 +48,7 @@ export function TeammateSpinnerTree(t0) {
       const isLeaderForegrounded = viewingAgentTaskId === undefined;
       const isLeaderSelected = isInSelectionMode && selectedIndex === -1;
       const isLeaderHighlighted = isLeaderForegrounded || isLeaderSelected;
-      isHideSelected = isInSelectionMode === true && selectedIndex === teammateTasks.length;
+      isHideSelected = Boolean(isInSelectionMode) && selectedIndex === teammateTasks.length;
       T0 = Box;
       t1 = "column";
       t2 = 1;
@@ -108,7 +107,7 @@ export function TeammateSpinnerTree(t0) {
       }
       let t16;
       if ($[34] !== isLeaderHighlighted || $[35] !== leaderTokenCount) {
-        t16 = leaderTokenCount !== undefined && leaderTokenCount > 0 && <Text dimColor={!isLeaderHighlighted}>{" "}· {formatNumber(leaderTokenCount)} tokens</Text>;
+        t16 = (leaderTokenCount ?? 0) > 0 && <Text dimColor={!isLeaderHighlighted}>{" "}· {formatNumber(leaderTokenCount)} tokens</Text>;
         $[34] = isLeaderHighlighted;
         $[35] = leaderTokenCount;
         $[36] = t16;
@@ -146,7 +145,10 @@ export function TeammateSpinnerTree(t0) {
       } else {
         t3 = $[50];
       }
-      t4 = teammateTasks.map((teammate, index) => <TeammateSpinnerLine key={teammate.id} teammate={teammate} isLast={!isInSelectionMode && index === teammateTasks.length - 1} isSelected={isInSelectionMode && selectedIndex === index} isForegrounded={viewingAgentTaskId === teammate.id} allIdle={allIdle} showPreview={showTeammateMessagePreview} />);
+      t4 = teammateTasks.map((teammate, index) => {
+        const teammateKey = teammate.id;
+        return <TeammateSpinnerLine teammate={teammate} isLast={!isInSelectionMode && index === teammateTasks.length - 1} isSelected={isInSelectionMode && selectedIndex === index} isForegrounded={viewingAgentTaskId === teammate.id} allIdle={allIdle} showPreview={showTeammateMessagePreview} key={teammateKey} />;
+      });
     }
     $[0] = allIdle;
     $[1] = isInSelectionMode;

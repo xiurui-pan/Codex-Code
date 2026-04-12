@@ -24,6 +24,7 @@ import { handleInteractivePermission } from './toolPermission/handlers/interacti
 import { handleSwarmWorkerPermission } from './toolPermission/handlers/swarmWorkerHandler.js';
 import { createPermissionContext, createPermissionQueueOps } from './toolPermission/PermissionContext.js';
 import { logPermissionDecision } from './toolPermission/permissionLogging.js';
+import type { ClassifierResult } from '../utils/permissions/bashClassifier.js';
 export type CanUseToolFn<Input extends Record<string, unknown> = Record<string, unknown>> = (tool: ToolType, input: Input, toolUseContext: ToolUseContext, assistantMessage: AssistantMessage, toolUseID: string, forceDecision?: PermissionDecision<Input>) => Promise<PermissionDecision<Input>>;
 function useCanUseTool(setToolUseConfirmQueue, setToolPermissionContext) {
   const $ = _c(3);
@@ -189,14 +190,21 @@ function useCanUseTool(setToolUseConfirmQueue, setToolPermissionContext) {
   }
   return t0;
 }
-function _temp2(res) {
+type SpeculativeRaceResult = {
+  type: 'result';
+  result: ClassifierResult;
+} | {
+  type: 'timeout';
+};
+
+function _temp2(res: (value: SpeculativeRaceResult) => void) {
   return setTimeout(res, 2000, {
-    type: "timeout" as const
+    type: 'timeout' as const
   });
 }
-function _temp(r) {
+function _temp(r: ClassifierResult): SpeculativeRaceResult {
   return {
-    type: "result" as const,
+    type: 'result' as const,
     result: r
   };
 }

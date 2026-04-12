@@ -10,7 +10,14 @@
  */
 
 import { randomUUID } from 'crypto'
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import {
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react'
 import type { ToolUseConfirm } from '../components/permissions/PermissionRequest.js'
 import {
   applyRemotePermissionAssistantFields,
@@ -22,15 +29,49 @@ import {
   convertSDKMessage,
   isSessionEndMessage,
 } from '../remote/sdkMessageAdapter.js'
-import type { SSHSession } from '../ssh/createSSHSession.js'
-import type { SSHSessionManager } from '../ssh/SSHSessionManager.js'
+import type { SDKControlPermissionRequest } from '../entrypoints/sdk/controlTypes.js'
+import type { RemotePermissionResponse } from '../remote/RemoteSessionManager.js'
 import type { Tool } from '../Tool.js'
 import { findToolByName } from '../Tool.js'
 import type { Message as MessageType } from '../types/message.js'
 import type { PermissionAskDecision } from '../types/permissions.js'
+import type { PermissionUpdate } from '../utils/permissions/PermissionUpdateSchema.js'
 import { logForDebugging } from '../utils/debug.js'
 import { gracefulShutdown } from '../utils/gracefulShutdown.js'
 import type { RemoteMessageContent } from '../utils/teleport/api.js'
+
+type SSHSessionManagerLike = {
+  connect(): void
+  disconnect(): void
+  sendMessage(content: RemoteMessageContent): Promise<boolean>
+  sendInterrupt(): void
+  respondToPermissionRequest(
+    requestId: string,
+    result: RemotePermissionResponse,
+  ): void
+}
+
+type SSHSessionLike = {
+  remoteCwd?: string
+  proc: { exitCode: number | null; signalCode: string | null }
+  proxy: { stop(): void }
+  getStderrTail(): string
+  createManager(callbacks: {
+    onMessage: (sdkMessage: import('../entrypoints/agentSdkTypes.js').SDKMessage) => void
+    onPermissionRequest: (
+      request: SDKControlPermissionRequest,
+      requestId: string,
+    ) => void
+    onPermissionCancelled?: (
+      requestId: string,
+      toolUseId: string | undefined,
+    ) => void
+    onConnected?: () => void
+    onReconnecting?: (attempt: number, max: number) => void
+    onDisconnected?: () => void
+    onError?: (error: Error) => void
+  }): SSHSessionManagerLike
+}
 
 type UseSSHSessionResult = {
   isRemoteMode: boolean
@@ -40,10 +81,10 @@ type UseSSHSessionResult = {
 }
 
 type UseSSHSessionProps = {
-  session: SSHSession | undefined
-  setMessages: React.Dispatch<React.SetStateAction<MessageType[]>>
+  session: SSHSessionLike | undefined
+  setMessages: Dispatch<SetStateAction<MessageType[]>>
   setIsLoading: (loading: boolean) => void
-  setToolUseConfirmQueue: React.Dispatch<React.SetStateAction<ToolUseConfirm[]>>
+  setToolUseConfirmQueue: Dispatch<SetStateAction<ToolUseConfirm[]>>
   tools: Tool[]
 }
 
@@ -56,7 +97,7 @@ export function useSSHSession({
 }: UseSSHSessionProps): UseSSHSessionResult {
   const isRemoteMode = !!session
 
-  const managerRef = useRef<SSHSessionManager | null>(null)
+  const managerRef = useRef<SSHSessionManagerLike | null>(null)
   const hasReceivedInitRef = useRef(false)
   const isConnectedRef = useRef(false)
 
@@ -123,7 +164,7 @@ export function useSSHSession({
           behavior: 'ask',
           message:
             request.description ?? `${request.tool_name} requires permission`,
-          suggestions: request.permission_suggestions,
+          suggestions: request.permission_suggestions as PermissionAskDecision['suggestions'],
           blockedPath: request.blocked_path,
         }
 
@@ -145,20 +186,20 @@ export function useSSHSession({
             })
             removePermissionPrompt(request.tool_use_id, requestId)
           },
-          onAllow(updatedInput) {
-            manager.respondToPermissionRequest(requestId, {
-              behavior: 'allow',
-              updatedInput,
-            })
-            removePermissionPrompt(request.tool_use_id, requestId)
-            setIsLoading(true)
-          },
           onReject(feedback) {
             manager.respondToPermissionRequest(requestId, {
               behavior: 'deny',
               message: feedback ?? 'User denied permission',
             })
             removePermissionPrompt(request.tool_use_id, requestId)
+          },
+          onAllow(updatedInput, _permissionUpdates: PermissionUpdate[]) {
+            manager.respondToPermissionRequest(requestId, {
+              behavior: 'allow',
+              updatedInput,
+            })
+            removePermissionPrompt(request.tool_use_id, requestId)
+            setIsLoading(true)
           },
           async recheckPermission() {},
         }

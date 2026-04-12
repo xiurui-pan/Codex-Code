@@ -55,16 +55,13 @@ import { TICK_TAG } from './xml.js'
 import { logForDebugging } from '../utils/debug.js'
 import { loadMemoryPrompt } from '../memdir/memdir.js'
 import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js'
+import { getAntModelOverrideConfig } from '../utils/model/antModels.js'
 import { isUndercover } from '../utils/undercover.js'
 import { isMcpInstructionsDeltaEnabled } from '../utils/mcpInstructionsDelta.js'
 
 // Dead code elimination: conditional imports for feature-gated modules
 /* eslint-disable @typescript-eslint/no-require-imports */
-const getCachedMCConfigForFRC = feature('CACHED_MICROCOMPACT')
-  ? (
-      require('../services/compact/cachedMCConfig.js') as typeof import('../services/compact/cachedMCConfig.js')
-    ).getCachedMCConfig
-  : null
+const getCachedMCConfigForFRC = null
 
 const proactiveModule =
   feature('PROACTIVE') || feature('KAIROS')
@@ -80,18 +77,10 @@ const briefToolModule =
   feature('KAIROS') || feature('KAIROS_BRIEF')
     ? (require('../tools/BriefTool/BriefTool.js') as typeof import('../tools/BriefTool/BriefTool.js'))
     : null
-const DISCOVER_SKILLS_TOOL_NAME: string | null = feature(
-  'EXPERIMENTAL_SKILL_SEARCH',
-)
-  ? (
-      require('../tools/DiscoverSkillsTool/prompt.js') as typeof import('../tools/DiscoverSkillsTool/prompt.js')
-    ).DISCOVER_SKILLS_TOOL_NAME
-  : null
+const DISCOVER_SKILLS_TOOL_NAME: string | null = null
 // Capture the module (not .isSkillSearchEnabled directly) so spyOn() in tests
 // patches what we actually call — a captured function ref would point past the spy.
-const skillSearchFeatureCheck = feature('EXPERIMENTAL_SKILL_SEARCH')
-  ? (require('../services/skillSearch/featureCheck.js') as typeof import('../services/skillSearch/featureCheck.js'))
-  : null
+const skillSearchFeatureCheck = null
 /* eslint-enable @typescript-eslint/no-require-imports */
 import type { OutputStyleConfig } from './outputStyles.js'
 import { CYBER_RISK_INSTRUCTION } from './cyberRiskInstruction.js'
@@ -393,10 +382,7 @@ function getSessionSpecificGuidanceSection(
 
 // @[MODEL LAUNCH]: Remove this section when we launch numbat.
 function getOutputEfficiencySection(): string {
-  if (
-    process.env.USER_TYPE === 'ant' ||
-    isCurrentPhaseCustomCodexProvider()
-  ) {
+  if (process.env.USER_TYPE === 'ant') {
     return `# Communicating with the user
 When sending user-facing text, you're writing for a person, not logging to a console. Assume users can't see most tool calls or thinking - only your text output. Before your first tool call, briefly state what you're about to do. While working, give short updates at key moments: when you find something load-bearing (a bug, a root cause), when changing direction, when you've made progress without an update.
 
@@ -412,15 +398,13 @@ These user-facing text instructions do not apply to code or tool calls.`
 
 Be concise, but do not go silent.
 
-Before exploring or doing substantial work, start with a brief user update that says what you are checking first.
-
 Before making tool calls, send a brief preamble to the user explaining what you are about to do.
 
 - Logically group related actions: if you are about to run several related commands, describe them together in one preamble rather than sending a separate note for each.
 - Keep it concise: be no more than 1-2 sentences, focused on immediate, tangible next steps.
 - Build on prior context: if this is not your first tool call, connect the dots with what has been done so far and make the next action clear.
 - Keep your tone light, friendly, and curious.
-- Exception: avoid adding a preamble for every trivial read unless it is part of a larger grouped action.
+- Exception: skip the preamble for straightforward single reads, one-off local searches, or other trivial checks unless they are part of a larger grouped action.
 
 Examples:
 - "I’ve explored the repo; now checking the API route definitions."
@@ -435,8 +419,6 @@ Do not narrate the terminal. Do not repeat exact shell commands, tool names, raw
 If you are about to make another search or read call after already gathering several results on the same question, pause and ask whether you already have enough evidence to answer. Reuse earlier evidence instead of repeating the same fact check.
 
 If a task runs long or needs many tool calls, send brief progress updates at reasonable intervals. Keep them short, plain, and focused on what has been done and what comes next.
-
-The messages you send before tool calls should describe what is immediately about to be done next in very concise language. If there was previous work done, the preamble should also include a note about that work so the user can follow the thread.
 
 Keep text output brief and direct. Lead with the answer or next action, not the reasoning. Skip filler words and unnecessary transitions. Do not restate what the user said — just do it. When explaining, include only what the user needs in order to follow along.
 
@@ -844,8 +826,8 @@ Act on your best judgment rather than asking for confirmation.
 
 ## Be concise
 
-Keep your text output brief and high-level. The user does not need a play-by-play of your thought process or implementation details, but they still need short human-language updates before tool batches and at natural milestones. Focus text output on:
-- Short progress or tracking updates before each meaningful tool batch that starts a new phase or follow-up check
+Keep your text output brief and high-level. The user does not need a play-by-play of your thought process or implementation details, but they still need short human-language updates at natural milestones. Focus text output on:
+- Short progress or tracking updates at natural milestones or when a meaningful new phase starts
 - Decisions that need the user's input
 - High-level status updates at natural milestones (e.g., "PR created", "tests passing")
 - Errors or blockers that change the plan

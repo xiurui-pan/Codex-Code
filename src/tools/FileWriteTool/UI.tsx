@@ -362,6 +362,7 @@ export function renderToolUseErrorMessage(result: ToolResultBlockParam['content'
 export function renderToolResultMessage({
   filePath,
   content,
+  firstLine,
   structuredPatch,
   type,
   originalFile
@@ -398,7 +399,7 @@ export function renderToolResultMessage({
     case 'update':
       {
         const isPlanFile = filePath.startsWith(getPlansDirectory());
-        return <FileEditToolUpdatedMessage filePath={filePath} structuredPatch={structuredPatch} firstLine={content.split('\n')[0] ?? null} fileContent={originalFile ?? undefined} style={style} verbose={verbose} previewHint={isPlanFile ? '/plan to preview' : undefined} />;
+        return <FileEditToolUpdatedMessage filePath={filePath} structuredPatch={structuredPatch} firstLine={firstLine ?? content.split('\n')[0] ?? null} fileContent={originalFile ?? undefined} style={style} verbose={verbose} previewHint={isPlanFile ? '/plan to preview' : undefined} />;
       }
   }
 }

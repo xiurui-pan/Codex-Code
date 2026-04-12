@@ -190,7 +190,7 @@ export function DiscoverPlugins({
         }
 
         // Handle marketplace loading errors/warnings
-        const successCount = count(marketplaces, m => m.data !== null);
+        const successCount = marketplaces.filter(m => m.data !== null).length;
         const errorResult = formatMarketplaceLoadingErrors(failures, successCount);
         if (errorResult) {
           if (errorResult.type === 'warning') {
@@ -244,7 +244,8 @@ export function DiscoverPlugins({
       });
       if (result.success) {
         successCount_0++;
-      } else {
+      }
+      if (result.success === false) {
         failureCount++;
         newFailedPlugins.push({
           name: plugin_0.entry.name,
@@ -304,7 +305,9 @@ export function DiscoverPlugins({
       setParentViewState({
         type: 'menu'
       });
-    } else {
+      return;
+    }
+    if (result_0.success === false) {
       setIsInstalling(false);
       setInstallError(result_0.error);
     }

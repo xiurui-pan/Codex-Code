@@ -2,6 +2,7 @@ import type {
   ToolResultBlockParam,
   ToolUseBlockParam,
 } from '@anthropic-ai/sdk/resources/index.mjs'
+import type React from 'react'
 import type {
   ElicitRequestURLParams,
   ElicitResult,
@@ -309,12 +310,22 @@ export type ToolProgress<P extends ToolProgressData> = {
   data: P
 }
 
+function isToolProgressData(data: unknown): data is ToolProgressData {
+  return (
+    data !== null &&
+    typeof data === 'object' &&
+    'type' in data &&
+    typeof data.type === 'string' &&
+    data.type !== 'hook_progress'
+  )
+}
+
 export function filterToolProgressMessages(
   progressMessagesForMessage: ProgressMessage[],
 ): ProgressMessage<ToolProgressData>[] {
   return progressMessagesForMessage.filter(
     (msg): msg is ProgressMessage<ToolProgressData> =>
-      msg.data?.type !== 'hook_progress',
+      isToolProgressData(msg.data),
   )
 }
 

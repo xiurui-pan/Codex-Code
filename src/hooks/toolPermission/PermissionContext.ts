@@ -1,4 +1,5 @@
 import { feature } from 'bun:bundle'
+import type { Dispatch, SetStateAction } from 'react'
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs'
 import {
   type AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
@@ -355,9 +356,7 @@ type PermissionContext = ReturnType<typeof createPermissionContext>
  * generic queue interface used by PermissionContext.
  */
 function createPermissionQueueOps(
-  setToolUseConfirmQueue: React.Dispatch<
-    React.SetStateAction<ToolUseConfirm[]>
-  >,
+  setToolUseConfirmQueue: Dispatch<SetStateAction<ToolUseConfirm[]>>,
 ): PermissionQueueOps {
   return {
     push(item: ToolUseConfirm) {

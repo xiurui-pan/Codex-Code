@@ -1,5 +1,9 @@
 import type { RenderableMessage } from '../types/message.js'
 import {
+  FILE_READ_STORED_TEXT_OMITTED,
+  hasStoredFileReadContentOmitted,
+} from '../tools/FileReadTool/storageShape.js'
+import {
   INTERRUPT_MESSAGE,
   INTERRUPT_MESSAGE_FOR_TOOL_USE,
 } from './messages.js'
@@ -181,7 +185,14 @@ export function toolResultSearchText(r: unknown): string {
     typeof o.file === 'object' &&
     typeof (o.file as { content?: unknown }).content === 'string'
   ) {
-    return (o.file as { content: string }).content
+    const content = (o.file as { content: string }).content
+    if (
+      content === FILE_READ_STORED_TEXT_OMITTED ||
+      hasStoredFileReadContentOmitted(r)
+    ) {
+      return ''
+    }
+    return content
   }
   // Known output-field names only. A blind walk would index metadata
   // the UI doesn't show (rawOutputPath, backgroundTaskId, filePath,

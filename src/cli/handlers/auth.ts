@@ -20,6 +20,7 @@ import {
 import { getOauthProfileFromOauthToken } from '../../services/oauth/getOauthProfile.js'
 import { OAuthService } from '../../services/oauth/index.js'
 import type { OAuthTokens } from '../../services/oauth/types.js'
+import type { OrgValidationResult } from '../../utils/auth.js'
 import {
   clearOAuthTokenCache,
   getAnthropicApiKeyWithSource,
@@ -42,6 +43,12 @@ import {
   buildAccountProperties,
   buildAPIProviderProperties,
 } from '../../utils/status.js'
+
+function isOrgValidationFailure(
+  result: OrgValidationResult,
+): result is Extract<OrgValidationResult, { valid: false }> {
+  return result.valid === false
+}
 
 /**
  * Shared post-token-acquisition logic. Saves tokens, fetches profile/roles,
@@ -158,7 +165,7 @@ export async function authLogin({
       await installOAuthTokens(tokens)
 
       const orgResult = await validateForceLoginOrg()
-      if (!orgResult.valid) {
+      if (isOrgValidationFailure(orgResult)) {
         process.stderr.write(orgResult.message + '\n')
         process.exit(1)
       }
@@ -208,7 +215,7 @@ export async function authLogin({
     await installOAuthTokens(result)
 
     const orgResult = await validateForceLoginOrg()
-    if (!orgResult.valid) {
+    if (isOrgValidationFailure(orgResult)) {
       process.stderr.write(orgResult.message + '\n')
       process.exit(1)
     }

@@ -610,7 +610,10 @@ export async function trySessionMemoryCompaction(
 
     const postCompactMessages = buildPostCompactMessages(compactionResult)
 
-    const postCompactTokenCount = estimateMessageTokens(postCompactMessages)
+    // Use the same estimator as shouldAutoCompact() so session-memory
+    // compaction cannot be accepted on one turn and immediately retrigger on
+    // the next due to attachments, hook results, or preserved-message usage.
+    const postCompactTokenCount = tokenCountWithEstimation(postCompactMessages)
 
     // Only check threshold if one was provided (for autocompact)
     if (

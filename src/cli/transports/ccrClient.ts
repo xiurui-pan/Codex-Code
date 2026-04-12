@@ -3,6 +3,7 @@ import type {
   SDKPartialAssistantMessage,
   StdoutMessage,
 } from 'src/entrypoints/sdk/controlTypes.js'
+import type { SDKAssistantMessage } from 'src/entrypoints/agentSdkTypes.js'
 import { decodeJwtExpiry } from '../../bridge/jwtUtils.js'
 import { logForDebugging } from '../../utils/debug.js'
 import { logForDiagnosticsNoPII } from '../../utils/diagLogs.js'
@@ -69,7 +70,7 @@ const MAX_CONSECUTIVE_AUTH_FAILURES = 10
 
 type EventPayload = {
   uuid: string
-  type: string
+  type?: string
   [key: string]: unknown
 }
 
@@ -83,16 +84,67 @@ type ClientEvent = {
  * of SDKPartialAssistantMessage — RawMessageStreamEvent's delta is a union and
  * narrowing through two levels defeats the discriminant.
  */
+type TextDeltaEvent = {
+  type: 'content_block_delta'
+  index: number
+  delta: { type: 'text_delta'; text: string }
+}
+
+type MessageStartEvent = {
+  type: 'message_start'
+  message: { id: string }
+}
+
 type CoalescedStreamEvent = {
   type: 'stream_event'
   uuid: string
   session_id: string
   parent_tool_use_id: string | null
-  event: {
-    type: 'content_block_delta'
-    index: number
-    delta: { type: 'text_delta'; text: string }
-  }
+  event: TextDeltaEvent
+}
+
+function isMessageStartEvent(event: unknown): event is MessageStartEvent {
+  return (
+    typeof event === 'object' &&
+    event !== null &&
+    'type' in event &&
+    event.type === 'message_start' &&
+    'message' in event &&
+    typeof event.message === 'object' &&
+    event.message !== null &&
+    'id' in event.message &&
+    typeof event.message.id === 'string'
+  )
+}
+
+function isTextDeltaEvent(event: unknown): event is TextDeltaEvent {
+  return (
+    typeof event === 'object' &&
+    event !== null &&
+    'type' in event &&
+    event.type === 'content_block_delta' &&
+    'index' in event &&
+    typeof event.index === 'number' &&
+    'delta' in event &&
+    typeof event.delta === 'object' &&
+    event.delta !== null &&
+    'type' in event.delta &&
+    event.delta.type === 'text_delta' &&
+    'text' in event.delta &&
+    typeof event.delta.text === 'string'
+  )
+}
+
+function isAssistantMessageWithId(
+  message: StdoutMessage,
+): message is SDKAssistantMessage & { message: { id: string } } {
+  return (
+    message.type === 'assistant' &&
+    typeof message.message === 'object' &&
+    message.message !== null &&
+    'id' in message.message &&
+    typeof message.message.id === 'string'
+  )
 }
 
 /**
@@ -119,7 +171,7 @@ export function createStreamAccumulator(): StreamAccumulatorState {
 
 function scopeKey(m: {
   session_id: string
-  parent_tool_use_id: string | null
+  parent_tool_use_id?: string | null
 }): string {
   return `${m.session_id}:${m.parent_tool_use_id ?? ''}`
 }
@@ -148,56 +200,51 @@ export function accumulateStreamEvents(
   // rewrite the same entry instead of emitting one event per delta.
   const touched = new Map<string[], CoalescedStreamEvent>()
   for (const msg of buffer) {
-    switch (msg.event.type) {
-      case 'message_start': {
-        const id = msg.event.message.id
-        const prevId = state.scopeToMessage.get(scopeKey(msg))
-        if (prevId) state.byMessage.delete(prevId)
-        state.scopeToMessage.set(scopeKey(msg), id)
-        state.byMessage.set(id, [])
-        out.push(msg)
-        break
-      }
-      case 'content_block_delta': {
-        if (msg.event.delta.type !== 'text_delta') {
-          out.push(msg)
-          break
-        }
-        const messageId = state.scopeToMessage.get(scopeKey(msg))
-        const blocks = messageId ? state.byMessage.get(messageId) : undefined
-        if (!blocks) {
-          // Delta without a preceding message_start (reconnect mid-stream,
-          // or message_start was in a prior buffer that got dropped). Pass
-          // through raw — can't produce a full-so-far snapshot without the
-          // prior chunks anyway.
-          out.push(msg)
-          break
-        }
-        const chunks = (blocks[msg.event.index] ??= [])
-        chunks.push(msg.event.delta.text)
-        const existing = touched.get(chunks)
-        if (existing) {
-          existing.event.delta.text = chunks.join('')
-          break
-        }
-        const snapshot: CoalescedStreamEvent = {
-          type: 'stream_event',
-          uuid: msg.uuid,
-          session_id: msg.session_id,
-          parent_tool_use_id: msg.parent_tool_use_id,
-          event: {
-            type: 'content_block_delta',
-            index: msg.event.index,
-            delta: { type: 'text_delta', text: chunks.join('') },
-          },
-        }
-        touched.set(chunks, snapshot)
-        out.push(snapshot)
-        break
-      }
-      default:
-        out.push(msg)
+    if (isMessageStartEvent(msg.event)) {
+      const id = msg.event.message.id
+      const prevId = state.scopeToMessage.get(scopeKey(msg))
+      if (prevId) state.byMessage.delete(prevId)
+      state.scopeToMessage.set(scopeKey(msg), id)
+      state.byMessage.set(id, [])
+      out.push(msg)
+      continue
     }
+
+    if (!isTextDeltaEvent(msg.event)) {
+      out.push(msg)
+      continue
+    }
+
+    const messageId = state.scopeToMessage.get(scopeKey(msg))
+    const blocks = messageId ? state.byMessage.get(messageId) : undefined
+    if (!blocks) {
+      // Delta without a preceding message_start (reconnect mid-stream,
+      // or message_start was in a prior buffer that got dropped). Pass
+      // through raw — can't produce a full-so-far snapshot without the
+      // prior chunks anyway.
+      out.push(msg)
+      continue
+    }
+    const chunks = (blocks[msg.event.index] ??= [])
+    chunks.push(msg.event.delta.text)
+    const existing = touched.get(chunks)
+    if (existing) {
+      existing.event.delta.text = chunks.join('')
+      continue
+    }
+    const snapshot: CoalescedStreamEvent = {
+      type: 'stream_event',
+      uuid: msg.uuid,
+      session_id: msg.session_id,
+      parent_tool_use_id: msg.parent_tool_use_id ?? null,
+      event: {
+        type: 'content_block_delta',
+        index: msg.event.index,
+        delta: { type: 'text_delta', text: chunks.join('') },
+      },
+    }
+    touched.set(chunks, snapshot)
+    out.push(snapshot)
   }
   return out
 }
@@ -222,7 +269,9 @@ export function clearStreamAccumulatorForMessage(
   }
 }
 
-type RequestResult = { ok: true } | { ok: false; retryAfterMs?: number }
+type RequestResult =
+  | { ok: true; retryAfterMs?: undefined }
+  | { ok: false; retryAfterMs?: number }
 
 type WorkerEvent = {
   payload: EventPayload
@@ -744,21 +793,25 @@ export class CCRClient {
       return
     }
     await this.flushStreamEventBuffer()
-    if (message.type === 'assistant') {
-      clearStreamAccumulatorForMessage(this.streamTextAccumulator, message)
+    if (isAssistantMessageWithId(message)) {
+      clearStreamAccumulatorForMessage(this.streamTextAccumulator, {
+        session_id: message.session_id,
+        parent_tool_use_id: message.parent_tool_use_id ?? null,
+        message: { id: message.message.id },
+      })
     }
     await this.eventUploader.enqueue(this.toClientEvent(message))
   }
 
   /** Wrap a StdoutMessage as a ClientEvent, injecting a UUID if missing. */
   private toClientEvent(message: StdoutMessage): ClientEvent {
-    const msg = message as unknown as Record<string, unknown>
-    return {
-      payload: {
-        ...msg,
-        uuid: typeof msg.uuid === 'string' ? msg.uuid : randomUUID(),
-      } as EventPayload,
+    const payload: EventPayload = {
+      ...(message as Record<string, unknown>),
+      uuid: 'uuid' in message && typeof message.uuid === 'string'
+        ? message.uuid
+        : randomUUID(),
     }
+    return { payload }
   }
 
   /**

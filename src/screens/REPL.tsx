@@ -63,7 +63,6 @@ import { useDirectConnect } from '../hooks/useDirectConnect.js';
 import type { DirectConnectConfig } from '../server/directConnectManager.js';
 import { useSSHSession } from '../hooks/useSSHSession.js';
 import { useAssistantHistory } from '../hooks/useAssistantHistory.js';
-import type { SSHSession } from '../ssh/createSSHSession.js';
 import { SkillImprovementSurvey } from '../components/SkillImprovementSurvey.js';
 import { useSkillImprovementSurvey } from '../hooks/useSkillImprovementSurvey.js';
 import { useMoreRight } from '../moreright/useMoreRight.js';
@@ -592,7 +591,7 @@ export type Props = {
   // Direct connect config for `claude connect` mode (connects to a claude server)
   directConnectConfig?: DirectConnectConfig;
   // SSH session for `claude ssh` mode (local REPL, remote tools over ssh)
-  sshSession?: SSHSession;
+  sshSession?: Parameters<typeof useSSHSession>[0]['session'];
   // Thinking configuration to use when thinking is enabled
   thinkingConfig: ThinkingConfig;
 };
@@ -2636,17 +2635,17 @@ export function REPL({
   const onQueryEvent = useCallback((event: Parameters<typeof handleMessageFromStream>[0]) => {
     handleMessageFromStream(event, newMessage => {
       if (isCompactBoundaryMessage(newMessage)) {
-        // Fullscreen: keep pre-compact messages for scrollback. query.ts
-        // slices at the boundary for API calls, Messages.tsx skips the
-        // boundary filter in fullscreen, and useLogMessages treats this
-        // as an incremental append (first uuid unchanged). Cap at one
-        // compact-interval of scrollback — normalizeMessages/applyGrouping
-        // are O(n) per render, so drop everything before the previous
-        // boundary to keep n bounded across multi-day sessions.
+        // Keep pre-compact messages in state so transcript mode can still
+        // inspect the pre-compact history, but immediately repin the prompt
+        // viewport to the post-compact slice. Messages.tsx now filters the
+        // prompt view at the boundary; this state keeps one compact interval
+        // of scrollback available for transcript/history without letting the
+        // main prompt stay parked on stale pre-compact content.
         if (isFullscreenEnvEnabled()) {
           setMessages(old => [...getMessagesAfterCompactBoundary(old, {
             includeSnipped: true
           }), newMessage]);
+          queueMicrotask(repinScroll);
         } else {
           setMessages(() => [newMessage]);
         }
@@ -2709,7 +2708,7 @@ export function REPL({
         endResponseLength: baseline
       });
     }, onStreamingText);
-  }, [setMessages, setResponseLength, setStreamMode, setStreamingToolUses, setStreamingThinking, onStreamingText]);
+  }, [setMessages, setResponseLength, setStreamMode, setStreamingToolUses, setStreamingThinking, onStreamingText, repinScroll]);
   const onQueryImpl = useCallback(async (messagesIncludingNewMessages: MessageType[], newMessages: MessageType[], abortController: AbortController, shouldQuery: boolean, additionalAllowedTools: string[], mainLoopModelParam: string, effort?: EffortValue) => {
     // Prepare IDE integration for new prompt. Read mcpClients fresh from
     // store — useManageMCPConnections may have populated it since the
@@ -3443,6 +3442,10 @@ export function REPL({
       setInputMode('prompt');
       setIDESelection(undefined);
       setSubmitCount(_ => _ + 1);
+      // A new user turn should not inherit the previous turn's retained
+      // thinking. Continuation requests within the same turn preserve it in
+      // handleMessageFromStream(stream_request_start), so clear it here.
+      setStreamingThinking(null);
       helpers.clearBuffer();
       tipPickedThisTurnRef.current = false;
 

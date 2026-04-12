@@ -4,7 +4,10 @@ import {
   getSessionId,
   isSessionPersistenceDisabled,
 } from 'src/bootstrap/state.js'
-import type { SDKMessage } from 'src/entrypoints/agentSdkTypes.js'
+import type {
+  SDKAssistantMessage,
+  SDKMessage,
+} from 'src/entrypoints/agentSdkTypes.js'
 import type { CanUseToolFn } from '../hooks/useCanUseTool.js'
 import { runTools } from '../services/tools/toolOrchestration.js'
 import { findToolByName, type Tool, type Tools } from '../Tool.js'
@@ -17,6 +20,7 @@ import {
 } from '../tools/FileReadTool/constants.js'
 import { FILE_WRITE_TOOL_NAME } from '../tools/FileWriteTool/prompt.js'
 import type { Message } from '../types/message.js'
+import type { PermissionDecision, PermissionResult } from '../types/permissions.js'
 import type { OrphanedPermission } from '../types/textInputTypes.js'
 import { logForDebugging } from './debug.js'
 import { isEnvTruthy } from './envUtils.js'
@@ -121,7 +125,7 @@ export function* normalizeMessage(message: Message): Generator<SDKMessage> {
           parent_tool_use_id: null,
           session_id: getSessionId(),
           uuid: _.uuid,
-          error: _.error,
+          error: _.error as SDKAssistantMessage['error'],
         }
       }
       return
@@ -143,7 +147,7 @@ export function* normalizeMessage(message: Message): Generator<SDKMessage> {
                 parent_tool_use_id: message.parentToolUseID,
                 session_id: getSessionId(),
                 uuid: _.uuid,
-                error: _.error,
+                error: _.error as SDKAssistantMessage['error'],
               }
               break
             case 'user':
@@ -153,7 +157,10 @@ export function* normalizeMessage(message: Message): Generator<SDKMessage> {
                 parent_tool_use_id: message.parentToolUseID,
                 session_id: getSessionId(),
                 uuid: _.uuid,
-                timestamp: _.timestamp,
+                timestamp:
+                  typeof _.timestamp === 'string'
+                    ? _.timestamp
+                    : _.timestamp?.toString(),
                 isSynthetic: _.isMeta || _.isVisibleInTranscriptOnly,
                 tool_use_result: _.mcpMeta
                   ? { content: _.toolUseResult, ..._.mcpMeta }
@@ -216,7 +223,10 @@ export function* normalizeMessage(message: Message): Generator<SDKMessage> {
           parent_tool_use_id: null,
           session_id: getSessionId(),
           uuid: _.uuid,
-          timestamp: _.timestamp,
+          timestamp:
+            typeof _.timestamp === 'string'
+              ? _.timestamp
+              : _.timestamp?.toString(),
           isSynthetic: _.isMeta || _.isVisibleInTranscriptOnly,
           tool_use_result: _.mcpMeta
             ? { content: _.toolUseResult, ..._.mcpMeta }
@@ -237,7 +247,8 @@ export async function* handleOrphanedPermission(
 ): AsyncGenerator<SDKMessage, void, unknown> {
   const persistSession = !isSessionPersistenceDisabled()
   const { permissionResult, assistantMessage } = orphanedPermission
-  const { toolUseID } = permissionResult
+  const toolUseID =
+    'toolUseID' in permissionResult ? permissionResult.toolUseID : undefined
 
   if (!toolUseID) {
     return
@@ -283,13 +294,31 @@ export async function* handleOrphanedPermission(
     input: finalInput,
   }
 
-  const canUseTool: CanUseToolFn = async () => ({
-    ...permissionResult,
-    decisionReason: {
-      type: 'mode',
-      mode: 'default' as const,
-    },
-  })
+  const canUseTool: CanUseToolFn = async () => {
+    const decision: PermissionDecision<Record<string, unknown>> =
+      permissionResult.behavior === 'passthrough'
+        ? {
+            behavior: 'ask',
+            message: permissionResult.message,
+            updatedInput: undefined,
+            decisionReason: {
+              type: 'mode',
+              mode: 'default' as const,
+            },
+            suggestions: permissionResult.suggestions,
+            blockedPath: permissionResult.blockedPath,
+            pendingClassifierCheck: permissionResult.pendingClassifierCheck,
+          }
+        : {
+            ...permissionResult,
+            decisionReason: {
+              type: 'mode',
+              mode: 'default' as const,
+            },
+          }
+
+    return decision
+  }
 
   // Add the assistant message with tool_use to messages BEFORE executing
   // so the conversation history is complete (tool_use -> tool_result).

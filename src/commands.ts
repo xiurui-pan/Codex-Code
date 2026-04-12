@@ -176,21 +176,13 @@ const voiceCommand = feature('VOICE_MODE')
 const forceSnip = feature('HISTORY_SNIP')
   ? require('./commands/force-snip.js').default
   : null
-const workflowsCmd = feature('WORKFLOW_SCRIPTS')
-  ? (
-      require('./commands/workflows/index.js') as typeof import('./commands/workflows/index.js')
-    ).default
-  : null
+const workflowsCmd = null
 const webCmd = feature('CCR_REMOTE_SETUP')
   ? (
       require('./commands/remote-setup/index.js') as typeof import('./commands/remote-setup/index.js')
     ).default
   : null
-const clearSkillIndexCache = feature('EXPERIMENTAL_SKILL_SEARCH')
-  ? (
-      require('./services/skillSearch/localSearch.js') as typeof import('./services/skillSearch/localSearch.js')
-    ).clearSkillIndexCache
-  : null
+const clearSkillIndexCache: (() => void) | null = null
 const subscribePr = feature('KAIROS_GITHUB_WEBHOOKS')
   ? require('./commands/subscribe-pr.js').default
   : null
@@ -198,16 +190,8 @@ const ultraplan = feature('ULTRAPLAN')
   ? require('./commands/ultraplan.js').default
   : null
 const torch = feature('TORCH') ? require('./commands/torch.js').default : null
-const peersCmd = feature('UDS_INBOX')
-  ? (
-      require('./commands/peers/index.js') as typeof import('./commands/peers/index.js')
-    ).default
-  : null
-const forkCmd = feature('FORK_SUBAGENT')
-  ? (
-      require('./commands/fork/index.js') as typeof import('./commands/fork/index.js')
-    ).default
-  : null
+const peersCmd = null
+const forkCmd = null
 const buddy = (
   require('./commands/buddy/index.js') as typeof import('./commands/buddy/index.js')
 ).default
@@ -493,11 +477,7 @@ async function getSkills(cwd: string): Promise<{
 }
 
 /* eslint-disable @typescript-eslint/no-require-imports */
-const getWorkflowCommands = feature('WORKFLOW_SCRIPTS')
-  ? (
-      require('./tools/WorkflowTool/createWorkflowCommand.js') as typeof import('./tools/WorkflowTool/createWorkflowCommand.js')
-    ).getWorkflowCommands
-  : null
+const getWorkflowCommands: ((cwd: string) => Promise<Command[]>) | null = null
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 /**
@@ -732,7 +712,7 @@ export const REMOTE_SAFE_COMMANDS: Set<Command> = new Set(
     keybindings, // Keybinding management
     statusline, // Status line toggle
     stickers, // Stickers
-  ].filter((c): c is Command => c !== null),
+  ].filter(Boolean) as Command[],
 )
 
 /**
@@ -755,7 +735,7 @@ export const BRIDGE_SAFE_COMMANDS: Set<Command> = new Set(
     summary, // Summarize conversation
     releaseNotes, // Show changelog
     files, // List tracked files
-  ].filter((c): c is Command => c !== null),
+  ].filter(Boolean) as Command[],
 )
 
 /**

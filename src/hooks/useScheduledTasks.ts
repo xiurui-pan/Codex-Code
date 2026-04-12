@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { type Dispatch, type SetStateAction, useEffect, useRef } from 'react'
 import { useAppStateStore, useSetAppState } from '../state/AppState.js'
 import { isTerminalTaskStatus } from '../Task.js'
 import {
@@ -26,7 +26,7 @@ type Props = {
    * enqueued at 'later' priority either way and drains between turns.
    */
   assistantMode?: boolean
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>
+  setMessages: Dispatch<SetStateAction<Message[]>>
 }
 
 /**

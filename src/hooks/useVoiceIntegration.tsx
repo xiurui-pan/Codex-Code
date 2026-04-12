@@ -1,6 +1,14 @@
 import { feature } from 'bun:bundle';
-import * as React from 'react';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { createRequire } from 'node:module';
+import {
+  type Dispatch,
+  type RefObject,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react';
 import { useNotifications } from '../context/notifications.js';
 import { useIsModalOverlayActive } from '../context/overlayContext.js';
 import { useGetVoiceState, useSetVoiceState, useVoiceState } from '../context/voice.js';
@@ -15,7 +23,8 @@ import { useVoiceEnabled } from './useVoiceEnabled.js';
 
 // Dead code elimination: conditional import for voice input hook.
 /* eslint-disable @typescript-eslint/no-require-imports */
-import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+
 // Capture the module namespace, not the function: spyOn() mutates the module
 // object, so `voiceNs.useVoice(...)` resolves to the spy even if this module
 // was loaded before the spy was installed (test ordering independence).
@@ -33,7 +42,6 @@ const voiceNs: {
   })
 };
 /* eslint-enable @typescript-eslint/no-require-imports */
-const require = createRequire(import.meta.url);
 
 // Maximum gap (ms) between key presses to count as held (auto-repeat).
 // Terminal auto-repeat fires every 30-80ms; 120ms covers jitter while
@@ -92,9 +100,9 @@ type InsertTextHandle = {
   cursorOffset: number;
 };
 type UseVoiceIntegrationArgs = {
-  setInputValueRaw: React.Dispatch<React.SetStateAction<string>>;
-  inputValueRef: React.RefObject<string>;
-  insertTextRef: React.RefObject<InsertTextHandle | null>;
+  setInputValueRaw: Dispatch<SetStateAction<string>>;
+  inputValueRef: RefObject<string>;
+  insertTextRef: RefObject<InsertTextHandle | null>;
 };
 type InterimRange = {
   start: number;

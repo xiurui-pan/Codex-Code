@@ -18,13 +18,29 @@ import { detectImageFormatFromBase64 } from '../utils/imageResizer.js'
  * Returns the extracted fields, or undefined if the message should be
  * skipped (non-user type, missing/empty content).
  */
+type SDKUserMessageWithContent = Extract<SDKMessage, { type: 'user' }> & {
+  message: { content: string | Array<ContentBlockParam> }
+}
+
+function getUserMessageContent(
+  msg: SDKMessage,
+): string | Array<ContentBlockParam> | undefined {
+  if (msg.type !== 'user') return undefined
+  if (msg.message === null || typeof msg.message !== 'object') return undefined
+  if (!('content' in msg.message)) return undefined
+
+  const { content } = msg.message as { content?: unknown }
+  if (typeof content === 'string') return content
+  if (Array.isArray(content)) return content as ContentBlockParam[]
+  return undefined
+}
+
 export function extractInboundMessageFields(
   msg: SDKMessage,
 ):
   | { content: string | Array<ContentBlockParam>; uuid: UUID | undefined }
   | undefined {
-  if (msg.type !== 'user') return undefined
-  const content = msg.message?.content
+  const content = getUserMessageContent(msg)
   if (!content) return undefined
   if (Array.isArray(content) && content.length === 0) return undefined
 

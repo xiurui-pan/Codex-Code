@@ -1,11 +1,23 @@
 export type BashProgress = {
   type: 'bash_progress'
-  [key: string]: unknown
+  output: string
+  fullOutput: string
+  elapsedTimeSeconds: number
+  totalLines: number
+  totalBytes: number
+  taskId?: string
+  timeoutMs?: number
 }
 
 export type PowerShellProgress = {
   type: 'powershell_progress'
-  [key: string]: unknown
+  output: string
+  fullOutput: string
+  elapsedTimeSeconds: number
+  totalLines: number
+  totalBytes: number
+  timeoutMs?: number
+  taskId?: string
 }
 
 export type MCPProgress = {
@@ -18,13 +30,21 @@ export type WebSearchProgress = {
   [key: string]: unknown
 }
 
+import type { AssistantMessage, NormalizedUserMessage } from './message.js'
+
 export type AgentToolProgress = {
-  type: 'agent_tool_progress'
+  type: 'agent_progress'
+  message: AssistantMessage | NormalizedUserMessage
+  prompt?: string
+  agentId?: string
   [key: string]: unknown
 }
 
 export type SkillToolProgress = {
-  type: 'skill_tool_progress'
+  type: 'skill_progress'
+  message: AssistantMessage | NormalizedUserMessage
+  prompt?: string
+  agentId?: string
   [key: string]: unknown
 }
 

@@ -310,10 +310,11 @@ export const SYNTHETIC_MESSAGES = new Set([
 ])
 
 export function isSyntheticMessage(message: Message): boolean {
+  if (message.type !== 'assistant' && message.type !== 'user') {
+    return false
+  }
+
   return (
-    message.type !== 'progress' &&
-    message.type !== 'attachment' &&
-    message.type !== 'system' &&
     Array.isArray(message.message.content) &&
     message.message.content[0]?.type === 'text' &&
     SYNTHETIC_MESSAGES.has(message.message.content[0].text)
@@ -378,7 +379,7 @@ function baseCreateAssistantMessage({
     speed: null,
   },
 }: {
-  content: BetaContentBlock[]
+  content: ContentBlock[]
   isApiErrorMessage?: boolean
   apiError?: AssistantMessage['apiError']
   error?: SDKAssistantMessageError
@@ -400,7 +401,7 @@ function baseCreateAssistantMessage({
       stop_sequence: '',
       type: 'message',
       usage,
-      content,
+      content: content as ContentBlock[],
       context_management: null,
     },
     requestId: undefined,
@@ -420,7 +421,7 @@ export function createAssistantMessage({
   model,
   modelTurnItems,
 }: {
-  content: string | BetaContentBlock[]
+  content: string | ContentBlock[]
   usage?: Usage
   isVirtual?: true
   isVisibleInTranscriptOnly?: true
@@ -430,12 +431,12 @@ export function createAssistantMessage({
   const message = baseCreateAssistantMessage({
     content:
       typeof content === 'string'
-        ? [
+        ? ([
             {
               type: 'text' as const,
               text: content === '' ? NO_CONTENT_MESSAGE : content,
-            } as BetaContentBlock, // NOTE: citations field is not supported in Bedrock API
-          ]
+            },
+          ] as ContentBlock[])
         : content,
     usage,
     isVirtual,
@@ -466,8 +467,8 @@ export function createAssistantAPIErrorMessage({
       {
         type: 'text' as const,
         text: content === '' ? NO_CONTENT_MESSAGE : content,
-      } as BetaContentBlock, // NOTE: citations field is not supported in Bedrock API
-    ],
+      },
+    ] as ContentBlock[],
     isApiErrorMessage: true,
     apiError,
     error,
@@ -707,12 +708,10 @@ export function extractTag(html: string, tagName: string): string | null {
   return null
 }
 
-export function isNotEmptyMessage(message: Message): boolean {
-  if (
-    message.type === 'progress' ||
-    message.type === 'attachment' ||
-    message.type === 'system'
-  ) {
+export function isNotEmptyMessage(
+  message: Message | NormalizedMessage,
+): boolean {
+  if (message.type !== 'assistant' && message.type !== 'user') {
     return true
   }
 
@@ -743,7 +742,7 @@ export function isNotEmptyMessage(message: Message): boolean {
 // Deterministic UUID derivation. Produces a stable UUID-shaped string from a
 // parent UUID + content block index so that the same input always produces the
 // same key across calls. Used by normalizeMessages and synthetic message creation.
-export function deriveUUID(parentUUID: UUID, index: number): UUID {
+export function deriveUUID(parentUUID: UUID | string, index: number): UUID {
   const hex = index.toString(16).padStart(12, '0')
   return `${parentUUID.slice(0, 24)}${hex}` as UUID
 }
@@ -828,10 +827,14 @@ export function normalizeMessages(messages: Message[]): NormalizedMessage[] {
               content: [_],
               toolUseResult: message.toolUseResult,
               mcpMeta: message.mcpMeta,
-              isMeta: message.isMeta,
-              isVisibleInTranscriptOnly: message.isVisibleInTranscriptOnly,
-              isVirtual: message.isVirtual,
-              timestamp: message.timestamp,
+              isMeta: message.isMeta || undefined,
+              isVisibleInTranscriptOnly:
+                message.isVisibleInTranscriptOnly || undefined,
+              isVirtual: message.isVirtual || undefined,
+              timestamp:
+                typeof message.timestamp === 'string'
+                  ? message.timestamp
+                  : message.timestamp?.toString(),
               imagePasteIds: imageId !== undefined ? [imageId] : undefined,
               origin: message.origin,
             }),
@@ -1336,8 +1339,7 @@ export function buildMessageLookups(
     if (msg.message.id === lastAssistantMsgId) continue
     for (const content of msg.message.content) {
       if (
-        (content.type === 'server_tool_use' ||
-          content.type === 'mcp_tool_use') &&
+        content.type === 'server_tool_use' &&
         !resolvedToolUseIDs.has((content as { id: string }).id)
       ) {
         const id = (content as { id: string }).id
@@ -1485,10 +1487,8 @@ export function getToolUseIDs(
   return new Set(
     normalizedMessages
       .filter(
-        (_): _ is NormalizedAssistantMessage<BetaToolUseBlock> =>
-          _.type === 'assistant' &&
-          Array.isArray(_.message.content) &&
-          _.message.content[0]?.type === 'tool_use',
+        (_): _ is NormalizedAssistantMessage<ToolUseBlock> =>
+          _.type === 'assistant' && _.message.content[0]?.type === 'tool_use',
       )
       .map(_ => _.message.content[0].id),
   )
@@ -1787,7 +1787,7 @@ export function stripCallerFieldFromAssistantMessage(
           name: block.name,
           input: block.input,
         }
-      }),
+      }) as ContentBlock[],
     },
   }
 }
@@ -2125,7 +2125,10 @@ export function normalizeMessagesForAPI(
           const userMsg = createUserMessage({
             content: message.content,
             uuid: message.uuid,
-            timestamp: message.timestamp,
+            timestamp:
+              typeof message.timestamp === 'string'
+                ? message.timestamp
+                : message.timestamp?.toString(),
           })
           const lastMessage = last(result)
           if (lastMessage?.type === 'user') {
@@ -2252,11 +2255,7 @@ export function normalizeMessagesForAPI(
           // like 'caller' from tool_use blocks, as these are only valid with the
           // tool search beta header
           const toolSearchEnabled = isToolSearchEnabledOptimistic()
-          const normalizedMessage: AssistantMessage = {
-            ...message,
-            message: {
-              ...message.message,
-              content: message.message.content.map(block => {
+          const normalizedContent = message.message.content.map(block => {
                 if (block.type === 'tool_use') {
                   const tool = tools.find(t => toolMatchesName(t, block.name))
                   const normalizedInput = tool
@@ -2287,7 +2286,12 @@ export function normalizeMessagesForAPI(
                   }
                 }
                 return block
-              }),
+              })
+          const normalizedMessage: AssistantMessage = {
+            ...message,
+            message: {
+              ...message.message,
+              content: normalizedContent as ContentBlock[],
             },
           }
 
@@ -2316,7 +2320,7 @@ export function normalizeMessagesForAPI(
         }
         case 'attachment': {
           const rawAttachmentMessage = normalizeAttachmentForAPI(
-            message.attachment,
+            message.attachment as Attachment,
           )
           const attachmentMessage = checkStatsigFeatureGate_CACHED_MAY_BE_STALE(
             'tengu_chair_sermon',
@@ -2611,8 +2615,9 @@ function smooshIntoToolResult(
   // blocks are text — this is the common case (hook reminders into Bash/Read
   // results) and matches the legacy smoosh output shape.
   if (allText && (existing === undefined || typeof existing === 'string')) {
+    const existingText = typeof existing === 'string' ? existing : ''
     const joined = [
-      (existing ?? '').trim(),
+      existingText.trim(),
       ...blocks.map(b => (b as TextBlockParam).text.trim()),
     ]
       .filter(Boolean)
@@ -3000,13 +3005,19 @@ export function handleMessageFromStream(
   onApiMetrics?: (metrics: { ttftMs: number }) => void,
   onStreamingText?: (f: (current: string | null) => string | null) => void,
 ): void {
-  if (
-    message.type !== 'stream_event' &&
-    message.type !== 'stream_request_start'
-  ) {
+  if (message.type !== 'stream_event') {
+    if (message.type === 'stream_request_start') {
+      onSetStreamMode('requesting')
+      onStreamingToolUses(() => [])
+      onStreamingText?.(() => null)
+      onStreamingThinking?.(current => (current?.isStreaming ? null : current))
+      return
+    }
     // Handle tombstone messages - remove the targeted message instead of adding
     if (message.type === 'tombstone') {
-      onTombstone?.(message.message)
+      if (message.targetUuid) {
+        onTombstone?.({ ...message, uuid: message.targetUuid } as Message)
+      }
       return
     }
     // Tool use summary messages are SDK-only, ignore them in stream handling
@@ -3031,14 +3042,6 @@ export function handleMessageFromStream(
     // transition from streaming text → final message atomic (no gap, no duplication).
     onStreamingText?.(() => null)
     onMessage(message)
-    return
-  }
-
-  if (message.type === 'stream_request_start') {
-    onStreamingText?.(() => null)
-    onStreamingToolUses(() => [])
-    onStreamingThinking?.(() => null)
-    onSetStreamMode('requesting')
     return
   }
 
@@ -3095,8 +3098,6 @@ export function handleMessageFromStream(
         case 'server_tool_use':
         case 'web_search_tool_result':
         case 'code_execution_tool_result':
-        case 'mcp_tool_use':
-        case 'mcp_tool_result':
         case 'container_upload':
         case 'web_fetch_tool_result':
         case 'bash_code_execution_tool_result':
@@ -3134,13 +3135,15 @@ export function handleMessageFromStream(
           })
           return
         }
-        case 'thinking_delta':
-          onUpdateLength(message.event.delta.thinking)
+        case 'thinking_delta': {
+          const delta = 'thinking' in message.event.delta ? message.event.delta.thinking : ''
+          onUpdateLength(delta)
           onStreamingThinking?.(current => ({
-            thinking: `${current?.thinking ?? ''}${message.event.delta.thinking}`,
+            thinking: `${current?.thinking ?? ''}${delta}`,
             isStreaming: true,
           }))
           return
+        }
         case 'signature_delta':
           // Signatures are cryptographic authentication strings, not model
           // output. Excluding them from onUpdateLength prevents them from
@@ -4235,17 +4238,6 @@ You have exited auto mode. The user may now want to interact more directly. You 
       ])
     }
     case 'context_efficiency': {
-      if (feature('HISTORY_SNIP')) {
-        const { SNIP_NUDGE_TEXT } =
-          // eslint-disable-next-line @typescript-eslint/no-require-imports
-          require('../services/compact/snipCompact.js') as typeof import('../services/compact/snipCompact.js')
-        return wrapMessagesInSystemReminder([
-          createUserMessage({
-            content: SNIP_NUDGE_TEXT,
-            isMeta: true,
-          }),
-        ])
-      }
       return []
     }
     case 'date_change': {
@@ -5239,10 +5231,7 @@ export function ensureToolResultPairing(
     message.type === 'assistant' &&
     message.message.content.length > 0 &&
     message.message.content.every(
-      block =>
-        block.type === 'tool_use' ||
-        block.type === 'server_tool_use' ||
-        block.type === 'mcp_tool_use',
+      block => block.type === 'tool_use' || block.type === 'server_tool_use',
     )
 
   const isToolResultMessage = (
@@ -5377,7 +5366,7 @@ export function ensureToolResultPairing(
         seenToolUseIds.add(block.id)
       }
       if (
-        (block.type === 'server_tool_use' || block.type === 'mcp_tool_use') &&
+        block.type === 'server_tool_use' &&
         !serverResultIds.has((block as { id: string }).id)
       ) {
         repaired = true
@@ -5581,9 +5570,7 @@ export function ensureToolResultPairing(
           .filter(b => b.type === 'tool_use')
           .map(b => (b as ToolUseBlock | ToolUseBlockParam).id)
         const serverToolUses = m.message.content
-          .filter(
-            b => b.type === 'server_tool_use' || b.type === 'mcp_tool_use',
-          )
+          .filter(b => b.type === 'server_tool_use')
           .map(b => (b as { id: string }).id)
         const parts = [
           `id=${m.message.id}`,

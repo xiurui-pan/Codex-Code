@@ -140,7 +140,7 @@ export function BrowseMarketplace({
         } of marketplaces_0) {
           if (marketplace) {
             // Count how many plugins from this marketplace are installed
-            const installedFromThisMarketplace = count(marketplace.plugins, plugin => isPluginInstalled(createPluginId(plugin.name, name)));
+            const installedFromThisMarketplace = count(marketplace.plugins, plugin => isPluginInstalled(createPluginId((plugin as InstallablePlugin['entry']).name, name)));
             marketplaceInfos.push({
               name,
               totalPlugins: marketplace.plugins.length,
@@ -159,7 +159,7 @@ export function BrowseMarketplace({
         setMarketplaces(marketplaceInfos);
 
         // Handle marketplace loading errors/warnings
-        const successCount = count(marketplaces_0, m => m.data !== null);
+        const successCount = marketplaces_0.filter(m => m.data !== null).length;
         const errorResult = formatMarketplaceLoadingErrors(failures, successCount);
         if (errorResult) {
           if (errorResult.type === 'warning') {
@@ -330,7 +330,8 @@ export function BrowseMarketplace({
       });
       if (result.success) {
         successCount_0++;
-      } else {
+      }
+      if (result.success === false) {
         failureCount++;
         newFailedPlugins.push({
           name: plugin_1.entry.name,
@@ -395,7 +396,9 @@ export function BrowseMarketplace({
       setParentViewState({
         type: 'menu'
       });
-    } else {
+      return;
+    }
+    if (result_0.success === false) {
       setIsInstalling(false);
       setInstallError(result_0.error);
     }

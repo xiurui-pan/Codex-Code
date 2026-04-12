@@ -170,7 +170,7 @@ test('responses compact body uses the dedicated compact request shape', async ()
   assert.deepEqual(body.text, {
     verbosity: 'low',
   })
-  assert.deepEqual(body.include, ['reasoning.encrypted_content'])
+  assert.equal('include' in body, false)
 })
 
 test('responses compact transport posts to /responses/compact and parses opaque output items', async () => {
@@ -238,6 +238,7 @@ test('responses compact transport posts to /responses/compact and parses opaque 
     assert.equal(capturedBody?.stream, undefined)
     assert.equal(capturedBody?.tool_choice, undefined)
     assert.equal(capturedBody?.tools, undefined)
+    assert.equal(capturedBody?.include, undefined)
     assert.deepEqual(
       result.outputItems.map(item => item.type),
       ['message', 'compaction'],

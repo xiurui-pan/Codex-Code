@@ -78,8 +78,9 @@ export function buildToolResultItemsForLocalExecution(
   toolName: string | undefined,
   block: ToolResultBlockParam,
   source: 'history' | 'tool_execution' = 'history',
+  outputTextOverride?: string,
 ): ModelTurnItem[] {
-  const outputText = normalizeToolResultText(block.content)
+  const outputText = outputTextOverride ?? normalizeToolResultText(block.content)
   const items: ModelTurnItem[] = [
     {
       kind: 'tool_output',

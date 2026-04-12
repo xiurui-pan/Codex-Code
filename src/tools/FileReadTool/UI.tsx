@@ -89,15 +89,13 @@ export function renderToolResultMessage(output: Output): React.ReactNode {
       }
     case 'notebook':
       {
-        const {
-          cells
-        } = output.file;
-        if (!cells || cells.length < 1) {
+        const cellCount = output.file.cells.length > 0 ? output.file.cells.length : (output.file.cellCount ?? 0);
+        if (cellCount < 1) {
           return <Text color="error">No cells found in notebook</Text>;
         }
         return <MessageResponse height={1}>
           <Text>
-            Read <Text bold>{cells.length}</Text> cells
+            Read <Text bold>{cellCount}</Text> cells
           </Text>
         </MessageResponse>;
       }

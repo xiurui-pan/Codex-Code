@@ -78,8 +78,10 @@ export function useBackgroundTaskNavigation(options?: {
   const teammateCount = teammateTasks.length
 
   // Check for non-teammate background tasks (local_agent, local_bash, etc.)
-  const hasNonTeammateBackgroundTasks = Object.values(tasks).some(
-    t => isBackgroundTask(t) && t.type !== 'in_process_teammate',
+  const hasNonTeammateBackgroundTasks = Object.values(
+    tasks as Record<string, AppState['tasks'][string]>,
+  ).some((t: AppState['tasks'][string]) =>
+    isBackgroundTask(t) && t.type !== 'in_process_teammate',
   )
 
   // Track previous teammate count to detect when teammates are removed

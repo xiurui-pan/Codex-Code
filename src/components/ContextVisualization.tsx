@@ -323,6 +323,7 @@ export function ContextVisualization(t0) {
   } else {
     t11 = $[57];
   }
+  const visibleMemoryFiles = memoryFiles.filter(_temp28);
   let t12;
   if ($[58] !== memoryFiles) {
     t12 = visibleMemoryFiles.length > 0 && <Box flexDirection="column" marginTop={1}><Box><Text bold={true}>Memory files</Text><Text dimColor={true}> · /memory</Text></Box>{visibleMemoryFiles.map(_temp23)}</Box>;

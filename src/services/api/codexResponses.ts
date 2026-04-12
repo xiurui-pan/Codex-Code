@@ -629,7 +629,7 @@ const PREPENDED_USER_CONTEXT_SUFFIX_PATTERN =
   /\n+\s*IMPORTANT: this context may or may not be relevant to your tasks\. You should not respond to this context unless it is highly relevant to your task\.\n<\/system-reminder>\s*$/s
 
 function wrapCodexUserInstructions(text: string): string {
-  return `# AGENTS.md instructions for ${getCwd()}\n\n<INSTRUCTIONS>\n${text}\n</INSTRUCTIONS>`
+  return text
 }
 
 function escapeXml(text: string): string {
@@ -1334,7 +1334,6 @@ function applyResponsesBodyDefaults({
             effort,
             summary,
           }
-    body.include = ['reasoning.encrypted_content']
   }
 
   const textControls = getResponsesTextControls(resolvedModel)
@@ -1400,7 +1399,6 @@ export async function buildResponsesCompactBody({
             effort,
             summary,
           }
-    body.include = ['reasoning.encrypted_content']
   }
 
   const textControls = getResponsesTextControls(resolvedModel)
@@ -1538,6 +1536,45 @@ class RetryableResponsesStreamError extends Error {
     super(message)
     this.name = 'RetryableResponsesStreamError'
     this.delayMs = delayMs
+  }
+}
+
+function classifyResponsesStreamTransportError(error: unknown): {
+  retryable: boolean
+  message: string
+} {
+  const message = errorMessage(error)
+  if (error instanceof RetryableResponsesStreamError) {
+    return {
+      retryable: true,
+      message,
+    }
+  }
+
+  if (error instanceof SyntaxError) {
+    return {
+      retryable: true,
+      message,
+    }
+  }
+
+  const normalized = message.toLowerCase()
+  if (
+    normalized.includes('unexpected eof') ||
+    normalized.includes('unexpected end of json input') ||
+    normalized.includes('unexpected end of input') ||
+    normalized.includes('stream timed out') ||
+    normalized.includes('terminated')
+  ) {
+    return {
+      retryable: true,
+      message,
+    }
+  }
+
+  return {
+    retryable: false,
+    message,
   }
 }
 
@@ -2451,13 +2488,17 @@ export async function* queryCodexResponsesStream({
         return
       }
 
+      const streamFailure = classifyResponsesStreamTransportError(error)
       if (
-        error instanceof RetryableResponsesStreamError &&
+        streamFailure.retryable &&
         !yieldedRetryUnsafeOutput &&
         streamRetryCount < streamMaxRetries
       ) {
         streamRetryCount += 1
-        const delayMs = error.delayMs ?? getRetryDelayMs(streamRetryCount)
+        const delayMs =
+          error instanceof RetryableResponsesStreamError
+            ? (error.delayMs ?? getRetryDelayMs(streamRetryCount))
+            : getRetryDelayMs(streamRetryCount)
         yield {
           kind: 'retry',
           message: `Reconnecting... ${streamRetryCount}/${streamMaxRetries}`,
@@ -2472,7 +2513,7 @@ export async function* queryCodexResponsesStream({
       yield {
         kind: 'api_error',
         errorMessage: formatCodexProviderApiError(
-          `Custom Codex provider request failed: ${errorMessage(error)}`,
+          `Custom Codex provider request failed: ${streamFailure.message}`,
         ),
       }
       return

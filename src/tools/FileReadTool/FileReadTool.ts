@@ -92,6 +92,7 @@ import {
   renderToolUseTag,
   userFacingName,
 } from './UI.js'
+import { FILE_READ_STORED_TEXT_OMITTED } from './storageShape.js'
 
 // Device files that would hang the process: infinite output or blocking input.
 // Checked by path only (no I/O). Safe devices like /dev/null are intentionally omitted.
@@ -265,6 +266,12 @@ const outputSchema = lazySchema(() => {
           .describe('Number of lines in the returned content'),
         startLine: z.number().describe('The starting line number'),
         totalLines: z.number().describe('Total number of lines in the file'),
+        storedContentOmitted: z
+          .boolean()
+          .optional()
+          .describe(
+            'True when transcript storage omitted the full file content to keep session size bounded',
+          ),
       }),
     }),
     z.object({
@@ -294,6 +301,12 @@ const outputSchema = lazySchema(() => {
           })
           .optional()
           .describe('Image dimension info for coordinate mapping'),
+        storedBase64Omitted: z
+          .boolean()
+          .optional()
+          .describe(
+            'True when transcript storage omitted the image bytes to keep session size bounded',
+          ),
       }),
     }),
     z.object({
@@ -301,6 +314,18 @@ const outputSchema = lazySchema(() => {
       file: z.object({
         filePath: z.string().describe('The path to the notebook file'),
         cells: z.array(z.any()).describe('Array of notebook cells'),
+        cellCount: z
+          .number()
+          .optional()
+          .describe(
+            'Original cell count when transcript storage omitted the full notebook cells',
+          ),
+        storedCellsOmitted: z
+          .boolean()
+          .optional()
+          .describe(
+            'True when transcript storage omitted notebook cell contents to keep session size bounded',
+          ),
       }),
     }),
     z.object({
@@ -309,6 +334,12 @@ const outputSchema = lazySchema(() => {
         filePath: z.string().describe('The path to the PDF file'),
         base64: z.string().describe('Base64-encoded PDF data'),
         originalSize: z.number().describe('Original file size in bytes'),
+        storedBase64Omitted: z
+          .boolean()
+          .optional()
+          .describe(
+            'True when transcript storage omitted the PDF bytes to keep session size bounded',
+          ),
       }),
     }),
     z.object({
@@ -652,6 +683,13 @@ export const FileReadTool = buildTool({
   mapToolResultToToolResultBlockParam(data, toolUseID) {
     switch (data.type) {
       case 'image': {
+        if (data.file.storedBase64Omitted) {
+          return {
+            tool_use_id: toolUseID,
+            type: 'tool_result',
+            content: `Image file read: ${formatFileSize(data.file.originalSize)}`,
+          }
+        }
         return {
           tool_use_id: toolUseID,
           type: 'tool_result',
@@ -668,6 +706,14 @@ export const FileReadTool = buildTool({
         }
       }
       case 'notebook':
+        if (data.file.storedCellsOmitted) {
+          const cellCount = data.file.cellCount ?? 0
+          return {
+            tool_use_id: toolUseID,
+            type: 'tool_result',
+            content: `Notebook file read: ${data.file.filePath} (${cellCount} ${cellCount === 1 ? 'cell' : 'cells'})`,
+          }
+        }
         return mapNotebookCellsToToolResult(data.file.cells, toolUseID)
       case 'pdf':
         // Return PDF metadata only - the actual content is sent as a supplemental DocumentBlockParam
@@ -692,13 +738,18 @@ export const FileReadTool = buildTool({
       case 'text': {
         let content: string
 
-        if (data.file.content) {
+        if (
+          data.file.content &&
+          data.file.content !== FILE_READ_STORED_TEXT_OMITTED
+        ) {
           content =
             memoryFileFreshnessPrefix(data) +
             formatFileLines(data.file) +
             (shouldIncludeFileReadMitigation()
               ? CYBER_RISK_MITIGATION_REMINDER
               : '')
+        } else if (data.file.storedContentOmitted) {
+          content = `File was read earlier: ${data.file.filePath} (${data.file.numLines} ${data.file.numLines === 1 ? 'line' : 'lines'})`
         } else {
           // Determine the appropriate warning message
           content =

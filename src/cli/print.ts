@@ -119,8 +119,15 @@ import type {
   SDKControlMcpSetServersResponse,
   SDKControlReloadPluginsResponse,
 } from 'src/entrypoints/sdk/controlTypes.js'
-import type { PermissionMode } from '@anthropic-ai/claude-agent-sdk'
-import type { PermissionMode as InternalPermissionMode } from 'src/types/permissions.js'
+import type { PermissionMode } from 'src/types/permissions.js'
+import type {
+  ExternalPermissionMode,
+  PermissionMode as InternalPermissionMode,
+} from 'src/types/permissions.js'
+import {
+  isExternalPermissionMode,
+  toExternalPermissionMode,
+} from 'src/utils/permissions/PermissionMode.js'
 import { getCwd } from 'src/utils/cwd.js'
 import omit from 'lodash-es/omit.js'
 import reject from 'lodash-es/reject.js'
@@ -253,6 +260,7 @@ import {
   getPublicModelInfoForOption,
 } from 'src/utils/model/modelOptions.js'
 import {
+  modelSupportsEffort,
   resolveAppliedEffort,
 } from 'src/utils/effort.js'
 import { ensureModelStringsInitialized } from 'src/utils/model/modelStrings.js'
@@ -333,6 +341,7 @@ import { isCurrentPhaseCustomCodexProvider } from '../utils/currentPhase.js'
 
 type AuthModule = typeof import('../utils/auth.js')
 type AuthHandlerModule = typeof import('./handlers/auth.js')
+type OAuthTokens = import('../services/oauth/types.js').OAuthTokens
 type OAuthServiceModule = typeof import('../services/oauth/index.js')
 type SettingsSyncModule = typeof import('../services/settingsSync/index.js')
 type RemoteManagedSettingsModule =
@@ -552,6 +561,16 @@ function getAccountInformationForProvider(): AccountInformation {
   return authModule.getAccountInformation()
 }
 
+function getPublicAccountApiProvider():
+  | 'firstParty'
+  | 'bedrock'
+  | 'vertex'
+  | 'foundry'
+  | undefined {
+  const provider = getAPIProvider()
+  return provider === 'custom' ? undefined : provider
+}
+
 function createOAuthServiceForProvider(): OAuthServiceLike {
   if (isCustomProviderStage()) {
     throw new Error(
@@ -562,7 +581,7 @@ function createOAuthServiceForProvider(): OAuthServiceLike {
   return new oauthModule.OAuthService()
 }
 
-async function installOAuthTokensForProvider(tokens: unknown): Promise<void> {
+async function installOAuthTokensForProvider(tokens: OAuthTokens): Promise<void> {
   if (isCustomProviderStage()) {
     throw new Error(
       'Current stage only supports custom Codex provider; Claude OAuth is disabled.',
@@ -1285,20 +1304,13 @@ function runHeadlessStreaming(
   // notifySessionMetadataChanged, both of which onChangeAppState now covers);
   // keeping it would double-emit status messages.
   setPermissionModeChangedListener(newMode => {
-    // Only emit for SDK-exposed modes.
-    if (
-      newMode === 'default' ||
-      newMode === 'acceptEdits' ||
-      newMode === 'bypassPermissions' ||
-      newMode === 'plan' ||
-      newMode === (feature('TRANSCRIPT_CLASSIFIER') && 'auto') ||
-      newMode === 'dontAsk'
-    ) {
+    // Only emit modes that are part of the external SDK contract.
+    if (isExternalPermissionMode(newMode)) {
       output.enqueue({
         type: 'system',
         subtype: 'status',
         status: null,
-        permissionMode: newMode as PermissionMode,
+        permissionMode: toExternalPermissionMode(newMode),
         uuid: randomUUID(),
         session_id: getSessionId(),
       })
@@ -1452,7 +1464,10 @@ function runHeadlessStreaming(
           session_id: getSessionId(),
           parent_tool_use_id: null,
           uuid: crumb.uuid,
-          timestamp: crumb.timestamp,
+          timestamp:
+            typeof crumb.timestamp === 'string'
+              ? crumb.timestamp
+              : new Date(crumb.timestamp ?? Date.now()).toISOString(),
           isReplay: true,
         } satisfies SDKUserMessageReplay)
       }
@@ -1859,10 +1874,12 @@ function runHeadlessStreaming(
         connection.config.type === 'stdio' ||
         connection.config.type === undefined
       ) {
-        config = {
-          type: 'stdio' as const,
-          command: connection.config.command,
-          args: connection.config.args,
+        if ('command' in connection.config) {
+          config = {
+            type: 'stdio' as const,
+            command: connection.config.command,
+            args: connection.config.args,
+          }
         }
       }
       const serverTools =
@@ -2015,13 +2032,9 @@ function runHeadlessStreaming(
       {}
     for (const [name, config] of Object.entries(newConfigs)) {
       const type = config.type
-      if (
-        type === undefined ||
-        type === 'stdio' ||
-        type === 'sse' ||
-        type === 'http' ||
-        type === 'sdk'
-      ) {
+      if ((type === undefined || type === 'stdio') && 'command' in config) {
+        supportedConfigs[name] = config
+      } else if (type === 'sse' || type === 'http' || type === 'sdk') {
         supportedConfigs[name] = config
       }
     }
@@ -3216,7 +3229,9 @@ function runHeadlessStreaming(
             sdkClient.type === 'connected' &&
             sdkClient.client?.transport?.onmessage
           ) {
-            sdkClient.client.transport.onmessage(mcpRequest.message)
+            sdkClient.client.transport.onmessage(
+              mcpRequest.message as import('@modelcontextprotocol/sdk/types.js').JSONRPCMessage,
+            )
           }
           sendControlResponseSuccess(message)
         } else if (message.request.subtype === 'rewind_files') {
@@ -3874,7 +3889,7 @@ function runHeadlessStreaming(
                     subscriptionType: accountInfo?.subscription,
                     tokenSource: accountInfo?.tokenSource,
                     apiKeySource: accountInfo?.apiKeySource,
-                    apiProvider: getAPIProvider(),
+                    apiProvider: getPublicAccountApiProvider(),
                   },
                 })
               },
@@ -4165,51 +4180,64 @@ function runHeadlessStreaming(
       initialized = true
 
       // Check for duplicate user message - skip if already processed
-      if (message.uuid) {
+      const inboundFields = extractInboundMessageFields(message)
+      if (!inboundFields) {
+        continue
+      }
+
+      const messageUuid =
+        typeof message.uuid === 'string' ? validateUuid(message.uuid) : null
+      if (messageUuid) {
         const sessionId = getSessionId() as UUID
         const existsInSession = await doesMessageExistInSession(
           sessionId,
-          message.uuid,
+          messageUuid,
         )
 
         // Check both historical duplicates (from file) and runtime duplicates (this session)
-        if (existsInSession || receivedMessageUuids.has(message.uuid)) {
-          logForDebugging(`Skipping duplicate user message: ${message.uuid}`)
+        if (existsInSession || receivedMessageUuids.has(messageUuid)) {
+          logForDebugging(`Skipping duplicate user message: ${messageUuid}`)
           // Send acknowledgment for duplicate message if replay mode is enabled
           if (options.replayUserMessages) {
             logForDebugging(
-              `Sending acknowledgment for duplicate user message: ${message.uuid}`,
+              `Sending acknowledgment for duplicate user message: ${messageUuid}`,
             )
             output.enqueue({
               type: 'user',
-              message: message.message,
+              message: {
+                role: 'user',
+                content: inboundFields.content,
+              },
               session_id: sessionId,
               parent_tool_use_id: null,
-              uuid: message.uuid,
-              timestamp: message.timestamp,
+              uuid: messageUuid,
+              timestamp:
+                typeof message.timestamp === 'string'
+                  ? message.timestamp
+                  : new Date(message.timestamp ?? Date.now()).toISOString(),
               isReplay: true,
-            } as SDKUserMessageReplay)
+            } satisfies SDKUserMessageReplay)
           }
           // Historical dup = transcript already has this turn's output, so it
           // ran but its lifecycle was never closed (interrupted before ack).
           // Runtime dups don't need this — the original enqueue path closes them.
           if (existsInSession) {
-            notifyCommandLifecycle(message.uuid, 'completed')
+            notifyCommandLifecycle(messageUuid, 'completed')
           }
           // Don't enqueue duplicate messages for execution
           continue
         }
 
         // Track this UUID to prevent runtime duplicates
-        trackReceivedMessageUuid(message.uuid)
+        trackReceivedMessageUuid(messageUuid)
       }
 
       enqueue({
         mode: 'prompt' as const,
         // file_attachments rides the protobuf catchall from the web composer.
         // Same-ref no-op when absent (no 'file_attachments' key).
-        value: await resolveAndPrepend(message, message.message.content),
-        uuid: message.uuid,
+        value: await resolveAndPrepend(message, inboundFields.content),
+        uuid: messageUuid ?? randomUUID(),
         priority: message.priority,
       })
       // Increment prompt count for attribution tracking and save snapshot
@@ -4571,7 +4599,10 @@ async function handleInitializeRequest(
     })),
     output_style: outputStyle,
     available_output_styles: Object.keys(availableOutputStyles),
-    models: modelInfos,
+    models: modelInfos.map(model => ({
+      ...model,
+      supportedEffortLevels: [...model.supportedEffortLevels],
+    })),
     account: {
       email: accountInfo?.email,
       organization: accountInfo?.organization,
@@ -4581,7 +4612,7 @@ async function handleInitializeRequest(
       // getAccountInformation() returns undefined under 3P providers, so the
       // other fields are all absent. apiProvider disambiguates "not logged
       // in" (firstParty + tokenSource:none) from "3P, login not applicable".
-      apiProvider: getAPIProvider(),
+      apiProvider: getPublicAccountApiProvider(),
     },
     pid: process.pid,
   }
@@ -5358,11 +5389,13 @@ export async function handleOrphanedPermissionResponse({
 }): Promise<boolean> {
   if (
     message.response.subtype === 'success' &&
-    message.response.response?.toolUseID &&
+    message.response.response &&
+    typeof message.response.response === 'object' &&
+    'toolUseID' in message.response.response &&
     typeof message.response.response.toolUseID === 'string'
   ) {
+    const toolUseID = message.response.response.toolUseID
     const permissionResult = message.response.response as PermissionResult
-    const { toolUseID } = permissionResult
     if (!toolUseID) {
       return false
     }

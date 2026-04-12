@@ -14,22 +14,17 @@ test('system prompt restores brief milestone updates without command echoing', (
   assert.match(source, /Be concise, but do not go silent\./)
   assert.match(
     source,
-    /Before exploring or doing substantial work, start with a brief user update that says what you are checking first\./,
-  )
-  assert.match(
-    source,
     /Before making tool calls, send a brief preamble to the user explaining what you are about to do\./,
   )
   assert.match(source, /Logically group related actions:/)
   assert.match(source, /Build on prior context:/)
-  assert.match(source, /Exception: avoid adding a preamble for every trivial read unless it is part of a larger grouped action\./)
   assert.match(
     source,
-    /I’ve explored the repo; now checking the API route definitions\./,
+    /Exception: skip the preamble for straightforward single reads, one-off local searches, or other trivial checks unless they are part of a larger grouped action\./,
   )
   assert.match(
     source,
-    /The messages you send before tool calls should describe what is immediately about to be done next in very concise language\./,
+    /I’ve explored the repo; now checking the API route definitions\./,
   )
   assert.match(source, /Do not narrate the terminal\./)
   assert.match(
@@ -40,23 +35,14 @@ test('system prompt restores brief milestone updates without command echoing', (
     source,
     /they can see your tool calls\./,
   )
+  assert.doesNotMatch(source, /before tool batches and at natural milestones\./)
 })
 
-test('codex mode reuses the stronger Claude-style communication section', () => {
+test('codex mode no longer forces the stronger Claude-style communication section', () => {
   const source = readSource('src/constants/prompts.ts')
 
-  assert.match(
-    source,
-    /process\.env\.USER_TYPE === 'ant'[\s\S]*isCurrentPhaseCustomCodexProvider\(\)/,
-  )
-  assert.match(
-    source,
-    /Assume users can't see most tool calls or thinking - only your text output\./,
-  )
-  assert.match(
-    source,
-    /Before your first tool call, briefly state what you're about to do\./,
-  )
+  assert.match(source, /if \(process\.env\.USER_TYPE === 'ant'\) \{/)
+  assert.match(source, /if \(process\.env\.USER_TYPE === 'ant'\) \{\s+return `# Communicating with the user/s)
   assert.doesNotMatch(
     source,
     /After a few consecutive tool-only turns, pause and send one short progress update before continuing\./,

@@ -5,7 +5,7 @@
  * This component renders nothing - it just registers the keybinding handlers.
  */
 import { feature } from 'bun:bundle';
-import { useCallback } from 'react';
+import { type Dispatch, type SetStateAction, useCallback } from 'react';
 import instances from '../ink/instances.js';
 import { useKeybinding } from '../keybindings/useKeybinding.js';
 import type { Screen } from '../screens/REPL.js';
@@ -18,9 +18,9 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 type Props = {
   screen: Screen;
-  setScreen: React.Dispatch<React.SetStateAction<Screen>>;
+  setScreen: Dispatch<SetStateAction<Screen>>;
   showAllInTranscript: boolean;
-  setShowAllInTranscript: React.Dispatch<React.SetStateAction<boolean>>;
+  setShowAllInTranscript: Dispatch<SetStateAction<boolean>>;
   messageCount: number;
   onEnterTranscript?: () => void;
   onExitTranscript?: () => void;

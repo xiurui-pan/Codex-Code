@@ -26,7 +26,7 @@ import { getMainLoopModel, getRuntimeMainLoopModel } from '../../../utils/model/
 import { createPromptRuleContent, isClassifierPermissionsEnabled, PROMPT_PREFIX } from '../../../utils/permissions/bashClassifier.js';
 import { type PermissionMode, toExternalPermissionMode } from '../../../utils/permissions/PermissionMode.js';
 import type { PermissionUpdate } from '../../../utils/permissions/PermissionUpdateSchema.js';
-import { isAutoModeGateEnabled, restoreDangerousPermissions, stripDangerousPermissionsForAutoMode } from '../../../utils/permissions/permissionSetup.js';
+import { isAutoModeGateEnabled, restoreDangerousPermissions } from '../../../utils/permissions/permissionSetup.js';
 import { getPewterLedgerVariant, isPlanModeInterviewPhaseEnabled } from '../../../utils/planModeV2.js';
 import { getPlan, getPlanFilePath } from '../../../utils/plans.js';
 import { editFileInEditor, editPromptInEditor } from '../../../utils/promptEditor.js';
@@ -192,7 +192,9 @@ export function ExitPlanModePermissionRequest({
       return next;
     });
   }, []);
-  const imageAttachments = Object.values(pastedContents).filter(c => c.type === 'image');
+  const imageAttachments = (Object.values(pastedContents) as PastedContent[]).filter(
+    c => c.type === 'image',
+  );
   const hasImages = imageAttachments.length > 0;
 
   // TODO: Delete the branch after moving to V2
@@ -221,10 +223,6 @@ export function ExitPlanModePermissionRequest({
     return plan ?? 'No plan found. Please write your plan to the plan file first.';
   });
   const [showSaveMessage, setShowSaveMessage] = useState(false);
-  // Track Ctrl+G local edits so updatedInput can include the plan (the tool
-  // only echoes the plan in tool_result when input.plan is set — otherwise
-  // the model already has it in context from writing the plan file).
-  const [planEditedLocally, setPlanEditedLocally] = useState(false);
 
   // Auto-hide save message after 5 seconds
   useEffect(() => {
@@ -251,7 +249,6 @@ export function ExitPlanModePermissionRequest({
             });
           }
           if (result.content !== null) {
-            if (result.content !== currentPlan) setPlanEditedLocally(true);
             setCurrentPlan(result.content);
             setShowSaveMessage(true);
           }
@@ -345,13 +342,6 @@ export function ExitPlanModePermissionRequest({
       return;
     }
 
-    // V1: pass plan in input. V2: plan is on disk, but if the user edited it
-    // via Ctrl+G we pass it through so the tool echoes the edit in tool_result
-    // (otherwise the model never sees the user's changes).
-    const updatedInput = isV2 && !planEditedLocally ? {} : {
-      plan: currentPlan
-    };
-
     // If auto was active during plan (from auto mode or opt-in) and NOT going
     // to auto, deactivate auto + restore permissions + fire exit attachment.
     if (feature('TRANSCRIPT_CLASSIFIER')) {
@@ -381,25 +371,18 @@ export function ExitPlanModePermissionRequest({
     if (value !== 'no') {
       autoNameSessionFromPlan(currentPlan, setAppState, !isKeepContextOption);
     }
-    if (value !== 'no' && !isKeepContextOption) {
-      // Determine the permission mode based on the selected option
-      let mode: PermissionMode = 'default';
-      if (value === 'yes-bypass-permissions') {
-        mode = 'bypassPermissions';
-      } else if (value === 'yes-accept-edits') {
-        mode = 'acceptEdits';
-      } else if (feature('TRANSCRIPT_CLASSIFIER') && value === 'yes-auto-clear-context' && isAutoModeGateEnabled()) {
-        // REPL's processInitialMessage handles stripDangerousPermissions + mode,
-        // but does NOT set autoModeActive. Gate-off falls through to 'default'.
-        mode = 'auto';
-        autoModeStateModule?.setAutoModeActive(true);
-      }
-
+    const queueApprovedPlanExecution = ({
+      mode,
+      clearContext
+    }: {
+      mode: PermissionMode;
+      clearContext: boolean;
+    }): void => {
       // Log plan exit event
       logEvent('tengu_plan_exit', {
         planLengthChars: currentPlan.length,
         outcome: value as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-        clearContext: true,
+        clearContext,
         interviewPhaseEnabled: isPlanModeInterviewPhaseEnabled(),
         planStructureVariant,
         hasFeedback: !!acceptFeedback
@@ -424,49 +407,54 @@ export function ExitPlanModePermissionRequest({
             }),
             planContent: currentPlan
           },
-          clearContext: true,
+          clearContext,
           mode,
           allowedPrompts
         }
       }));
       setHasExitedPlanMode(true);
+      if (!clearContext) {
+        setNeedsPlanModeExitAttachment(true);
+      }
       onDone();
       onReject();
-      // Reject the tool use to unblock the query loop
-      // The REPL will see pendingInitialQuery and trigger fresh query
+      // Reject the tool use to unblock the current query loop, then let the
+      // REPL start a fresh implementation query from initialMessage.
       toolUseConfirm.onReject();
-      return;
-    }
-
-    // Handle auto keep-context option — needs special handling because
-    // buildPermissionUpdates maps auto to 'default' via toExternalPermissionMode.
-    // We set the mode directly via setAppState and sync the bootstrap state.
-    if (feature('TRANSCRIPT_CLASSIFIER') && value === 'yes-resume-auto-mode' && isAutoModeGateEnabled()) {
-      logEvent('tengu_plan_exit', {
-        planLengthChars: currentPlan.length,
-        outcome: value as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-        clearContext: false,
-        interviewPhaseEnabled: isPlanModeInterviewPhaseEnabled(),
-        planStructureVariant,
-        hasFeedback: !!acceptFeedback
+    };
+    if (value !== 'no' && !isKeepContextOption) {
+      // Determine the permission mode based on the selected option
+      let mode: PermissionMode = 'default';
+      if (value === 'yes-bypass-permissions') {
+        mode = 'bypassPermissions';
+      } else if (value === 'yes-accept-edits') {
+        mode = 'acceptEdits';
+      } else if (feature('TRANSCRIPT_CLASSIFIER') && value === 'yes-auto-clear-context' && isAutoModeGateEnabled()) {
+        // REPL's processInitialMessage handles stripDangerousPermissions + mode,
+        // but does NOT set autoModeActive. Gate-off falls through to 'default'.
+        mode = 'auto';
+        autoModeStateModule?.setAutoModeActive(true);
+      }
+      queueApprovedPlanExecution({
+        mode,
+        clearContext: true
       });
-      setHasExitedPlanMode(true);
-      setNeedsPlanModeExitAttachment(true);
-      autoModeStateModule?.setAutoModeActive(true);
-      setAppState(prev => ({
-        ...prev,
-        toolPermissionContext: stripDangerousPermissionsForAutoMode({
-          ...prev.toolPermissionContext,
-          mode: 'auto',
-          prePlanMode: undefined
-        })
-      }));
-      onDone();
-      toolUseConfirm.onAllow(updatedInput, [], acceptFeedback);
       return;
     }
 
-    // Handle keep-context options (goes through normal onAllow flow)
+    // Keep-context approvals must also launch a fresh implementation turn.
+    // Merely allowing ExitPlanMode leaves the model free to keep discussing the
+    // old request instead of actually executing the approved plan.
+    if (feature('TRANSCRIPT_CLASSIFIER') && value === 'yes-resume-auto-mode' && isAutoModeGateEnabled()) {
+      autoModeStateModule?.setAutoModeActive(true);
+      queueApprovedPlanExecution({
+        mode: 'auto',
+        clearContext: false
+      });
+      return;
+    }
+
+    // Handle keep-context options
     // yes-resume-auto-mode falls through here when the auto mode gate is
     // disabled (e.g. circuit breaker fired after the dialog rendered).
     // Without this fallback the function would return without resolving the
@@ -480,39 +468,25 @@ export function ExitPlanModePermissionRequest({
     };
     const keepContextMode = keepContextModes[value];
     if (keepContextMode) {
-      logEvent('tengu_plan_exit', {
-        planLengthChars: currentPlan.length,
-        outcome: value as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-        clearContext: false,
-        interviewPhaseEnabled: isPlanModeInterviewPhaseEnabled(),
-        planStructureVariant,
-        hasFeedback: !!acceptFeedback
+      queueApprovedPlanExecution({
+        mode: keepContextMode,
+        clearContext: false
       });
-      setHasExitedPlanMode(true);
-      setNeedsPlanModeExitAttachment(true);
-      onDone();
-      toolUseConfirm.onAllow(updatedInput, buildPermissionUpdates(keepContextMode, allowedPrompts), acceptFeedback);
       return;
     }
 
-    // Handle standard approval options
+    // Legacy approval values — route them through the same explicit
+    // implementation handoff if they ever appear.
     const standardModes: Record<string, PermissionMode> = {
       'yes-bypass-permissions': 'bypassPermissions',
       'yes-accept-edits': 'acceptEdits'
     };
     const standardMode = standardModes[value];
     if (standardMode) {
-      logEvent('tengu_plan_exit', {
-        planLengthChars: currentPlan.length,
-        outcome: value as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-        interviewPhaseEnabled: isPlanModeInterviewPhaseEnabled(),
-        planStructureVariant,
-        hasFeedback: !!acceptFeedback
+      queueApprovedPlanExecution({
+        mode: standardMode,
+        clearContext: false
       });
-      setHasExitedPlanMode(true);
-      setNeedsPlanModeExitAttachment(true);
-      onDone();
-      toolUseConfirm.onAllow(updatedInput, buildPermissionUpdates(standardMode, allowedPrompts), acceptFeedback);
       return;
     }
 
@@ -741,7 +715,7 @@ export function buildPlanApprovalOptions({
   });
   return options;
 }
-function getContextUsedPercent(messages: AppState['messages'], permissionMode: PermissionMode): number | null {
+function getContextUsedPercent(messages: import('../../../types/message.js').Message[], permissionMode: PermissionMode): number | null {
   const usage = getEstimatedCurrentUsage(messages, {
     includeRestoredTotals: false
   });

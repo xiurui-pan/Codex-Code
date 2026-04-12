@@ -98,6 +98,19 @@ test('exit plan mode result keeps the full plan visible and avoids Claude-brande
   assert.doesNotMatch(exitToolUiSource, /User approved Claude&apos;s plan/)
 })
 
+test('approved plans always hand off to an explicit implementation turn, even when keeping context', () => {
+  const source = readSource(
+    'src/components/permissions/ExitPlanModePermissionRequest/ExitPlanModePermissionRequest.tsx',
+  )
+
+  assert.match(source, /const queueApprovedPlanExecution = \(\{/)
+  assert.match(source, /content: `Implement the following plan:\\n\\n/)
+  assert.match(source, /mode: keepContextMode,\s*clearContext: false/)
+  assert.match(source, /mode: 'auto',\s*clearContext: false/)
+  assert.match(source, /toolUseConfirm\.onReject\(\);/)
+  assert.doesNotMatch(source, /toolUseConfirm\.onAllow\(updatedInput/)
+})
+
 test('plan exit can refine locally with ultraplan instead of sending the user away', () => {
   const commandsSource = readSource('src/commands.ts')
   const source = readSource(

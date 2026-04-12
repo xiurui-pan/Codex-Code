@@ -52,6 +52,42 @@ test('stream_request_start clears partial stream state before a retry resumes', 
   assert.equal(streamingThinking, null)
 })
 
+test('stream_request_start preserves completed thinking between follow-up requests', () => {
+  let streamingThinking: {
+    thinking: string
+    isStreaming: boolean
+    streamingEndedAt?: number
+  } | null = {
+    thinking: 'Checking files',
+    isStreaming: false,
+    streamingEndedAt: 12_345,
+  }
+  let mode: string | null = null
+
+  handleMessageFromStream(
+    { type: 'stream_request_start' },
+    () => {},
+    () => {},
+    nextMode => {
+      mode = nextMode
+    },
+    () => {},
+    undefined,
+    updater => {
+      streamingThinking = updater(streamingThinking)
+    },
+    undefined,
+    undefined,
+  )
+
+  assert.equal(mode, 'requesting')
+  assert.deepEqual(streamingThinking, {
+    thinking: 'Checking files',
+    isStreaming: false,
+    streamingEndedAt: 12_345,
+  })
+})
+
 test('tool_use block start keeps existing streaming preamble visible', () => {
   let streamingText: string | null = 'I found the likely area; now checking the helper.'
   let mode: string | null = null

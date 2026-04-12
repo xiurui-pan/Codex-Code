@@ -74,14 +74,19 @@ const outputSchema = lazySchema(() =>
       ),
     filePath: z.string().describe('The path to the file that was written'),
     content: z.string().describe('The content that was written to the file'),
+    firstLine: z
+      .string()
+      .nullable()
+      .describe('The first line of the written content for diff rendering context'),
     structuredPatch: z
       .array(hunkSchema())
       .describe('Diff patch showing the changes'),
     originalFile: z
       .string()
       .nullable()
+      .optional()
       .describe(
-        'The original file content before the write (null for new files)',
+        'Legacy original file content before the write. New sessions omit this to keep large transcripts bounded.',
       ),
     gitDiff: gitDiffSchema().optional(),
   }),
@@ -373,8 +378,8 @@ export const FileWriteTool = buildTool({
         type: 'update' as const,
         filePath: file_path,
         content,
+        firstLine: content.split('\n')[0] ?? null,
         structuredPatch: patch,
-        originalFile: oldContent,
         ...(gitDiff && { gitDiff }),
       }
       // Track lines added and removed for file updates, right before yielding result
@@ -396,8 +401,8 @@ export const FileWriteTool = buildTool({
       type: 'create' as const,
       filePath: file_path,
       content,
+      firstLine: content.split('\n')[0] ?? null,
       structuredPatch: [],
-      originalFile: null,
       ...(gitDiff && { gitDiff }),
     }
 

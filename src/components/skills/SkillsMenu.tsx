@@ -69,14 +69,14 @@ export function SkillsMenu(t0) {
       flagSettings: [],
       plugin: [],
       mcp: []
-    };
+    } as Record<SkillSource, SkillCommand[]>;
     for (const skill of skills) {
       const source = skill.source as SkillSource;
       if (source in groups) {
         groups[source].push(skill);
       }
     }
-    for (const group of Object.values(groups)) {
+    for (const group of Object.values(groups) as SkillCommand[][]) {
       group.sort(_temp2);
     }
     $[2] = skills;

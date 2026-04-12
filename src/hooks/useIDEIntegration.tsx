@@ -1,5 +1,5 @@
 import { c as _c } from "react/compiler-runtime";
-import { useEffect } from 'react';
+import { type Dispatch, type SetStateAction, useEffect } from 'react';
 import type { ScopedMcpServerConfig } from '../services/mcp/types.js';
 import { getGlobalConfig } from '../utils/config.js';
 import { isEnvDefinedFalsy, isEnvTruthy } from '../utils/envUtils.js';
@@ -8,9 +8,9 @@ import { type IDEExtensionInstallationStatus, type IdeType, initializeIdeIntegra
 type UseIDEIntegrationProps = {
   autoConnectIdeFlag?: boolean;
   ideToInstallExtension: IdeType | null;
-  setDynamicMcpConfig: React.Dispatch<React.SetStateAction<Record<string, ScopedMcpServerConfig> | undefined>>;
-  setShowIdeOnboarding: React.Dispatch<React.SetStateAction<boolean>>;
-  setIDEInstallationState: React.Dispatch<React.SetStateAction<IDEExtensionInstallationStatus | null>>;
+  setDynamicMcpConfig: Dispatch<SetStateAction<Record<string, ScopedMcpServerConfig> | undefined>>;
+  setShowIdeOnboarding: Dispatch<SetStateAction<boolean>>;
+  setIDEInstallationState: Dispatch<SetStateAction<IDEExtensionInstallationStatus | null>>;
 };
 export function useIDEIntegration(t0) {
   const $ = _c(7);

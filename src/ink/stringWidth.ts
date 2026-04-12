@@ -215,8 +215,6 @@ const bunStringWidth =
     ? Bun.stringWidth
     : null
 
-const BUN_STRING_WIDTH_OPTS = { ambiguousIsNarrow: true } as const
-
 export const stringWidth: (str: string) => number = bunStringWidth
-  ? str => bunStringWidth(str, BUN_STRING_WIDTH_OPTS)
+  ? str => bunStringWidth(str)
   : stringWidthJavaScript

@@ -387,3 +387,13 @@ test('custom codex provider retries stream_read_error after partial text output'
   assert.equal(result.finalText, 'retried after partial text')
   assert.deepEqual(result.deltaTexts, ['partial text', 'retried after partial text'])
 })
+
+test('custom codex provider retries truncated SSE unexpected EOF before surfacing an error', async () => {
+  const result = await runBehavior('stream-retry-unexpected-eof')
+
+  assert.equal(result.requestCount, 2)
+  assert.deepEqual(result.retryMessages, ['Reconnecting... 1/1'])
+  assert.equal(result.errorMessage, null)
+  assert.equal(result.finalText, 'retried after eof')
+  assert.deepEqual(result.deltaTexts, ['partial text', 'retried after eof'])
+})

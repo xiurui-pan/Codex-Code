@@ -528,16 +528,13 @@ const MessagesImpl = ({
     hasTruncatedMessages: hasTruncatedMessages_0,
     hiddenMessageCount: hiddenMessageCount_0
   } = useMemo(() => {
-    // In fullscreen mode the alt buffer has no native scrollback, so the
-    // compact-boundary filter just hides history the ScrollBox could
-    // otherwise scroll to. Main-screen mode keeps the filter — pre-compact
-    // rows live above the viewport in native scrollback there, and
-    // re-rendering them triggers full resets.
-    // includeSnipped: UI rendering keeps snipped messages for scrollback
-    // (this PR's core goal — full history in UI, filter only for the model).
-    // Also avoids a UUID mismatch: normalizeMessages derives new UUIDs, so
-    // projectSnippedView's check against original removedUuids would fail.
-    const compactAwareMessages = verbose || isFullscreenEnvEnabled() ? normalizedMessages : getMessagesAfterCompactBoundary(normalizedMessages, {
+    // Prompt mode should show the post-compact view immediately so the
+    // boundary banner and fresh context are visible after compaction.
+    // Transcript mode (ctrl+o) still keeps the full history.
+    // includeSnipped keeps the transcript path consistent with the on-disk
+    // history; normalizeMessages derives new UUIDs, so projecting against
+    // original removedUuids would not match here.
+    const compactAwareMessages = verbose || isTranscriptMode ? normalizedMessages : getMessagesAfterCompactBoundary(normalizedMessages, {
       includeSnipped: true
     });
     const messagesToShowNotTruncated = reorderMessagesInUI(compactAwareMessages.filter((msg_2): msg_2 is Exclude<NormalizedMessage, ProgressMessageType> => msg_2.type !== 'progress')

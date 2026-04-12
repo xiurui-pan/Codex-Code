@@ -1,4 +1,5 @@
-import React, { PureComponent, type ReactNode } from 'react';
+import * as React from 'react';
+import type { ReactNode } from 'react';
 import { updateLastInteractionTime } from '../../bootstrap/state.js';
 import { logForDebugging } from '../../utils/debug.js';
 import { stopCapturingEarlyInput } from '../../utils/earlyInput.js';
@@ -98,14 +99,19 @@ type State = {
 // Root component for all Ink apps
 // It renders stdin and stdout contexts, so that children can access them if needed
 // It also handles Ctrl+C exiting and cursor visibility
-export default class App extends PureComponent<Props, State> {
+export default class App extends React.PureComponent<Props, State> {
+  declare props: Props;
   static displayName = 'InternalApp';
+  constructor(props: Props) {
+    super(props);
+    this.querier = new TerminalQuerier(props.stdout);
+  }
   static getDerivedStateFromError(error: Error) {
     return {
       error
     };
   }
-  override state = {
+  state = {
     error: undefined
   };
 
@@ -122,7 +128,7 @@ export default class App extends PureComponent<Props, State> {
 
   // Terminal query/response dispatch. Responses arrive on stdin (parsed
   // out by parse-keypress) and are routed to pending promise resolvers.
-  querier = new TerminalQuerier(this.props.stdout);
+  querier: TerminalQuerier;
 
   // Multi-click tracking for double/triple-click text selection. A click
   // within MULTI_CLICK_TIMEOUT_MS and MULTI_CLICK_DISTANCE of the previous
@@ -151,7 +157,7 @@ export default class App extends PureComponent<Props, State> {
   isRawModeSupported(): boolean {
     return this.props.stdin.isTTY;
   }
-  override render() {
+  render() {
     return <TerminalSizeContext.Provider value={{
       columns: this.props.terminalColumns,
       rows: this.props.terminalRows
@@ -178,13 +184,13 @@ export default class App extends PureComponent<Props, State> {
         </AppContext.Provider>
       </TerminalSizeContext.Provider>;
   }
-  override componentDidMount() {
+  componentDidMount() {
     // In accessibility mode, keep the native cursor visible for screen magnifiers and other tools
     if (this.props.stdout.isTTY && !isEnvTruthy(process.env.CODEX_CODE_ACCESSIBILITY)) {
       this.props.stdout.write(HIDE_CURSOR);
     }
   }
-  override componentWillUnmount() {
+  componentWillUnmount() {
     if (this.props.stdout.isTTY) {
       this.props.stdout.write(SHOW_CURSOR);
     }
@@ -203,7 +209,7 @@ export default class App extends PureComponent<Props, State> {
       this.handleSetRawMode(false);
     }
   }
-  override componentDidCatch(error: Error) {
+  componentDidCatch(error: Error) {
     this.handleExit(error);
   }
   handleSetRawMode = (isEnabled: boolean): void => {

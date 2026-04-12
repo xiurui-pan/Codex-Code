@@ -85,14 +85,14 @@ export function Passes({
         }
 
         // Build pass statuses array
-        const redemptions = redemptionsData.redemptions || [];
-        const maxRedemptions = redemptionsData.limit || 3;
+        const redemptions = redemptionsData.redemptions ?? [];
+        const maxRedemptions = redemptionsData.limit ?? 3;
         const statuses: PassStatus[] = [];
         for (let i = 0; i < maxRedemptions; i++) {
           const redemption = redemptions[i];
           statuses.push({
             passNumber: i + 1,
-            isAvailable: !redemption
+            isAvailable: redemption == null
           });
         }
         setPassStatuses(statuses);
@@ -126,7 +126,7 @@ export function Passes({
         </Box>
       </Pane>;
   }
-  const availableCount = count(passStatuses, p => p.isAvailable);
+  const availableCount = count(passStatuses, (p: PassStatus) => p.isAvailable);
 
   // Sort passes: available first, then redeemed
   const sortedPasses = [...passStatuses].sort((a, b) => +b.isAvailable - +a.isAvailable);

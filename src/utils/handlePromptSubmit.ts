@@ -1,6 +1,7 @@
 import type { UUID } from 'crypto'
 import { logEvent } from 'src/services/analytics/index.js'
 import type { AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from 'src/services/analytics/metadata.js'
+import type { Dispatch, SetStateAction } from 'react'
 import { type Command, getCommandName, isCommandEnabled } from '../commands.js'
 import { selectableUserMessagesFilter } from '../components/MessageSelector.js'
 import type { SpinnerMode } from '../components/Spinner/types.js'
@@ -96,9 +97,7 @@ export type HandlePromptSubmitParams = BaseExecutionParams & {
   pastedContents?: Record<number, PastedContent>
   helpers: PromptInputHelpers
   onInputChange: (value: string) => void
-  setPastedContents: React.Dispatch<
-    React.SetStateAction<Record<number, PastedContent>>
-  >
+  setPastedContents: Dispatch<SetStateAction<Record<number, PastedContent>>>
   abortController?: AbortController | null
   addNotification?: (notification: {
     key: string

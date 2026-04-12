@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto'
 import {
+  type Dispatch,
   type RefObject,
+  type SetStateAction,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -22,7 +24,7 @@ import { logForDebugging } from '../utils/debug.js'
 type Props = {
   /** Gated on viewerOnly — non-viewer sessions have no remote history to page. */
   config: RemoteSessionConfig | undefined
-  setMessages: React.Dispatch<React.SetStateAction<Message[]>>
+  setMessages: Dispatch<SetStateAction<Message[]>>
   scrollRef: RefObject<ScrollBoxHandle | null>
   /** Called after prepend from the layout effect with message count + height
    *  delta. Lets useUnseenDivider shift dividerIndex + dividerYRef. */

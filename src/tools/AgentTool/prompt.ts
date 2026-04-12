@@ -112,7 +112,7 @@ ${forkEnabled ? 'When spawning a fresh agent (with a `subagent_type`), it starts
 
 ${forkEnabled ? 'For fresh agents, terse' : 'Terse'} command-style prompts produce shallow, generic work.
 
-**Delegate the digging, keep the final decision.** It is fine to ask an agent to map a code path, read files, or summarize likely fixes. Once a research agent returns concrete file paths, line numbers, and reasoning, use that evidence directly instead of repeating the same repo-wide search yourself. Re-open the specific file you are about to edit, or re-check the evidence only when the result is stale, vague, or conflicts with what you now see.
+**Never delegate understanding.** Don't write "based on your findings, fix the bug" or "based on the research, implement it." Those phrases push synthesis onto the agent instead of doing it yourself. Write prompts that prove you understood: include file paths, line numbers, what specifically to change.
 `
 
   const forkExamples = `Example usage:

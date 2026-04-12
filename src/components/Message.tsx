@@ -10,7 +10,6 @@ import type { Tools } from '../Tool.js';
 import { type ConnectorTextBlock, isConnectorTextBlock } from '../types/connectorText.js';
 import type { AssistantMessage, AttachmentMessage as AttachmentMessageType, CollapsedReadSearchGroup as CollapsedReadSearchGroupType, GroupedToolUseMessage as GroupedToolUseMessageType, NormalizedUserMessage, ProgressMessage, SystemMessage } from '../types/message.js';
 import { type AdvisorBlock, isAdvisorBlock } from '../utils/advisor.js';
-import { isFullscreenEnvEnabled } from '../utils/fullscreen.js';
 import { logError } from '../utils/log.js';
 import type { buildMessageLookups } from '../utils/messages.js';
 import { CompactSummary } from './CompactSummary.js';
@@ -246,9 +245,6 @@ function MessageImpl(t0) {
     case "system":
       {
         if (message.subtype === "compact_boundary") {
-          if (isFullscreenEnvEnabled()) {
-            return null;
-          }
           let t2;
           if ($[64] === Symbol.for("react.memo_cache_sentinel")) {
             t2 = <CompactBoundaryMessage />;
@@ -605,14 +601,18 @@ function AssistantMessageBlock(t0) {
 }
 export function hasThinkingContent(m: {
   type: string;
-  message?: {
-    content: Array<{
-      type: string;
-    }>;
-  };
+  message?: unknown;
 }): boolean {
-  if (m.type !== 'assistant' || !m.message) return false;
-  return m.message.content.some(b => b.type === 'thinking' || b.type === 'redacted_thinking');
+  if (m.type !== 'assistant' || !m.message || typeof m.message !== 'object') {
+    return false;
+  }
+  const content = (m.message as { content?: Array<{ type?: string }> }).content;
+  if (!Array.isArray(content)) {
+    return false;
+  }
+  return content.some(
+    b => b.type === 'thinking' || b.type === 'redacted_thinking',
+  );
 }
 
 /** Exported for testing */

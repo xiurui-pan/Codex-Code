@@ -29,7 +29,7 @@ import { hasExactErrorMessage } from '../../utils/errors.js'
 import { executePreCompactHooks } from '../../utils/hooks.js'
 import { logError } from '../../utils/log.js'
 import { getMessagesAfterCompactBoundary } from '../../utils/messages.js'
-import { getGlobalConfig } from '../../utils/config.js'
+import { getEffectiveCompactionMode } from '../../utils/config.js'
 import { getUpgradeMessage } from '../../utils/model/contextWindowUpgradeCheck.js'
 import {
   buildEffectiveSystemPrompt,
@@ -37,9 +37,34 @@ import {
 } from '../../utils/systemPrompt.js'
 
 /* eslint-disable @typescript-eslint/no-require-imports */
-const reactiveCompact = feature('REACTIVE_COMPACT')
-  ? (require('../../services/compact/reactiveCompact.js') as typeof import('../../services/compact/reactiveCompact.js'))
-  : null
+type ReactiveCompactSuccess = {
+  ok: true
+  result: CompactionResult
+}
+
+type ReactiveCompactFailure = {
+  ok: false
+  reason:
+    | 'too_few_groups'
+    | 'aborted'
+    | 'exhausted'
+    | 'error'
+    | 'media_unstrippable'
+}
+
+type ReactiveCompactOutcome = ReactiveCompactSuccess | ReactiveCompactFailure
+
+function isReactiveCompactFailure(
+  outcome: ReactiveCompactOutcome,
+): outcome is ReactiveCompactFailure {
+  return outcome.ok === false
+}
+
+const reactiveCompact: {
+  isReactiveOnlyMode(): boolean
+  isWithheldPromptTooLong(assistantEnvelope: unknown): boolean
+  reactiveCompactOnPromptTooLong(...args: unknown[]): Promise<ReactiveCompactOutcome>
+} | null = null
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 export const call: LocalCommandCall = async (args, context) => {
@@ -61,7 +86,7 @@ export const call: LocalCommandCall = async (args, context) => {
     // Responses mode must skip it and use the native replacement-history flow.
     if (
       !customInstructions &&
-      (getGlobalConfig().compactionMode ?? 'summary') === 'summary'
+      getEffectiveCompactionMode() === 'summary'
     ) {
       const latestMessageUuid = messages[messages.length - 1]?.uuid
       const lastSummarizedMessageId = getLastSummarizedMessageId()
@@ -214,7 +239,7 @@ async function compactViaReactive(
       { customInstructions: mergedInstructions, trigger: 'manual' },
     )
 
-    if (!outcome.ok) {
+    if (isReactiveCompactFailure(outcome)) {
       // The outer catch in `call` translates these: aborted → "Compaction
       // canceled." (via abortController.signal.aborted check), NOT_ENOUGH →
       // re-thrown as-is, everything else → "Error during compaction: …".
@@ -230,6 +255,8 @@ async function compactViaReactive(
       }
     }
 
+    const result = outcome.result
+
     // Mirrors the post-success cleanup in tryReactiveCompact, minus
     // resetMicrocompactState — processSlashCommand calls that for all
     // type:'compact' results.
@@ -243,20 +270,20 @@ async function compactViaReactive(
     // they can merge its userDisplayMessage with PostCompact's here. This
     // caller additionally runs it concurrently with getCacheSharingParams.
     const combinedMessage =
-      [hookResult.userDisplayMessage, outcome.result.userDisplayMessage]
+      [hookResult.userDisplayMessage, result.userDisplayMessage]
         .filter(Boolean)
         .join('\n') || undefined
 
     return {
       type: 'compact',
       compactionResult: {
-        ...outcome.result,
+        ...result,
         userDisplayMessage: combinedMessage,
       },
       displayText: buildDisplayText(
         context,
         combinedMessage,
-        hasReadableCompactSummary(outcome.result),
+        hasReadableCompactSummary(result),
       ),
     }
   } finally {

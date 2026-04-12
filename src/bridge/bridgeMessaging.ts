@@ -11,12 +11,14 @@
  */
 
 import { randomUUID } from 'crypto'
-import type { SDKMessage } from '../entrypoints/agentSdkTypes.js'
+import type {
+  SDKMessage,
+  SDKResultSuccess,
+} from '../entrypoints/agentSdkTypes.js'
 import type {
   SDKControlRequest,
   SDKControlResponse,
 } from '../entrypoints/sdk/controlTypes.js'
-import type { SDKResultSuccess } from '../entrypoints/sdk/coreTypes.js'
 import { logEvent } from '../services/analytics/index.js'
 import { EMPTY_USAGE } from '../services/api/emptyUsage.js'
 import type { Message } from '../types/message.js'
@@ -209,6 +211,14 @@ export function handleIngressMessage(
 
 // ─── Server-initiated control requests ───────────────────────────────────────
 
+type PermissionModeVerdict = { ok: true } | { ok: false; error: string }
+
+function isPermissionModeErrorVerdict(
+  verdict: PermissionModeVerdict,
+): verdict is Extract<PermissionModeVerdict, { ok: false }> {
+  return verdict.ok === false
+}
+
 export type ServerControlRequestHandlers = {
   transport: ReplBridgeTransport | null
   sessionId: string
@@ -223,9 +233,7 @@ export type ServerControlRequestHandlers = {
   onInterrupt?: () => void
   onSetModel?: (model: string | undefined) => void
   onSetMaxThinkingTokens?: (maxTokens: number | null) => void
-  onSetPermissionMode?: (
-    mode: PermissionMode,
-  ) => { ok: true } | { ok: false; error: string }
+  onSetPermissionMode?: (mode: PermissionMode) => PermissionModeVerdict
 }
 
 const OUTBOUND_ONLY_ERROR =
@@ -338,7 +346,7 @@ export function handleServerControlRequest(
         error:
           'set_permission_mode is not supported in this context (onSetPermissionMode callback not registered)',
       }
-      if (verdict.ok) {
+      if (!isPermissionModeErrorVerdict(verdict)) {
         response = {
           type: 'control_response',
           response: {

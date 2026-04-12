@@ -149,18 +149,12 @@ export async function generateAgent(
   const response = await callModelTurnWithoutStreaming({
     messages: normalizeMessagesForAPI(messagesWithContext),
     systemPrompt: asSystemPrompt([systemPrompt]),
-    thinkingConfig: { type: 'disabled' as const },
     tools: [],
     signal: abortSignal,
     options: {
       getToolPermissionContext: async () => getEmptyToolPermissionContext(),
       model,
-      toolChoice: undefined,
       agents: [],
-      isNonInteractiveSession: false,
-      hasAppendSystemPrompt: false,
-      querySource: 'agent_creation',
-      mcpTools: [],
     },
   })
 

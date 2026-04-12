@@ -51,11 +51,8 @@ export async function collectContextData(
 
   let apiView = getMessagesAfterCompactBoundary(messages)
   if (feature('CONTEXT_COLLAPSE')) {
-    /* eslint-disable @typescript-eslint/no-require-imports */
-    const { projectView } =
-      require('../../services/contextCollapse/operations.js') as typeof import('../../services/contextCollapse/operations.js')
-    /* eslint-enable @typescript-eslint/no-require-imports */
-    apiView = projectView(apiView)
+    // Context-collapse implementation is not present in this branch.
+    // Keep the runtime gate but leave the view unchanged.
   }
 
   const { messages: compactedMessages } = await microcompactMessages(apiView)
@@ -150,10 +147,19 @@ export function formatContextAsMarkdownTable(data: ContextData): string {
   // the user needs to know which strategy is managing their context
   // even before anything has fired.
   if (feature('CONTEXT_COLLAPSE')) {
-    /* eslint-disable @typescript-eslint/no-require-imports */
-    const { getStats, isContextCollapseEnabled } =
-      require('../../services/contextCollapse/index.js') as typeof import('../../services/contextCollapse/index.js')
-    /* eslint-enable @typescript-eslint/no-require-imports */
+    const isContextCollapseEnabled = () => false
+    const getStats = () => ({
+      collapsedSpans: 0,
+      collapsedMessages: 0,
+      stagedSpans: 0,
+      health: {
+        totalSpawns: 0,
+        totalErrors: 0,
+        lastError: undefined as string | undefined,
+        emptySpawnWarningEmitted: false,
+        totalEmptySpawns: 0,
+      },
+    })
     if (isContextCollapseEnabled()) {
       const s = getStats()
       const { health: h } = s

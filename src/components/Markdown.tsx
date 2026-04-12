@@ -1,6 +1,6 @@
 import { c as _c } from "react/compiler-runtime";
 import { marked, type Token, type Tokens } from 'marked';
-import React, { Suspense, use, useMemo, useRef } from 'react';
+import { Suspense, type ReactNode, use, useRef } from 'react';
 import { useSettingsMaybeOutsideOfProvider } from '../hooks/useSettings.js';
 import { Ansi, Box, useTheme } from '../ink.js';
 import { type CliHighlight, getCliHighlightPromise } from '../utils/cliHighlight.js';
@@ -134,16 +134,18 @@ function MarkdownBody(t0) {
     const tokens = cachedLexer(stripPromptXMLTags(children));
     elements = [];
     let nonTableContent = "";
+    let elementKey = 0;
     const flushNonTableContent = function flushNonTableContent() {
       if (nonTableContent) {
-        elements.push(<Ansi key={elements.length} dimColor={dimColor}>{nonTableContent.trim()}</Ansi>);
+        elements.push(<Ansi key={elementKey++} dimColor={dimColor}>{nonTableContent.trim()}</Ansi>);
         nonTableContent = "";
       }
     };
     for (const token of tokens) {
       if (token.type === "table") {
         flushNonTableContent();
-        elements.push(<MarkdownTable key={elements.length} token={token as Tokens.Table} highlight={highlight} />);
+        const tableKey = elementKey++;
+        elements.push(<MarkdownTable token={token as Tokens.Table} highlight={highlight} key={tableKey} />);
       } else {
         nonTableContent = nonTableContent + formatToken(token, theme, 0, null, null, highlight);
         nonTableContent;
@@ -185,7 +187,7 @@ type StreamingProps = {
  */
 export function StreamingMarkdown({
   children
-}: StreamingProps): React.ReactNode {
+}: StreamingProps): ReactNode {
   // React Compiler: this component reads and writes stablePrefixRef.current
   // during render by design. The boundary only advances (monotonic), so
   // the ref mutation is idempotent under StrictMode double-render — but the

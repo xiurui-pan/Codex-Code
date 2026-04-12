@@ -188,6 +188,10 @@ export type DiffTool = 'terminal' | 'auto'
 export type OutputStyle = string
 export type CompactionMode = 'summary' | 'responses'
 
+function getDefaultCompactionMode(): CompactionMode {
+  return currentStageDisableGitAwareConfig ? 'responses' : 'summary'
+}
+
 export type GlobalConfig = {
   /**
    * @deprecated Use settings.apiKeyHelper instead.
@@ -594,7 +598,7 @@ function createDefaultGlobalConfig(): GlobalConfig {
     verbose: false,
     editorMode: 'normal',
     autoCompactEnabled: true,
-    compactionMode: 'summary',
+    compactionMode: getDefaultCompactionMode(),
     showTurnDuration: true,
     hasSeenTasksHint: false,
     hasUsedStash: false,
@@ -1144,6 +1148,10 @@ export function getGlobalConfig(): GlobalConfig {
       getConfig(getGlobalClaudeFile(), createDefaultGlobalConfig),
     )
   }
+}
+
+export function getEffectiveCompactionMode(): CompactionMode {
+  return getGlobalConfig().compactionMode ?? getDefaultCompactionMode()
 }
 
 /**

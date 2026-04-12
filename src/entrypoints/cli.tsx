@@ -116,10 +116,9 @@ async function main(): Promise<void> {
   // it calls them inside its run() fn.
   if (feature('DAEMON') && args[0] === '--daemon-worker') {
     const {
-      runDaemonWorker
-    } = await import('../daemon/workerRegistry.js');
-    await runDaemonWorker(args[1]);
-    return;
+      exitWithError
+    } = await import('../utils/process.js');
+    exitWithError('Current stage only supports custom Codex provider; daemon worker mode is disabled.');
   }
 
   // Fast-path for `claude remote-control` (also accepts legacy `claude remote` / `claude sync` / `claude bridge`):
@@ -182,18 +181,9 @@ async function main(): Promise<void> {
   if (feature('DAEMON') && args[0] === 'daemon') {
     profileCheckpoint('cli_daemon_path');
     const {
-      enableConfigs
-    } = await import('../utils/config.js');
-    enableConfigs();
-    const {
-      initSinks
-    } = await import('../utils/sinks.js');
-    initSinks();
-    const {
-      daemonMain
-    } = await import('../daemon/main.js');
-    await daemonMain(args.slice(1));
-    return;
+      exitWithError
+    } = await import('../utils/process.js');
+    exitWithError('Current stage only supports custom Codex provider; daemon mode is disabled.');
   }
 
   // Fast-path for `claude ps|logs|attach|kill` and `--bg`/`--background`.
@@ -202,40 +192,18 @@ async function main(): Promise<void> {
   if (feature('BG_SESSIONS') && (args[0] === 'ps' || args[0] === 'logs' || args[0] === 'attach' || args[0] === 'kill' || args.includes('--bg') || args.includes('--background'))) {
     profileCheckpoint('cli_bg_path');
     const {
-      enableConfigs
-    } = await import('../utils/config.js');
-    enableConfigs();
-    const bg = await import('../cli/bg.js');
-    switch (args[0]) {
-      case 'ps':
-        await bg.psHandler(args.slice(1));
-        break;
-      case 'logs':
-        await bg.logsHandler(args[1]);
-        break;
-      case 'attach':
-        await bg.attachHandler(args[1]);
-        break;
-      case 'kill':
-        await bg.killHandler(args[1]);
-        break;
-      default:
-        await bg.handleBgFlag(args);
-    }
-    return;
+      exitWithError
+    } = await import('../utils/process.js');
+    exitWithError('Current stage only supports custom Codex provider; background session mode is disabled.');
   }
 
   // Fast-path for template job commands.
   if (feature('TEMPLATES') && (args[0] === 'new' || args[0] === 'list' || args[0] === 'reply')) {
     profileCheckpoint('cli_templates_path');
     const {
-      templatesMain
-    } = await import('../cli/handlers/templateJobs.js');
-    await templatesMain(args);
-    // process.exit (not return) — mountFleetView's Ink TUI can leave event
-    // loop handles that prevent natural exit.
-    // eslint-disable-next-line custom-rules/no-process-exit
-    process.exit(0);
+      exitWithError
+    } = await import('../utils/process.js');
+    exitWithError('Current stage only supports custom Codex provider; templates are disabled.');
   }
 
   // Fast-path for `claude environment-runner`: headless BYOC runner.
@@ -243,10 +211,9 @@ async function main(): Promise<void> {
   if (feature('BYOC_ENVIRONMENT_RUNNER') && args[0] === 'environment-runner') {
     profileCheckpoint('cli_environment_runner_path');
     const {
-      environmentRunnerMain
-    } = await import('../environment-runner/main.js');
-    await environmentRunnerMain(args.slice(1));
-    return;
+      exitWithError
+    } = await import('../utils/process.js');
+    exitWithError('Current stage only supports custom Codex provider; environment runner is disabled.');
   }
 
   // Fast-path for `claude self-hosted-runner`: headless self-hosted-runner
@@ -255,10 +222,9 @@ async function main(): Promise<void> {
   if (feature('SELF_HOSTED_RUNNER') && args[0] === 'self-hosted-runner') {
     profileCheckpoint('cli_self_hosted_runner_path');
     const {
-      selfHostedRunnerMain
-    } = await import('../self-hosted-runner/main.js');
-    await selfHostedRunnerMain(args.slice(1));
-    return;
+      exitWithError
+    } = await import('../utils/process.js');
+    exitWithError('Current stage only supports custom Codex provider; self-hosted runner is disabled.');
   }
 
   // Fast-path for --worktree --tmux: exec into tmux before loading full CLI

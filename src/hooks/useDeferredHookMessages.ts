@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { type SetStateAction, useCallback, useEffect, useRef } from 'react'
 import type { HookResultMessage, Message } from '../types/message.js'
 
 /**
@@ -11,7 +11,7 @@ import type { HookResultMessage, Message } from '../types/message.js'
  */
 export function useDeferredHookMessages(
   pendingHookMessages: Promise<HookResultMessage[]> | undefined,
-  setMessages: (action: React.SetStateAction<Message[]>) => void,
+  setMessages: (action: SetStateAction<Message[]>) => void,
 ): () => Promise<void> {
   const pendingRef = useRef(pendingHookMessages ?? null)
   const resolvedRef = useRef(!pendingHookMessages)
@@ -21,7 +21,7 @@ export function useDeferredHookMessages(
     if (!promise) return
     let cancelled = false
     promise.then(msgs => {
-      if (cancelled) return
+      if (cancelled || resolvedRef.current) return
       resolvedRef.current = true
       pendingRef.current = null
       if (msgs.length > 0) {

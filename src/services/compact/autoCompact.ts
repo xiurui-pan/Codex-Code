@@ -5,7 +5,7 @@ import { getSdkBetas } from '../../bootstrap/state.js'
 import type { QuerySource } from '../../constants/querySource.js'
 import type { ToolUseContext } from '../../Tool.js'
 import type { Message } from '../../types/message.js'
-import { getGlobalConfig } from '../../utils/config.js'
+import { getEffectiveCompactionMode, getGlobalConfig } from '../../utils/config.js'
 import { getCodexAutoCompactTokenLimit } from '../../utils/codexConfig.js'
 import { getContextWindowForModel } from '../../utils/context.js'
 import { logForDebugging } from '../../utils/debug.js'
@@ -292,7 +292,7 @@ export async function autoCompactIfNeeded(
     querySource,
   }
 
-  if ((getGlobalConfig().compactionMode ?? 'summary') === 'summary') {
+  if (getEffectiveCompactionMode() === 'summary') {
     const sessionMemoryResult = await trySessionMemoryCompaction(
       messages,
       toolUseContext.agentId,

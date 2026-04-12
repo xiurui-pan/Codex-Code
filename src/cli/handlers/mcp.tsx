@@ -178,9 +178,10 @@ export async function mcpListHandler(): Promise<void> {
         // biome-ignore lint/suspicious/noConsole:: intentional console output
         console.log(`${name}: ${server.url} - ${status}`);
       } else if (!server.type || server.type === 'stdio') {
-        const args = Array.isArray(server.args) ? server.args : [];
+        const args = 'args' in server && Array.isArray(server.args) ? server.args : [];
+        const command = 'command' in server ? server.command : '';
         // biome-ignore lint/suspicious/noConsole:: intentional console output
-        console.log(`${name}: ${server.command} ${args.join(' ')} - ${status}`);
+        console.log(`${name}: ${command} ${args.join(' ')} - ${status}`);
       }
     }
   }

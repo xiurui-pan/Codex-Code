@@ -36,6 +36,11 @@ import { getFeatureValue_CACHED_MAY_BE_STALE } from '../services/analytics/growt
 import * as sessionIngress from '../services/api/sessionIngress.js'
 import { REPL_TOOL_NAME } from '../tools/REPLTool/constants.js'
 import {
+  compactToolUseResultForStorage,
+  summarizeStoredOutputText,
+  summarizeStoredToolResult,
+} from './toolResultRetention.js'
+import {
   type AgentId,
   asAgentId,
   asSessionId,
@@ -176,6 +181,46 @@ function isLegacyProgressEntry(entry: unknown): entry is LegacyProgressEntry {
     'uuid' in entry &&
     typeof entry.uuid === 'string'
   )
+}
+
+function compactLoadedToolResultPayload(
+  entry: TranscriptMessage,
+): TranscriptMessage {
+  if (entry.type !== 'user') {
+    return entry
+  }
+  const compactModelTurnItems = (outputSummary?: string) => {
+    for (const item of entry.modelTurnItems ?? []) {
+      if (
+        item.kind === 'tool_output' ||
+        item.kind === 'execution_result'
+      ) {
+        item.outputText = outputSummary
+          ? outputSummary
+          : summarizeStoredOutputText(item.outputText)
+      }
+    }
+  }
+  const result = entry.toolUseResult
+  if (result === undefined) {
+    compactModelTurnItems()
+    return entry
+  }
+  const compacted = compactToolUseResultForStorage(
+    undefined,
+    result,
+  )
+  if (compacted === result) {
+    compactModelTurnItems()
+    return entry
+  }
+
+  entry.toolUseResult = compacted
+  const outputSummary = summarizeStoredToolResult({
+    toolUseResult: compacted,
+  })
+  compactModelTurnItems(outputSummary)
+  return entry
 }
 
 /**
@@ -3632,6 +3677,7 @@ export async function loadTranscriptFile(
         if (entry.parentUuid && progressBridge.has(entry.parentUuid)) {
           entry.parentUuid = progressBridge.get(entry.parentUuid) ?? null
         }
+        compactLoadedToolResultPayload(entry)
         messages.set(entry.uuid, entry)
         // Compact boundary: prior marble-origami-commit entries reference
         // messages that won't be in the post-boundary chain. The >5MB

@@ -14,6 +14,7 @@ import { formatDuration, formatNumber, truncateToWidth } from '../../utils/forma
 import { toInkColor } from '../../utils/ink.js';
 import { TEAMMATE_SELECT_HINT } from './teammateSelectHint.js';
 type Props = {
+  key?: React.Key;
   teammate: InProcessTeammateTaskState;
   isLast: boolean;
   isSelected?: boolean;

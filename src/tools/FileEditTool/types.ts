@@ -65,9 +65,16 @@ const outputSchema = lazySchema(() =>
     filePath: z.string().describe('The file path that was edited'),
     oldString: z.string().describe('The original string that was replaced'),
     newString: z.string().describe('The new string that replaced it'),
+    firstLine: z
+      .string()
+      .nullable()
+      .describe('The first line of the file for diff rendering context'),
     originalFile: z
       .string()
-      .describe('The original file contents before editing'),
+      .optional()
+      .describe(
+        'Legacy full file contents before editing. New sessions omit this to keep large transcripts bounded.',
+      ),
     structuredPatch: z
       .array(hunkSchema())
       .describe('Diff patch showing the changes'),

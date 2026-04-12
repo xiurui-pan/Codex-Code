@@ -261,9 +261,12 @@ export async function processUserInput({
     }
 
     // TODO: Clean this up
-    if (hookResult.message) {
+    if (hookResult.message?.type === 'attachment') {
       switch (hookResult.message.attachment.type) {
         case 'hook_success':
+          if (typeof hookResult.message.attachment.content !== 'string') {
+            break
+          }
           if (!hookResult.message.attachment.content) {
             // Skip if there is no content
             break

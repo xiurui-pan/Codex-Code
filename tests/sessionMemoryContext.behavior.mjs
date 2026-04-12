@@ -785,6 +785,66 @@ test('resume-like compact prefers the current resumed session summary over newer
   }
 })
 
+test('compaction does not pull summary content from a different session', async () => {
+  const tempHome = await mkdtemp(join(tmpdir(), 'codex-session-memory-isolation-'))
+
+  try {
+    const cwd = projectRoot
+    const projectDir = join(
+      tempHome,
+      '.claude',
+      'projects',
+      sanitizePath(cwd),
+    )
+    await mkdir(projectDir, { recursive: true })
+
+    const activeSessionId = randomUUID()
+    const transcriptPath = join(projectDir, `${activeSessionId}.jsonl`)
+    await writeFile(transcriptPath, '', 'utf8')
+
+    const activeSummaryPath = join(
+      projectDir,
+      activeSessionId,
+      'session-memory',
+      'summary.md',
+    )
+
+    await new Promise(resolve => setTimeout(resolve, 20))
+    const otherSessionId = randomUUID()
+    const otherSummaryPath = join(
+      projectDir,
+      otherSessionId,
+      'session-memory',
+      'summary.md',
+    )
+    await mkdir(join(otherSummaryPath, '..'), { recursive: true })
+    await writeFile(
+      otherSummaryPath,
+      '# Current State\nWrong session summary\n',
+      'utf8',
+    )
+
+    const { findCompactionSessionMemorySummaryContent } = await import(
+      '../src/services/compact/sessionMemorySelection.ts'
+    )
+
+    const selectedSummary = await findCompactionSessionMemorySummaryContent({
+      fs: {
+        readFile,
+        readdir: async path => readdir(path, { withFileTypes: true }),
+        stat,
+      },
+      transcriptPath,
+      currentSessionMemoryPath: activeSummaryPath,
+      isEmpty: async content => content.trim().length === 0,
+    })
+
+    assert.equal(selectedSummary, null)
+  } finally {
+    await rm(tempHome, { recursive: true, force: true })
+  }
+})
+
 test('cross-project resume compact prefers the resumed transcript project summary over current cwd project summaries', async () => {
   const tempHome = await mkdtemp(join(tmpdir(), 'codex-session-memory-cross-project-'))
 

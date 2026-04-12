@@ -13,6 +13,70 @@ import type {
   CallToolResult,
   ToolAnnotations,
 } from '@modelcontextprotocol/sdk/types.js'
+import type {
+  Message as AnthropicMessage,
+  RawMessageStreamEvent,
+} from '@anthropic-ai/sdk/resources/messages/messages.js'
+import type { ConfigScope } from '../services/mcp/types.js'
+import type { CodexPublicModelInfo } from '../utils/model/codexModels.js'
+import type {
+  PermissionMode,
+  PermissionResult,
+  PermissionUpdate,
+} from '../types/permissions.js'
+import type { z } from 'zod/v4'
+import {
+  ApiKeySourceSchema,
+  ConfigChangeHookInputSchema,
+  CwdChangedHookInputSchema,
+  ElicitationHookInputSchema,
+  ElicitationResultHookInputSchema,
+  FileChangedHookInputSchema,
+  HookInputSchema,
+  InstructionsLoadedHookInputSchema,
+  NotificationHookInputSchema,
+  PermissionDeniedHookInputSchema,
+  PermissionRequestHookInputSchema,
+  PostCompactHookInputSchema,
+  PostToolUseFailureHookInputSchema,
+  PostToolUseHookInputSchema,
+  PreCompactHookInputSchema,
+  PreToolUseHookInputSchema,
+  SessionEndHookInputSchema,
+  SessionStartHookInputSchema,
+  SetupHookInputSchema,
+  StopFailureHookInputSchema,
+  StopHookInputSchema,
+  SubagentStartHookInputSchema,
+  SubagentStopHookInputSchema,
+  SyncHookJSONOutputSchema,
+  AsyncHookJSONOutputSchema,
+  TaskCompletedHookInputSchema,
+  TaskCreatedHookInputSchema,
+  TeammateIdleHookInputSchema,
+  UserPromptSubmitHookInputSchema,
+  SDKAPIRetryMessageSchema,
+  SDKAssistantMessageErrorSchema,
+  SDKAssistantMessageSchema,
+  SDKCompactBoundaryMessageSchema,
+  SDKMessageSchema,
+  SDKModelTurnItemMessageSchema,
+  SDKPartialAssistantMessageSchema,
+  SDKPermissionDenialSchema,
+  SDKRateLimitEventSchema,
+  SDKRateLimitInfoSchema,
+  SDKResultMessageSchema,
+  SDKSessionInfoSchema,
+  SDKStatusMessageSchema,
+  SDKStatusSchema,
+  SDKSystemMessageSchema,
+  SDKToolProgressMessageSchema,
+  SDKToolUseSummaryMessageSchema,
+  SDKUserMessageReplaySchema,
+  SDKUserMessageSchema,
+  RewindFilesResultSchema,
+  McpServerStatusSchema,
+} from './sdk/coreSchemas.js'
 
 // Control protocol types for SDK builders (bridge subpath consumers)
 /** @alpha */
@@ -33,10 +97,108 @@ export * from './sdk/toolTypes.js'
 // Minimal compatibility types needed by the main app while generated SDK
 // runtime/core types are stubbed in this branch.
 export type HookEvent = (typeof import('./sdk/coreTypes.js').HOOK_EVENTS)[number]
-export type SDKMessage = unknown
-export type SDKResultMessage = unknown
-export type SDKSessionInfo = unknown
-export type SDKUserMessage = unknown
+export type ApiKeySource = z.infer<ReturnType<typeof ApiKeySourceSchema>> | 'api' | 'none'
+export type HookInput = z.infer<ReturnType<typeof HookInputSchema>>
+export type PreToolUseHookInput = z.infer<ReturnType<typeof PreToolUseHookInputSchema>>
+export type PermissionRequestHookInput = z.infer<ReturnType<typeof PermissionRequestHookInputSchema>>
+export type PostToolUseHookInput = z.infer<ReturnType<typeof PostToolUseHookInputSchema>>
+export type PostToolUseFailureHookInput = z.infer<ReturnType<typeof PostToolUseFailureHookInputSchema>>
+export type PermissionDeniedHookInput = z.infer<ReturnType<typeof PermissionDeniedHookInputSchema>>
+export type NotificationHookInput = z.infer<ReturnType<typeof NotificationHookInputSchema>>
+export type UserPromptSubmitHookInput = z.infer<ReturnType<typeof UserPromptSubmitHookInputSchema>>
+export type SessionStartHookInput = z.infer<ReturnType<typeof SessionStartHookInputSchema>>
+export type SessionEndHookInput = z.infer<ReturnType<typeof SessionEndHookInputSchema>>
+export type SetupHookInput = z.infer<ReturnType<typeof SetupHookInputSchema>>
+export type StopHookInput = z.infer<ReturnType<typeof StopHookInputSchema>>
+export type StopFailureHookInput = z.infer<ReturnType<typeof StopFailureHookInputSchema>>
+export type SubagentStartHookInput = z.infer<ReturnType<typeof SubagentStartHookInputSchema>>
+export type SubagentStopHookInput = z.infer<ReturnType<typeof SubagentStopHookInputSchema>>
+export type PreCompactHookInput = z.infer<ReturnType<typeof PreCompactHookInputSchema>>
+export type PostCompactHookInput = z.infer<ReturnType<typeof PostCompactHookInputSchema>>
+export type TeammateIdleHookInput = z.infer<ReturnType<typeof TeammateIdleHookInputSchema>>
+export type TaskCreatedHookInput = z.infer<ReturnType<typeof TaskCreatedHookInputSchema>>
+export type TaskCompletedHookInput = z.infer<ReturnType<typeof TaskCompletedHookInputSchema>>
+export type ElicitationHookInput = z.infer<ReturnType<typeof ElicitationHookInputSchema>>
+export type ElicitationResultHookInput = z.infer<ReturnType<typeof ElicitationResultHookInputSchema>>
+export type ConfigChangeHookInput = z.infer<ReturnType<typeof ConfigChangeHookInputSchema>>
+export type InstructionsLoadedHookInput = z.infer<ReturnType<typeof InstructionsLoadedHookInputSchema>>
+export type CwdChangedHookInput = z.infer<ReturnType<typeof CwdChangedHookInputSchema>>
+export type FileChangedHookInput = z.infer<ReturnType<typeof FileChangedHookInputSchema>>
+export type SyncHookJSONOutput = z.infer<ReturnType<typeof SyncHookJSONOutputSchema>>
+export type AsyncHookJSONOutput = z.infer<ReturnType<typeof AsyncHookJSONOutputSchema>>
+export type HookJSONOutput = SyncHookJSONOutput | AsyncHookJSONOutput
+export type SDKAssistantMessageError = z.infer<ReturnType<typeof SDKAssistantMessageErrorSchema>>
+export type SDKStatus = z.infer<ReturnType<typeof SDKStatusSchema>>
+export type SDKUserMessage = {
+  type: 'user'
+  message: { role?: 'user'; content: string | Array<unknown> }
+  parent_tool_use_id: string | null
+  uuid?: string
+  session_id?: string
+  isSynthetic?: boolean
+  tool_use_result?: unknown
+  priority?: 'now' | 'next' | 'later'
+  timestamp?: string
+}
+export type SDKUserMessageReplay = SDKUserMessage & {
+  uuid: string
+  session_id: string
+  isReplay: true
+}
+export type SDKAssistantMessage = {
+  type: 'assistant'
+  message: AnthropicMessage
+  parent_tool_use_id: string | null
+  error?: SDKAssistantMessageError
+  uuid: string
+  session_id: string
+}
+export type SDKPartialAssistantMessage = {
+  type: 'stream_event'
+  event: RawMessageStreamEvent
+  parent_tool_use_id: string | null
+  uuid: string
+  session_id: string
+}
+export type SDKCompactBoundaryMessage = z.infer<ReturnType<typeof SDKCompactBoundaryMessageSchema>>
+export type SDKSystemMessage = z.infer<ReturnType<typeof SDKSystemMessageSchema>>
+export type SDKStatusMessage = z.infer<ReturnType<typeof SDKStatusMessageSchema>>
+export type SDKToolProgressMessage = z.infer<ReturnType<typeof SDKToolProgressMessageSchema>>
+export type SDKPermissionDenial = z.infer<ReturnType<typeof SDKPermissionDenialSchema>>
+export type SDKToolUseSummaryMessage = z.infer<ReturnType<typeof SDKToolUseSummaryMessageSchema>>
+export type SDKRateLimitInfo = z.infer<ReturnType<typeof SDKRateLimitInfoSchema>>
+export type SDKRateLimitEvent = z.infer<ReturnType<typeof SDKRateLimitEventSchema>>
+export type SDKAPIRetryMessage = z.infer<ReturnType<typeof SDKAPIRetryMessageSchema>>
+export type SDKModelTurnItemMessage = z.infer<ReturnType<typeof SDKModelTurnItemMessageSchema>>
+export type SDKResultMessage = z.infer<ReturnType<typeof SDKResultMessageSchema>>
+export type SDKResultSuccess = Extract<SDKResultMessage, { subtype: 'success' }>
+export type SDKResultError = Exclude<SDKResultMessage, { subtype: 'success' }>
+export type SDKMessage =
+  | SDKAssistantMessage
+  | SDKUserMessage
+  | SDKUserMessageReplay
+  | SDKResultMessage
+  | SDKSystemMessage
+  | SDKPartialAssistantMessage
+  | SDKCompactBoundaryMessage
+  | SDKModelTurnItemMessage
+  | SDKStatusMessage
+  | SDKAPIRetryMessage
+  | SDKToolProgressMessage
+  | SDKToolUseSummaryMessage
+  | SDKRateLimitEvent
+  | z.infer<ReturnType<typeof SDKMessageSchema>>
+export type SDKSessionInfo = z.infer<ReturnType<typeof SDKSessionInfoSchema>>
+export type McpServerConfigForProcessTransport =
+  | { type?: 'stdio'; command: string; args?: string[]; env?: Record<string, string> }
+  | { type: 'sse'; url: string; headers?: Record<string, string> }
+  | { type: 'http'; url: string; headers?: Record<string, string> }
+  | { type: 'sdk'; name: string }
+export type McpServerStatus = z.infer<ReturnType<typeof McpServerStatusSchema>> & {
+  scope?: ConfigScope
+}
+export type ModelInfo = CodexPublicModelInfo
+export type RewindFilesResult = z.infer<ReturnType<typeof RewindFilesResultSchema>>
 export type AnyZodRawShape = Record<string, unknown>
 export type ForkSessionOptions = unknown
 export type ForkSessionResult = unknown
@@ -54,6 +216,7 @@ export type SDKSessionOptions = unknown
 export type SdkMcpToolDefinition<T = unknown> = unknown
 export type SessionMessage = unknown
 export type SessionMutationOptions = unknown
+export type ExitReason = (typeof import('./sdk/coreTypes.js').EXIT_REASONS)[number]
 export type ModelUsage = {
   inputTokens: number
   outputTokens: number
@@ -64,6 +227,7 @@ export type ModelUsage = {
   contextWindow: number
   maxOutputTokens: number
 }
+export type { PermissionMode, PermissionResult, PermissionUpdate }
 
 // ============================================================================
 // Functions
@@ -71,14 +235,6 @@ export type ModelUsage = {
 
 // Import types needed for function signatures
 
-export type {
-  ListSessionsOptions,
-  GetSessionInfoOptions,
-  SessionMutationOptions,
-  ForkSessionOptions,
-  ForkSessionResult,
-  SDKSessionInfo,
-}
 
 export function tool<Schema extends AnyZodRawShape>(
   _name: string,

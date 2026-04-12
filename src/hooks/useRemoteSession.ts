@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react'
+import {
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+} from 'react'
 import { BoundedUUIDSet } from '../bridge/bridgeMessaging.js'
 import type { ToolUseConfirm } from '../components/permissions/PermissionRequest.js'
 import type { SpinnerMode } from '../components/Spinner/types.js'
@@ -45,18 +52,14 @@ const COMPACTION_TIMEOUT_MS = 180000 // 3 minutes
 
 type UseRemoteSessionProps = {
   config: RemoteSessionConfig | undefined
-  setMessages: React.Dispatch<React.SetStateAction<MessageType[]>>
+  setMessages: Dispatch<SetStateAction<MessageType[]>>
   setIsLoading: (loading: boolean) => void
   onInit?: (slashCommands: string[]) => void
-  setToolUseConfirmQueue: React.Dispatch<React.SetStateAction<ToolUseConfirm[]>>
+  setToolUseConfirmQueue: Dispatch<SetStateAction<ToolUseConfirm[]>>
   tools: Tool[]
-  setStreamingToolUses?: React.Dispatch<
-    React.SetStateAction<StreamingToolUse[]>
-  >
-  setStreamMode?: React.Dispatch<React.SetStateAction<SpinnerMode>>
-  setStreamingThinking?: React.Dispatch<
-    React.SetStateAction<StreamingThinking | null>
-  >
+  setStreamingToolUses?: Dispatch<SetStateAction<StreamingToolUse[]>>
+  setStreamMode?: Dispatch<SetStateAction<SpinnerMode>>
+  setStreamingThinking?: Dispatch<SetStateAction<StreamingThinking | null>>
   onStreamingText?: (f: (current: string | null) => string | null) => void
   setInProgressToolUseIDs?: (f: (prev: Set<string>) => Set<string>) => void
 }
@@ -166,10 +169,15 @@ export function useRemoteSession({
       onMessage: sdkMessage => {
         const parts = [`type=${sdkMessage.type}`]
         if ('subtype' in sdkMessage) parts.push(`subtype=${sdkMessage.subtype}`)
-        if (sdkMessage.type === 'user') {
-          const c = sdkMessage.message?.content
+        if (
+          sdkMessage.type === 'user' &&
+          typeof sdkMessage.message === 'object' &&
+          sdkMessage.message !== null &&
+          'content' in sdkMessage.message
+        ) {
+          const c = (sdkMessage.message as { content?: unknown }).content
           parts.push(
-            `content=${Array.isArray(c) ? c.map(b => b.type).join(',') : typeof c}`,
+            `content=${Array.isArray(c) ? c.map(b => (typeof b === 'object' && b !== null && 'type' in b ? String((b as { type: unknown }).type) : typeof b)).join(',') : typeof c}`,
           )
         }
         logForDebugging(`[useRemoteSession] Received ${parts.join(' ')}`)
@@ -256,13 +264,26 @@ export function useRemoteSession({
         // delete would never fire post-conversion. Mirrors the add site below
         // and inProcessRunner.ts; without this the set grows unbounded for the
         // session lifetime (BQ: CCR cohort shows 5.2x higher RSS slope).
-        if (setInProgressToolUseIDs && sdkMessage.type === 'user') {
-          const content = sdkMessage.message?.content
+        if (
+          setInProgressToolUseIDs &&
+          sdkMessage.type === 'user' &&
+          typeof sdkMessage.message === 'object' &&
+          sdkMessage.message !== null &&
+          'content' in sdkMessage.message
+        ) {
+          const content = (sdkMessage.message as { content?: unknown }).content
           if (Array.isArray(content)) {
             const resultIds: string[] = []
             for (const block of content) {
-              if (block.type === 'tool_result') {
-                resultIds.push(block.tool_use_id)
+              if (
+                typeof block === 'object' &&
+                block !== null &&
+                'type' in block &&
+                (block as { type: unknown }).type === 'tool_result' &&
+                'tool_use_id' in block &&
+                typeof (block as { tool_use_id: unknown }).tool_use_id === 'string'
+              ) {
+                resultIds.push((block as { tool_use_id: string }).tool_use_id)
               }
             }
             if (resultIds.length > 0) {
@@ -361,7 +382,7 @@ export function useRemoteSession({
           behavior: 'ask',
           message:
             request.description ?? `${request.tool_name} requires permission`,
-          suggestions: request.permission_suggestions,
+          suggestions: request.permission_suggestions as PermissionAskDecision['suggestions'],
           blockedPath: request.blocked_path,
         }
 

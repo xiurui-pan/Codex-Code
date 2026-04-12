@@ -266,6 +266,9 @@ test('remaining visible help and warning copy avoid Claude-branded links and com
 test('tips, status notices, and chrome startup copy avoid stale Claude wording in Codex mode', async () => {
   const tipSource = await readFile(`${ROOT}/services/tips/tipRegistry.ts`, 'utf8')
   const statusSource = await readFile(`${ROOT}/utils/statusNoticeDefinitions.tsx`, 'utf8')
+  const gracefulShutdownSource = await readFile(`${ROOT}/utils/gracefulShutdown.ts`, 'utf8')
+  const crossProjectResumeSource = await readFile(`${ROOT}/utils/crossProjectResume.ts`, 'utf8')
+  const mainSource = await readFile(`${ROOT}/main.tsx`, 'utf8')
 
   assert.match(tipSource, /codex-code --continue or codex-code --resume/)
   assert.doesNotMatch(tipSource, /claude --continue/)
@@ -274,6 +277,14 @@ test('tips, status notices, and chrome startup copy avoid stale Claude wording i
   assert.doesNotMatch(tipSource, /Claude desktop app/)
   assert.doesNotMatch(tipSource, /\/mobile/)
   assert.match(tipSource, /currentStageDisableClaudeProductTips/)
+
+  assert.match(gracefulShutdownSource, /codex-code --resume/)
+  assert.doesNotMatch(gracefulShutdownSource, /claude --resume/)
+  assert.match(crossProjectResumeSource, /codex-code --resume/)
+  assert.doesNotMatch(crossProjectResumeSource, /claude --resume/)
+
+  assert.doesNotMatch(mainSource, /SessionStart:startup hooks, then exit/)
+  assert.match(mainSource, /startup session hooks, then exit/)
 
   assert.doesNotMatch(statusSource, /claude \/logout/)
   assert.doesNotMatch(statusSource, /docs\.claude\.com/)

@@ -301,19 +301,9 @@ function StopHookSummaryMessage(t0) {
   }
   const totalDurationMs = t1;
   if (hookErrors.length === 0 && !preventedContinuation && !message.hookLabel) {
-    if (true || totalDurationMs < HOOK_TIMING_DISPLAY_THRESHOLD_MS) {
-      return null;
-    }
+    return null;
   }
-  let t2;
-  if ($[3] !== totalDurationMs) {
-    t2 = false && totalDurationMs > 0 ? ` (${formatSecondsShort(totalDurationMs)})` : "";
-    $[3] = totalDurationMs;
-    $[4] = t2;
-  } else {
-    t2 = $[4];
-  }
-  const totalStr = t2;
+  const totalStr = "";
   if (message.hookLabel) {
     const t3 = hookCount === 1 ? "hook" : "hooks";
     let t4;

@@ -80,7 +80,7 @@ export function NativeAutoUpdater({
     if (isUpdatingRef.current) {
       return;
     }
-    if ("production" === 'test' || "production" === 'development') {
+    if (process.env.NODE_ENV === 'test' || process.env.NODE_ENV === 'development') {
       logForDebugging('NativeAutoUpdater: Skipping update check in test/dev environment');
       return;
     }
@@ -191,7 +191,7 @@ export function NativeAutoUpdater({
           ✗ Auto-update failed &middot; Try <Text bold>/doctor</Text> or{' '}
           <Text bold>{recoveryCommand}</Text>
         </Text>}
-      {maxVersionIssue && "external" === 'ant' && <Text color="warning">
+      {maxVersionIssue && process.env.USER_TYPE === 'ant' && <Text color="warning">
           ⚠ Known issue: {maxVersionIssue} &middot; Run{' '}
           <Text bold>reinstall Codex Code with a compatible version</Text>
         </Text>}

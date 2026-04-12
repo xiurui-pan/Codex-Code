@@ -107,6 +107,10 @@ import {
   processToolResultBlock,
 } from '../../utils/toolResultStorage.js'
 import {
+  compactToolUseResultForStorage,
+  summarizeStoredToolResult,
+} from '../../utils/toolResultRetention.js'
+import {
   buildPermissionItemsForLocalExecution,
   buildToolResultItemsForLocalExecution,
 } from '../api/localExecutionItems.js'
@@ -1527,6 +1531,15 @@ async function checkPermissionsAndCallTool(
           )
         : await processToolResultBlock(tool, toolUseResult, toolUseID)
 
+      const storedToolUseResult = compactToolUseResultForStorage(
+        tool.name,
+        toolUseResult,
+      )
+      const modelOutputTextOverride = summarizeStoredToolResult({
+        toolName: tool.name,
+        toolUseResult,
+        toolResultBlock,
+      })
       // Build content blocks - tool result first, then optional feedback
       const contentBlocks: ContentBlockParam[] = [toolResultBlock]
       // Add accept feedback if user provided feedback when approving
@@ -1580,6 +1593,7 @@ async function checkPermissionsAndCallTool(
           tool.name,
           toolResultBlock,
           'tool_execution',
+          modelOutputTextOverride,
         ),
       ]
 
@@ -1592,7 +1606,7 @@ async function checkPermissionsAndCallTool(
           toolUseResult:
             toolUseContext.agentId && !toolUseContext.preserveToolUseResults
               ? undefined
-              : toolUseResult,
+              : storedToolUseResult,
           mcpMeta: toolUseContext.agentId ? undefined : mcpMeta,
           sourceToolAssistantUUID: assistantMessage.uuid,
           modelTurnItems,

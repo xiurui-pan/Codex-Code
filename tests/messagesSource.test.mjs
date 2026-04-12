@@ -30,9 +30,35 @@ test('prompt mode keeps streaming thinking visible through the short post-thinki
   assert.match(source, /shouldShowStreamingThinking\(streamingThinking\)/);
 });
 
+test('prompt mode filters to post-compact context while transcript mode keeps full history', () => {
+  const source = readSource('src/components/Messages.tsx');
+
+  assert.match(
+    source,
+    /const compactAwareMessages = verbose \|\| isTranscriptMode \? normalizedMessages : getMessagesAfterCompactBoundary\(normalizedMessages, \{/,
+  );
+});
+
 test('prompt footer keeps the status bar visible while retained thinking is still shown', () => {
   const source = readSource('src/screens/REPL.tsx');
 
   assert.match(source, /const isStreamingThinkingVisible = shouldShowStreamingThinking\(streamingThinking\);/);
   assert.match(source, /!visibleStreamingText \|\| isBriefOnly \|\| isStreamingThinkingVisible/);
+});
+
+test('new submits clear retained thinking, while intra-turn request starts do not need to', () => {
+  const replSource = readSource('src/screens/REPL.tsx');
+  const messagesSource = readSource('src/utils/messages.ts');
+
+  assert.match(replSource, /setSubmitCount\(_ => _ \+ 1\);[\s\S]*setStreamingThinking\(null\);/);
+  assert.match(messagesSource, /onStreamingThinking\?\.\(current => \(current\?\.isStreaming \? null : current\)\)/);
+});
+
+test('fullscreen compact boundary handling repins the prompt viewport after preserving transcript history', () => {
+  const source = readSource('src/screens/REPL.tsx');
+
+  assert.match(
+    source,
+    /setMessages\(old => \[\.\.\.getMessagesAfterCompactBoundary\(old, \{\s*includeSnipped: true\s*\}\), newMessage\]\);[\s\S]*queueMicrotask\(repinScroll\);/,
+  );
 });

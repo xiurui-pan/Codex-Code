@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { randomUUID, type UUID } from 'crypto'
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import { getOriginalCwd, getSessionId } from '../../bootstrap/state.js'
@@ -128,20 +129,20 @@ async function createFork(customTitle?: string): Promise<{
       isSidechain: false,
       forkedFrom: {
         sessionId: originalSessionId,
-        messageUuid: entry.uuid,
+        messageUuid: entry.uuid as UUID,
       },
     }
 
     // Build serialized message for LogOption
     const serialized: SerializedMessage = {
       ...entry,
-      sessionId: forkSessionId,
+      sessionId: String(forkSessionId),
     }
 
     serializedMessages.push(serialized)
     lines.push(jsonStringify(forkedEntry))
     if (entry.type !== 'progress') {
-      parentUuid = entry.uuid
+      parentUuid = entry.uuid as UUID
     }
   }
 
@@ -223,7 +224,7 @@ export async function call(
   onDone: LocalJSXCommandOnDone,
   context: LocalJSXCommandContext,
   args: string,
-): Promise<React.ReactNode> {
+): Promise<ReactNode> {
   const customTitle = args?.trim() || undefined
 
   const originalSessionId = getSessionId()

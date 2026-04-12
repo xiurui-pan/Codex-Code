@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/index.mjs'
 import type { UUID } from 'crypto'
 import type { CanUseToolFn } from '../hooks/useCanUseTool.js'
@@ -132,7 +133,7 @@ export type LocalJSXCommandCall = (
   onDone: LocalJSXCommandOnDone,
   context: ToolUseContext & LocalJSXCommandContext,
   args: string,
-) => Promise<React.ReactNode>
+) => Promise<ReactNode>
 
 /**
  * Module shape returned by load() for lazy-loaded commands.

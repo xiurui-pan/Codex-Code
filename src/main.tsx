@@ -29,12 +29,15 @@ import mapValues from 'lodash-es/mapValues.js';
 import pickBy from 'lodash-es/pickBy.js';
 import uniqBy from 'lodash-es/uniqBy.js';
 import React from 'react';
+
+const require = createRequire(import.meta.url);
 import { getOauthConfig } from './constants/oauth.js';
 import { getRemoteSessionUrl } from './constants/product.js';
 import { init, initializeTelemetryAfterTrust } from './entrypoints/init.js';
 import { addToHistory } from './history.js';
 import type { Root } from './ink.js';
 import { launchRepl } from './replLauncher.js';
+import { createRemoteSessionConfig } from './remote/RemoteSessionManager.js';
 import { type DownloadResult, downloadSessionFiles, type FilesApiConfig, parseFileSpecs } from './services/api/filesApi.js';
 import type { McpSdkServerConfig, McpServerConfig, ScopedMcpServerConfig } from './services/mcp/types.js';
 import { getEmptyToolPermissionContext, type ToolInputJSONSchema } from './Tool.js';
@@ -88,7 +91,6 @@ const getTeammateModeSnapshot = () => require('./utils/swarm/backends/teammateMo
 const coordinatorModeModule = feature('COORDINATOR_MODE') ? require('./coordinator/coordinatorMode.js') as typeof import('./coordinator/coordinatorMode.js') : null;
 /* eslint-enable @typescript-eslint/no-require-imports */
 import { relative, resolve } from 'path';
-const require = createRequire(import.meta.url);
 const currentPhaseDisableLegacyStartupModules = isCurrentPhaseCustomCodexProvider();
 const getPolicyLimitsModule = () => require('./services/policyLimits/index.js') as typeof import('./services/policyLimits/index.js');
 const loadPolicyLimits = (...args: Parameters<typeof import('./services/policyLimits/index.js')['loadPolicyLimits']>) => currentPhaseDisableLegacyStartupModules ? Promise.resolve() : getPolicyLimitsModule().loadPolicyLimits(...args);
@@ -160,18 +162,31 @@ const getFeatureValue_CACHED_MAY_BE_STALE = currentStageDisableGrowthbookStartup
 import { getOriginalCwd, setAdditionalDirectoriesForClaudeMd, setIsRemoteMode, setMainLoopModelOverride, setMainThreadAgentType, setTeleportedSessionInfo } from './bootstrap/state.js';
 import { filterCommandsForRemoteMode, getCommands } from './commands.js';
 import type { StatsStore } from './context/stats.js';
-import { launchAssistantInstallWizard, launchAssistantSessionChooser, launchInvalidSettingsDialog, launchResumeChooser, launchSnapshotUpdateDialog, launchTeleportRepoMismatchDialog, launchTeleportResumeWrapper } from './dialogLaunchers.js';
 import { SHOW_CURSOR } from './ink/termio/dec.js';
-import { exitWithError, exitWithMessage, getRenderContext, renderAndRun, showSetupScreens } from './interactiveHelpers.js';
+import {
+  exitWithError,
+  exitWithMessage,
+  getRenderContext,
+  renderAndRun,
+  showSetupDialog,
+  showSetupScreens,
+} from './interactiveHelpers.js';
 import { initBuiltinPlugins } from './plugins/bundled/index.js';
 /* eslint-enable @typescript-eslint/no-require-imports */
+import { checkQuotaStatus } from './services/claudeAiLimits.js';
 import { getMcpToolsCommandsAndResources, prefetchAllMcpResources } from './services/mcp/client.js';
+import { fetchClaudeAIMcpConfigsIfEligible } from './services/mcp/claudeai.js';
 import { VALID_INSTALLABLE_SCOPES, VALID_UPDATE_SCOPES } from './services/plugins/pluginCliCommands.js';
 import { initBundledSkills } from './skills/bundled/index.js';
 import type { AgentColorName } from './tools/AgentTool/agentColorManager.js';
 import type { LogOption } from './types/logs.js';
 import type { Message as MessageType } from './types/message.js';
 import { assertMinVersion } from './utils/autoUpdater.js';
+import {
+  getSubscriptionType,
+  isClaudeAISubscriber,
+  validateForceLoginOrg,
+} from './utils/auth.js';
 import { CLAUDE_IN_CHROME_SKILL_HINT, CLAUDE_IN_CHROME_SKILL_HINT_WITH_WEBBROWSER } from './utils/claudeInChrome/prompt.js';
 import { getContextWindowForModel } from './utils/context.js';
 import { loadConversationForResume } from './utils/conversationRecovery.js';
@@ -235,6 +250,91 @@ import { type ChannelEntry, getInitialMainLoopModel, getIsNonInteractiveSession,
 const autoModeStateModule = feature('TRANSCRIPT_CLASSIFIER') ? require('./utils/permissions/autoModeState.js') as typeof import('./utils/permissions/autoModeState.js') : null;
 
 // TeleportRepoMismatchDialog, TeleportResumeWrapper dynamically imported at call sites
+async function launchInvalidSettingsDialog(
+  root: Root,
+  props: {
+    settingsErrors: ValidationError[]
+    onExit: () => void
+  },
+): Promise<void> {
+  const { InvalidSettingsDialog } = await import(
+    './components/InvalidSettingsDialog.js'
+  )
+  return showSetupDialog(root, done => (
+    <InvalidSettingsDialog
+      settingsErrors={props.settingsErrors}
+      onContinue={done}
+      onExit={props.onExit}
+    />
+  ))
+}
+
+async function launchTeleportResumeWrapper(
+  root: Root,
+): Promise<import('./utils/conversationRecovery.js').TeleportRemoteResponse | null> {
+  const { TeleportResumeWrapper } = await import(
+    './components/TeleportResumeWrapper.js'
+  )
+  return showSetupDialog(root, done => (
+    <TeleportResumeWrapper
+      onComplete={done}
+      onCancel={() => done(null)}
+      source="cliArg"
+    />
+  ))
+}
+
+async function launchTeleportRepoMismatchDialog(
+  root: Root,
+  props: {
+    targetRepo: string
+    initialPaths: string[]
+  },
+): Promise<string | null> {
+  const { TeleportRepoMismatchDialog } = await import(
+    './components/TeleportRepoMismatchDialog.js'
+  )
+  return showSetupDialog(root, done => (
+    <TeleportRepoMismatchDialog
+      targetRepo={props.targetRepo}
+      initialPaths={props.initialPaths}
+      onSelectPath={done}
+      onCancel={() => done(null)}
+    />
+  ))
+}
+
+async function launchResumeChooser(
+  root: Root,
+  appProps: {
+    getFpsMetrics: () => FpsMetrics | undefined
+    stats: StatsStore
+    initialState: AppState
+  },
+  worktreePathsPromise: Promise<string[]>,
+  resumeProps: Omit<
+    React.ComponentProps<typeof import('./screens/ResumeConversation.js').ResumeConversation>,
+    'worktreePaths'
+  >,
+): Promise<void> {
+  const [worktreePaths, { ResumeConversation }, { App }] = await Promise.all([
+    worktreePathsPromise,
+    import('./screens/ResumeConversation.js'),
+    import('./components/App.js'),
+  ])
+
+  await renderAndRun(
+    root,
+    <App
+      getFpsMetrics={appProps.getFpsMetrics}
+      stats={appProps.stats}
+      initialState={appProps.initialState}
+    >
+      <ResumeConversation {...resumeProps} worktreePaths={worktreePaths} />
+    </App>,
+  )
+}
+
 import { migrateAutoUpdatesToSettings } from './migrations/migrateAutoUpdatesToSettings.js';
 import { migrateBypassPermissionsAcceptedToSettings } from './migrations/migrateBypassPermissionsAcceptedToSettings.js';
 import { migrateEnableAllProjectMcpServersToSettings } from './migrations/migrateEnableAllProjectMcpServersToSettings.js';
@@ -248,7 +348,6 @@ import { resetAutoModeOptInForDefaultOffer } from './migrations/resetAutoModeOpt
 import { resetProToOpusDefault } from './migrations/resetProToOpusDefault.js';
 /* eslint-enable @typescript-eslint/no-require-imports */
 // teleportWithProgress dynamically imported at call site
-import { createDirectConnectSession, DirectConnectError } from './server/createDirectConnectSession.js';
 import { initializeLspServerManager } from './services/lsp/manager.js';
 import { shouldEnablePromptSuggestion } from './services/PromptSuggestion/promptSuggestion.js';
 import { type AppState, getDefaultAppState, IDLE_SPECULATION_STATE } from './state/AppStateStore.js';
@@ -326,7 +425,7 @@ function isBeingDebugged() {
 }
 
 // Exit if we detect node debugging or inspection
-if ("external" !== 'ant' && isBeingDebugged()) {
+if (isBeingDebugged()) {
   // Use process.exit directly here since we're in the top-level code before imports
   // and gracefulShutdown is not yet available
   // eslint-disable-next-line custom-rules/no-top-level-side-effects
@@ -403,9 +502,6 @@ function runMigrations(): void {
     migrateReplBridgeEnabledToRemoteControlAtStartup();
     if (feature('TRANSCRIPT_CLASSIFIER')) {
       resetAutoModeOptInForDefaultOffer();
-    }
-    if ("external" === 'ant') {
-      migrateFennecToOpus();
     }
     saveGlobalConfig(prev => prev.migrationVersion === CURRENT_MIGRATION_VERSION ? prev : {
       ...prev,
@@ -509,10 +605,7 @@ export function startDeferredPrefetches(): void {
     void skillChangeDetector.initialize();
   }
 
-  // Event loop stall detector — logs when the main thread is blocked >500ms
-  if ("external" === 'ant') {
-    void import('./utils/eventLoopStallDetector.js').then(m => m.startEventLoopStallDetector());
-  }
+  // Event loop stall detector is not part of the codex-only product path.
 }
 function loadSettingsFromFlag(settingsFile: string): void {
   try {
@@ -624,49 +717,6 @@ function initializeEntrypoint(isNonInteractive: boolean): void {
   process.env.CODEX_CODE_ENTRYPOINT = isNonInteractive ? 'sdk-cli' : 'cli';
 }
 
-// Set by early argv processing when `claude open <url>` is detected (interactive mode only)
-type PendingConnect = {
-  url: string | undefined;
-  authToken: string | undefined;
-  dangerouslySkipPermissions: boolean;
-};
-const _pendingConnect: PendingConnect | undefined = feature('DIRECT_CONNECT') ? {
-  url: undefined,
-  authToken: undefined,
-  dangerouslySkipPermissions: false
-} : undefined;
-
-// Set by early argv processing when `claude assistant [sessionId]` is detected
-type PendingAssistantChat = {
-  sessionId?: string;
-  discover: boolean;
-};
-const _pendingAssistantChat: PendingAssistantChat | undefined = feature('KAIROS') ? {
-  sessionId: undefined,
-  discover: false
-} : undefined;
-
-// `claude ssh <host> [dir]` — parsed from argv early (same pattern as
-// DIRECT_CONNECT above) so the main command path can pick it up and hand
-// the REPL an SSH-backed session instead of a local one.
-type PendingSSH = {
-  host: string | undefined;
-  cwd: string | undefined;
-  permissionMode: string | undefined;
-  dangerouslySkipPermissions: boolean;
-  /** --local: spawn the child CLI directly, skip ssh/probe/deploy. e2e test mode. */
-  local: boolean;
-  /** Extra CLI args to forward to the remote CLI on initial spawn (--resume, -c). */
-  extraCliArgs: string[];
-};
-const _pendingSSH: PendingSSH | undefined = feature('SSH_REMOTE') ? {
-  host: undefined,
-  cwd: undefined,
-  permissionMode: undefined,
-  dangerouslySkipPermissions: false,
-  local: false,
-  extraCliArgs: []
-} : undefined;
 export async function main() {
   profileCheckpoint('main_function_start');
 
@@ -691,40 +741,6 @@ export async function main() {
   });
   profileCheckpoint('main_warning_handler_initialized');
 
-  // Check for cc:// or cc+unix:// URL in argv — rewrite so the main command
-  // handles it, giving the full interactive TUI instead of a stripped-down subcommand.
-  // For headless (-p), we rewrite to the internal `open` subcommand.
-  if (feature('DIRECT_CONNECT')) {
-    const rawCliArgs = process.argv.slice(2);
-    const ccIdx = rawCliArgs.findIndex(a => a.startsWith('cc://') || a.startsWith('cc+unix://'));
-    if (ccIdx !== -1 && _pendingConnect) {
-      const ccUrl = rawCliArgs[ccIdx]!;
-      const {
-        parseConnectUrl
-      } = await import('./server/parseConnectUrl.js');
-      const parsed = parseConnectUrl(ccUrl);
-      _pendingConnect.dangerouslySkipPermissions = rawCliArgs.includes('--dangerously-skip-permissions');
-      if (rawCliArgs.includes('-p') || rawCliArgs.includes('--print')) {
-        // Headless: rewrite to internal `open` subcommand
-        const stripped = rawCliArgs.filter((_, i) => i !== ccIdx);
-        const dspIdx = stripped.indexOf('--dangerously-skip-permissions');
-        if (dspIdx !== -1) {
-          stripped.splice(dspIdx, 1);
-        }
-        process.argv = [process.argv[0]!, process.argv[1]!, 'open', ccUrl, ...stripped];
-      } else {
-        // Interactive: strip cc:// URL and flags, run main command
-        _pendingConnect.url = parsed.serverUrl;
-        _pendingConnect.authToken = parsed.authToken;
-        const stripped = rawCliArgs.filter((_, i) => i !== ccIdx);
-        const dspIdx = stripped.indexOf('--dangerously-skip-permissions');
-        if (dspIdx !== -1) {
-          stripped.splice(dspIdx, 1);
-        }
-        process.argv = [process.argv[0]!, process.argv[1]!, ...stripped];
-      }
-    }
-  }
 
   // Handle deep link URIs early — this is invoked by the OS protocol handler
   // and should bail out before full init since it only needs to parse the URI
@@ -761,100 +777,6 @@ export async function main() {
     }
   }
 
-  // `claude ssh <host> [dir]` — strip from argv so the main command handler
-  // runs (full interactive TUI), stash the host/dir for the REPL branch at
-  // ~line 3720 to pick up. Headless (-p) mode not supported in v1: SSH
-  // sessions need the local REPL to drive them (interrupt, permissions).
-  if (feature('SSH_REMOTE') && _pendingSSH) {
-    const rawCliArgs = process.argv.slice(2);
-    // SSH-specific flags can appear before the host positional (e.g.
-    // `ssh --permission-mode auto host /tmp` — standard POSIX flags-before-
-    // positionals). Pull them all out BEFORE checking whether a host was
-    // given, so `claude ssh --permission-mode auto host` and `claude ssh host
-    // --permission-mode auto` are equivalent. The host check below only needs
-    // to guard against `-h`/`--help` (which commander should handle).
-    if (rawCliArgs[0] === 'ssh') {
-      const localIdx = rawCliArgs.indexOf('--local');
-      if (localIdx !== -1) {
-        _pendingSSH.local = true;
-        rawCliArgs.splice(localIdx, 1);
-      }
-      const dspIdx = rawCliArgs.indexOf('--dangerously-skip-permissions');
-      if (dspIdx !== -1) {
-        _pendingSSH.dangerouslySkipPermissions = true;
-        rawCliArgs.splice(dspIdx, 1);
-      }
-      const pmIdx = rawCliArgs.indexOf('--permission-mode');
-      if (pmIdx !== -1 && rawCliArgs[pmIdx + 1] && !rawCliArgs[pmIdx + 1]!.startsWith('-')) {
-        _pendingSSH.permissionMode = rawCliArgs[pmIdx + 1];
-        rawCliArgs.splice(pmIdx, 2);
-      }
-      const pmEqIdx = rawCliArgs.findIndex(a => a.startsWith('--permission-mode='));
-      if (pmEqIdx !== -1) {
-        _pendingSSH.permissionMode = rawCliArgs[pmEqIdx]!.split('=')[1];
-        rawCliArgs.splice(pmEqIdx, 1);
-      }
-      // Forward session-resume + model flags to the remote CLI's initial spawn.
-      // --continue/-c and --resume <uuid> operate on the REMOTE session history
-      // (which persists under the remote's ~/.claude/projects/<cwd>/).
-      // --model controls which model the remote uses.
-      const extractFlag = (flag: string, opts: {
-        hasValue?: boolean;
-        as?: string;
-      } = {}) => {
-        const i = rawCliArgs.indexOf(flag);
-        if (i !== -1) {
-          _pendingSSH.extraCliArgs.push(opts.as ?? flag);
-          const val = rawCliArgs[i + 1];
-          if (opts.hasValue && val && !val.startsWith('-')) {
-            _pendingSSH.extraCliArgs.push(val);
-            rawCliArgs.splice(i, 2);
-          } else {
-            rawCliArgs.splice(i, 1);
-          }
-        }
-        const eqI = rawCliArgs.findIndex(a => a.startsWith(`${flag}=`));
-        if (eqI !== -1) {
-          _pendingSSH.extraCliArgs.push(opts.as ?? flag, rawCliArgs[eqI]!.slice(flag.length + 1));
-          rawCliArgs.splice(eqI, 1);
-        }
-      };
-      extractFlag('-c', {
-        as: '--continue'
-      });
-      extractFlag('--continue');
-      extractFlag('--resume', {
-        hasValue: true
-      });
-      extractFlag('--model', {
-        hasValue: true
-      });
-    }
-    // After pre-extraction, any remaining dash-arg at [1] is either -h/--help
-    // (commander handles) or an unknown-to-ssh flag (fall through to commander
-    // so it surfaces a proper error). Only a non-dash arg is the host.
-    if (rawCliArgs[0] === 'ssh' && rawCliArgs[1] && !rawCliArgs[1].startsWith('-')) {
-      _pendingSSH.host = rawCliArgs[1];
-      // Optional positional cwd.
-      let consumed = 2;
-      if (rawCliArgs[2] && !rawCliArgs[2].startsWith('-')) {
-        _pendingSSH.cwd = rawCliArgs[2];
-        consumed = 3;
-      }
-      const rest = rawCliArgs.slice(consumed);
-
-      // Headless (-p) mode is not supported with SSH in v1 — reject early
-      // so the flag doesn't silently cause local execution.
-      if (rest.includes('-p') || rest.includes('--print')) {
-        process.stderr.write('Error: headless (-p/--print) mode is not supported with claude ssh\n');
-        gracefulShutdownSync(1);
-        return;
-      }
-
-      // Rewrite argv so the main command sees remaining flags but not `ssh`.
-      process.argv = [process.argv[0]!, process.argv[1]!, ...rest];
-    }
-  }
 
   // Check for -p/--print and --init-only flags early to set isInteractiveSession before init()
   // This is needed because telemetry initialization calls auth functions that need this flag
@@ -1069,7 +991,7 @@ async function run(): Promise<CommanderCommand> {
     // If not provided but flag is present, value will be true
     // The actual filtering is handled in debug.ts by parsing process.argv
     return true;
-  }).addOption(new Option('--debug-to-stderr', 'Enable debug mode (to stderr)').argParser(Boolean).hideHelp()).option('--debug-file <path>', 'Write debug logs to a specific file path (implicitly enables debug mode)', () => true).option('--verbose', 'Override verbose mode setting from config', () => true).option('-p, --print', 'Print response and exit (useful for pipes). Note: The workspace trust dialog is skipped when Codex Code is run with the -p mode. Only use this flag in directories you trust.', () => true).option('--bare', 'Minimal mode: skip hooks, LSP, plugin sync, attribution, auto-memory, background prefetches, keychain reads, and CLAUDE.md auto-discovery. Sets CODEX_CODE_SIMPLE=1. In bare mode, credentials must come from explicit settings or provider-specific environment variables because interactive login helpers and keychain reads are skipped. Skills still resolve via /skill-name. Explicitly provide context via: --system-prompt[-file], --append-system-prompt[-file], --add-dir (CLAUDE.md dirs), --mcp-config, --settings, --agents, --plugin-dir.', () => true).addOption(new Option('--init', 'Run Setup hooks with init trigger, then continue').hideHelp()).addOption(new Option('--init-only', 'Run Setup and SessionStart:startup hooks, then exit').hideHelp()).addOption(new Option('--maintenance', 'Run Setup hooks with maintenance trigger, then continue').hideHelp()).addOption(new Option('--output-format <format>', 'Output format (only works with --print): "text" (default), "json" (single result), or "stream-json" (realtime streaming)').choices(['text', 'json', 'stream-json'])).addOption(new Option('--json-schema <schema>', 'JSON Schema for structured output validation. ' + 'Example: {"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}').argParser(String)).option('--include-hook-events', 'Include all hook lifecycle events in the output stream (only works with --output-format=stream-json)', () => true).option('--include-partial-messages', 'Include partial message chunks as they arrive (only works with --print and --output-format=stream-json)', () => true).addOption(new Option('--input-format <format>', 'Input format (only works with --print): "text" (default), or "stream-json" (realtime streaming input)').choices(['text', 'stream-json'])).option('--mcp-debug', '[DEPRECATED. Use --debug instead] Enable MCP debug mode (shows MCP server errors)', () => true).option('--dangerously-skip-permissions', 'Bypass all permission checks. Recommended only for sandboxes with no internet access.', () => true).option('--allow-dangerously-skip-permissions', 'Enable bypassing all permission checks as an option, without it being enabled by default. Recommended only for sandboxes with no internet access.', () => true).addOption(new Option('--thinking <mode>', 'Thinking mode: enabled (equivalent to adaptive), disabled').choices(['enabled', 'adaptive', 'disabled']).hideHelp()).addOption(new Option('--max-thinking-tokens <tokens>', '[DEPRECATED. Use --thinking instead for newer models] Maximum number of thinking tokens (only works with --print)').argParser(Number).hideHelp()).addOption(new Option('--max-turns <turns>', 'Maximum number of agentic turns in non-interactive mode. This will early exit the conversation after the specified number of turns. (only works with --print)').argParser(Number).hideHelp()).addOption(new Option('--max-budget-usd <amount>', 'Maximum dollar amount to spend on API calls (only works with --print)').argParser(value => {
+  }).addOption(new Option('--debug-to-stderr', 'Enable debug mode (to stderr)').argParser(Boolean).hideHelp()).option('--debug-file <path>', 'Write debug logs to a specific file path (implicitly enables debug mode)', () => true).option('--verbose', 'Override verbose mode setting from config', () => true).option('-p, --print', 'Print response and exit (useful for pipes). Note: The workspace trust dialog is skipped when Codex Code is run with the -p mode. Only use this flag in directories you trust.', () => true).option('--bare', 'Minimal mode: skip hooks, LSP, plugin sync, attribution, auto-memory, background prefetches, keychain reads, and CLAUDE.md auto-discovery. Sets CODEX_CODE_SIMPLE=1. In bare mode, credentials must come from explicit settings or provider-specific environment variables because interactive login helpers and keychain reads are skipped. Skills still resolve via /skill-name. Explicitly provide context via: --system-prompt[-file], --append-system-prompt[-file], --add-dir (CLAUDE.md dirs), --mcp-config, --settings, --agents, --plugin-dir.', () => true).addOption(new Option('--init', 'Run Setup hooks with init trigger, then continue').hideHelp()).addOption(new Option('--init-only', 'Run Setup and startup session hooks, then exit').hideHelp()).addOption(new Option('--maintenance', 'Run Setup hooks with maintenance trigger, then continue').hideHelp()).addOption(new Option('--output-format <format>', 'Output format (only works with --print): "text" (default), "json" (single result), or "stream-json" (realtime streaming)').choices(['text', 'json', 'stream-json'])).addOption(new Option('--json-schema <schema>', 'JSON Schema for structured output validation. ' + 'Example: {"type":"object","properties":{"name":{"type":"string"}},"required":["name"]}').argParser(String)).option('--include-hook-events', 'Include all hook lifecycle events in the output stream (only works with --output-format=stream-json)', () => true).option('--include-partial-messages', 'Include partial message chunks as they arrive (only works with --print and --output-format=stream-json)', () => true).addOption(new Option('--input-format <format>', 'Input format (only works with --print): "text" (default), or "stream-json" (realtime streaming input)').choices(['text', 'stream-json'])).option('--mcp-debug', '[DEPRECATED. Use --debug instead] Enable MCP debug mode (shows MCP server errors)', () => true).option('--dangerously-skip-permissions', 'Bypass all permission checks. Recommended only for sandboxes with no internet access.', () => true).option('--allow-dangerously-skip-permissions', 'Enable bypassing all permission checks as an option, without it being enabled by default. Recommended only for sandboxes with no internet access.', () => true).addOption(new Option('--thinking <mode>', 'Thinking mode: enabled (equivalent to adaptive), disabled').choices(['enabled', 'adaptive', 'disabled']).hideHelp()).addOption(new Option('--max-thinking-tokens <tokens>', '[DEPRECATED. Use --thinking instead for newer models] Maximum number of thinking tokens (only works with --print)').argParser(Number).hideHelp()).addOption(new Option('--max-turns <turns>', 'Maximum number of agentic turns in non-interactive mode. This will early exit the conversation after the specified number of turns. (only works with --print)').argParser(Number).hideHelp()).addOption(new Option('--max-budget-usd <amount>', 'Maximum dollar amount to spend on API calls (only works with --print)').argParser(value => {
     const amount = Number(value);
     if (isNaN(amount) || amount <= 0) {
       throw new Error('--max-budget-usd must be a positive number greater than 0');
@@ -1175,14 +1097,8 @@ async function run(): Promise<CommanderCommand> {
     // Extract disable slash commands flag
     const disableSlashCommands = options.disableSlashCommands || false;
 
-    // Extract tasks mode options (ant-only)
-    const tasksOption = "external" === 'ant' && (options as {
-      tasks?: boolean | string;
-    }).tasks;
-    const taskListId = tasksOption ? typeof tasksOption === 'string' ? tasksOption : DEFAULT_TASKS_MODE_TASK_LIST_ID : undefined;
-    if ("external" === 'ant' && taskListId) {
-      process.env.CODEX_CODE_TASK_LIST_ID = taskListId;
-    }
+    // Tasks mode is not part of the codex-only startup path.
+    const taskListId = undefined;
 
     // Extract worktree option
     // worktree can be true (flag without value) or a string (custom name or PR reference)
@@ -1587,7 +1503,8 @@ async function run(): Promise<CommanderCommand> {
     };
     // Store the explicit CLI flag so teammates can inherit it
     setChromeFlagOverride(chromeOpts.chrome);
-    const enableClaudeInChrome = shouldEnableClaudeInChrome(chromeOpts.chrome) && ("external" === 'ant' || isClaudeAISubscriber());
+    const enableClaudeInChrome =
+      shouldEnableClaudeInChrome(chromeOpts.chrome) && isClaudeAISubscriber();
     const autoEnableClaudeInChrome = !enableClaudeInChrome && shouldAutoEnableClaudeInChrome();
     if (enableClaudeInChrome) {
       const platform = getPlatform();
@@ -1822,8 +1739,8 @@ async function run(): Promise<CommanderCommand> {
       overlyBroadBashPermissions
     } = initResult;
 
-    // Handle overly broad shell allow rules for ant users (Bash(*), PowerShell(*))
-    if ("external" === 'ant' && overlyBroadBashPermissions.length > 0) {
+    // Handle overly broad shell allow rules.
+    if (overlyBroadBashPermissions.length > 0) {
       for (const permission of overlyBroadBashPermissions) {
         logForDebugging(`Ignoring overly broad shell permission ${permission.ruleDisplay} from ${permission.sourceDisplay}`);
       }
@@ -2094,7 +2011,7 @@ async function run(): Promise<CommanderCommand> {
     //  - flag absent from disk (== null also catches pre-#22279 poisoned null)
     const selectedModelOption = options.model ?? codexConfiguredModel;
     const explicitModel = selectedModelOption || process.env.ANTHROPIC_MODEL;
-    if (!currentPhaseCustomCodexProvider && "external" === 'ant' && explicitModel && explicitModel !== 'default' && !hasGrowthBookEnvOverride('tengu_ant_model_override') && getGlobalConfig().cachedGrowthBookFeatures?.['tengu_ant_model_override'] == null) {
+    if (!currentPhaseCustomCodexProvider && explicitModel && explicitModel !== 'default' && !hasGrowthBookEnvOverride('tengu_ant_model_override') && getGlobalConfig().cachedGrowthBookFeatures?.['tengu_ant_model_override'] == null) {
       logForDebugging('[STARTUP] initializeGrowthBook start');
       await initializeGrowthBook();
       logForDebugging('[STARTUP] initializeGrowthBook done');
@@ -2262,11 +2179,8 @@ async function run(): Promise<CommanderCommand> {
         // Log agent memory loaded event for tmux teammates
         if (customAgent.memory) {
           logEvent('tengu_agent_memory_loaded', {
-            ...("external" === 'ant' && {
-              agent_type: customAgent.agentType as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
-            }),
             scope: customAgent.memory as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
-            source: 'teammate' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS
+            source: 'teammate' as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
           });
         }
         if (customPrompt) {
@@ -2309,10 +2223,6 @@ async function run(): Promise<CommanderCommand> {
       const proactivePrompt = `\n# Proactive Mode\n\nYou are in proactive mode. Take initiative — explore, act, and make progress without waiting for instructions.\n\nStart by briefly greeting the user.\n\nYou will receive periodic <tick> prompts. These are check-ins. Do whatever seems most useful, or call Sleep if there's nothing to do. ${briefVisibility}`;
       appendSystemPrompt = appendSystemPrompt ? `${appendSystemPrompt}\n\n${proactivePrompt}` : proactivePrompt;
     }
-    if (feature('KAIROS') && kairosEnabled && assistantModule) {
-      const assistantAddendum = assistantModule.getAssistantSystemPromptAddendum();
-      appendSystemPrompt = appendSystemPrompt ? `${appendSystemPrompt}\n\n${assistantAddendum}` : assistantAddendum;
-    }
 
     writeStartupProbe('action:before-current-phase-branch');
     const currentPhaseBareLocalMode = currentPhaseCustomCodexProvider;
@@ -2328,10 +2238,8 @@ async function run(): Promise<CommanderCommand> {
       const ctx = getRenderContext(false);
       getFpsMetrics = ctx.getFpsMetrics;
       stats = ctx.stats;
-      // Install asciicast recorder before Ink mounts (ant-only, opt-in via CODEX_CODE_TERMINAL_RECORDING=1)
-      if ("external" === 'ant') {
-        installAsciicastRecorder();
-      }
+      // Install the recorder before Ink mounts when enabled.
+      installAsciicastRecorder();
       const {
         createRoot
       } = await import('./ink.js');
@@ -2369,23 +2277,7 @@ async function run(): Promise<CommanderCommand> {
         }
       }
 
-      // Check for pending agent memory snapshot updates (only for --agent mode, ant-only)
-      if (!currentPhaseCustomCodexProvider && !currentPhaseBareLocalMode && feature('AGENT_MEMORY_SNAPSHOT') && mainThreadAgentDefinition && agentLoadModule.isCustomAgent(mainThreadAgentDefinition) && mainThreadAgentDefinition.memory && mainThreadAgentDefinition.pendingSnapshotUpdate) {
-        const agentDef = mainThreadAgentDefinition;
-        const choice = await launchSnapshotUpdateDialog(root, {
-          agentType: agentDef.agentType,
-          scope: agentDef.memory!,
-          snapshotTimestamp: agentDef.pendingSnapshotUpdate!.snapshotTimestamp
-        });
-        if (choice === 'merge') {
-          const {
-            buildMergePrompt
-          } = await import('./components/agents/SnapshotUpdateDialog.js');
-          const mergePrompt = buildMergePrompt(agentDef.agentType, agentDef.memory!);
-          inputPrompt = inputPrompt ? `${mergePrompt}\n\n${inputPrompt}` : mergePrompt;
-        }
-        agentDef.pendingSnapshotUpdate = undefined;
-      }
+      // Agent memory snapshot updates are not part of the codex-only startup path.
 
       // Skip executing /login if we just completed onboarding for it
       if (onboardingShown && prompt?.trim().toLowerCase() === '/login') {
@@ -2433,8 +2325,8 @@ async function run(): Promise<CommanderCommand> {
     }
 
     if (currentPhaseBareLocalMode && !isNonInteractiveSession) {
-      if (teleport || remote !== null || (feature('DIRECT_CONNECT') && _pendingConnect?.url) || (feature('SSH_REMOTE') && _pendingSSH?.host) || (feature('KAIROS') && _pendingAssistantChat && (_pendingAssistantChat.sessionId || _pendingAssistantChat.discover))) {
-        await exitWithError(root, '当前阶段的自定义 Codex provider 支持本地新会话与本地 resume/continue，不支持 teleport、remote、connect、ssh 或 assistant。', () => gracefulShutdown(1));
+      if (teleport || remote !== null) {
+        await exitWithError(root, '当前阶段的自定义 Codex provider 支持本地新会话与本地 resume/continue，不支持 teleport 或 remote。', () => gracefulShutdown(1));
         return;
       }
     }

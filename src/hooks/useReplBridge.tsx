@@ -190,13 +190,18 @@ export function useReplBridge(messages: Message[], setMessages: (action: React.S
                 resolveAndPrepend
               } = await import('../bridge/inboundAttachments.js');
               let sanitized = fields.content;
-              if (feature('KAIROS_GITHUB_WEBHOOKS')) {
+              if (
+                feature('KAIROS_GITHUB_WEBHOOKS') &&
+                typeof fields.content === 'string'
+              ) {
                 /* eslint-disable @typescript-eslint/no-require-imports */
-                const {
-                  sanitizeInboundWebhookContent
-                } = require('../bridge/webhookSanitizer.js') as typeof import('../bridge/webhookSanitizer.js');
+                const webhookModule = require('../bridge/webhookSanitizer.js') as {
+                  sanitizeInboundWebhookContent?: (content: string) => string;
+                };
                 /* eslint-enable @typescript-eslint/no-require-imports */
-                sanitized = sanitizeInboundWebhookContent(fields.content);
+                sanitized =
+                  webhookModule.sanitizeInboundWebhookContent?.(fields.content) ??
+                  fields.content;
               }
               const content = await resolveAndPrepend(msg, sanitized);
               const preview = typeof content === 'string' ? content.slice(0, 80) : `[${content.length} content blocks]`;

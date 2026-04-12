@@ -28,6 +28,7 @@ const MAX_ROW_LINES = 4;
 const ANSI_BOLD_START = '\x1b[1m';
 const ANSI_BOLD_END = '\x1b[22m';
 type Props = {
+  key?: React.Key;
   token: Tokens.Table;
   highlight: CliHighlight | null;
   /** Override terminal width (useful for testing) */

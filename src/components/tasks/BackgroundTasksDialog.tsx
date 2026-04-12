@@ -15,8 +15,7 @@ import { LocalAgentTask } from 'src/tasks/LocalAgentTask/LocalAgentTask.js';
 import type { LocalShellTaskState } from 'src/tasks/LocalShellTask/guards.js';
 import { LocalShellTask } from 'src/tasks/LocalShellTask/LocalShellTask.js';
 // Type import is erased at build time — safe even though module is ant-gated.
-import type { LocalWorkflowTaskState } from 'src/tasks/LocalWorkflowTask/LocalWorkflowTask.js';
-import type { MonitorMcpTaskState } from 'src/tasks/MonitorMcpTask/MonitorMcpTask.js';
+import type { LocalWorkflowTaskState, MonitorMcpTaskState } from 'src/tasks/types.js';
 import { RemoteAgentTask, type RemoteAgentTaskState } from 'src/tasks/RemoteAgentTask/RemoteAgentTask.js';
 import { createRequire } from 'node:module';
 import { type BackgroundTaskState, isBackgroundTask, type TaskState } from 'src/tasks/types.js';
@@ -109,22 +108,17 @@ type ListItem = {
 /* eslint-disable @typescript-eslint/no-require-imports */
 const currentStageDisableUltraplan = process.env.CODEX_CODE_USE_CODEX_PROVIDER === '1';
 const stopUltraplan = !currentStageDisableUltraplan ? (require('../../commands/ultraplan.js') as typeof import('../../commands/ultraplan.js')).stopUltraplan : null;
-const WorkflowDetailDialog = feature('WORKFLOW_SCRIPTS') ? (require('./WorkflowDetailDialog.js') as typeof import('./WorkflowDetailDialog.js')).WorkflowDetailDialog : null;
-const workflowTaskModule = feature('WORKFLOW_SCRIPTS') ? require('src/tasks/LocalWorkflowTask/LocalWorkflowTask.js') as typeof import('src/tasks/LocalWorkflowTask/LocalWorkflowTask.js') : null;
-const killWorkflowTask = workflowTaskModule?.killWorkflowTask ?? null;
-const skipWorkflowAgent = workflowTaskModule?.skipWorkflowAgent ?? null;
-const retryWorkflowAgent = workflowTaskModule?.retryWorkflowAgent ?? null;
-// Relative path, not `src/...` path-mapping — Bun's DCE can statically
-// resolve + eliminate `./` requires, but path-mapped strings stay opaque
-// and survive as dead literals in the bundle. Matches tasks.ts pattern.
-const monitorMcpModule = feature('MONITOR_TOOL') ? require('../../tasks/MonitorMcpTask/MonitorMcpTask.js') as typeof import('../../tasks/MonitorMcpTask/MonitorMcpTask.js') : null;
-const killMonitorMcp = monitorMcpModule?.killMonitorMcp ?? null;
-const MonitorMcpDetailDialog = feature('MONITOR_TOOL') ? (require('./MonitorMcpDetailDialog.js') as typeof import('./MonitorMcpDetailDialog.js')).MonitorMcpDetailDialog : null;
+const WorkflowDetailDialog = null;
+const killWorkflowTask = null;
+const skipWorkflowAgent = null;
+const retryWorkflowAgent = null;
+const killMonitorMcp = null;
+const MonitorMcpDetailDialog = null;
 /* eslint-enable @typescript-eslint/no-require-imports */
 
 // Helper to get filtered background tasks (excludes foregrounded local_agent)
 function getSelectableBackgroundTasks(tasks: Record<string, TaskState> | undefined, foregroundedTaskId: string | undefined): TaskState[] {
-  const backgroundTasks = Object.values(tasks ?? {}).filter(isBackgroundTask);
+  const backgroundTasks = tasks ? Object.values(tasks).filter(isBackgroundTask) : [];
   return backgroundTasks.filter(task => !(task.type === 'local_agent' && task.id === foregroundedTaskId));
 }
 export function BackgroundTasksDialog({
@@ -180,10 +174,19 @@ export function BackgroundTasksDialog({
     mcpMonitors,
     dreamTasks: dreamTasks_0,
     allSelectableItems
-  } = useMemo(() => {
+  } = useMemo<{
+    bashTasks: Extract<ListItem, { type: 'local_bash' }>[];
+    remoteSessions: Extract<ListItem, { type: 'remote_agent' }>[];
+    agentTasks: Extract<ListItem, { type: 'local_agent' }>[];
+    teammateTasks: ListItem[];
+    workflowTasks: Extract<ListItem, { type: 'local_workflow' }>[];
+    mcpMonitors: Extract<ListItem, { type: 'monitor_mcp' }>[];
+    dreamTasks: Extract<ListItem, { type: 'dream' }>[];
+    allSelectableItems: ListItem[];
+  }>(() => {
     // Filter to only show running/pending background tasks, matching the status bar count
-    const backgroundTasks = Object.values(typedTasks ?? {}).filter(isBackgroundTask);
-    const allItems_0 = backgroundTasks.map(toListItem);
+    const backgroundTasks = typedTasks ? Object.values(typedTasks).filter(isBackgroundTask) : [];
+    const allItems_0: ListItem[] = backgroundTasks.map(toListItem);
     const sorted = allItems_0.sort((a, b) => {
       const aStatus = a.status;
       const bStatus = b.status;
@@ -379,9 +382,9 @@ export function BackgroundTasksDialog({
       case 'local_bash':
         return <ShellDetailDialog shell={task_0} onDone={onDone} onKillShell={() => void killShellTask(task_0.id)} onBack={goBackToList} key={`shell-${task_0.id}`} />;
       case 'local_agent':
-        return <AsyncAgentDetailDialog agent={task_0} onDone={onDone} onKillAgent={() => void killAgentTask(task_0.id)} onBack={goBackToList} key={`agent-${task_0.id}`} />;
+        return <AsyncAgentDetailDialog agent={task_0} onDone={onDone} onKillAgent={() => void killAgentTask(task_0.id)} onBack={goBackToList} />;
       case 'remote_agent':
-        return <RemoteSessionDetailDialog session={task_0} onDone={onDone} toolUseContext={toolUseContext} onBack={goBackToList} onKill={task_0.status !== 'running' ? undefined : task_0.isUltraplan && stopUltraplan ? () => void stopUltraplan(task_0.id, task_0.sessionId, setAppState) : () => void killRemoteAgentTask(task_0.id)} key={`session-${task_0.id}`} />;
+        return <RemoteSessionDetailDialog session={task_0} onDone={onDone} toolUseContext={toolUseContext} onBack={goBackToList} onKill={task_0.status !== 'running' ? undefined : task_0.isUltraplan && stopUltraplan ? () => void stopUltraplan(task_0.id, task_0.sessionId, setAppState) : () => void killRemoteAgentTask(task_0.id)} />;
       case 'in_process_teammate':
         return <InProcessTeammateDetailDialog teammate={task_0} onDone={onDone} onKill={task_0.status === 'running' ? () => void killTeammateTask(task_0.id) : undefined} onBack={goBackToList} onForeground={task_0.status === 'running' ? () => {
           enterTeammateView(task_0.id, setAppState);
@@ -401,9 +404,9 @@ export function BackgroundTasksDialog({
         })} onBack={goBackToList} onKill={task_0.status === 'running' ? () => void killDreamTask(task_0.id) : undefined} key={`dream-${task_0.id}`} />;
     }
   }
-  const runningBashCount = count(bashTasks, _ => _.status === 'running');
-  const runningAgentCount = count(remoteSessions, __0 => __0.status === 'running' || __0.status === 'pending') + count(agentTasks, __1 => __1.status === 'running');
-  const runningTeammateCount = count(teammateTasks, __2 => __2.status === 'running');
+  const runningBashCount = count<Extract<ListItem, { type: 'local_bash' }>>(bashTasks, item => item.status === 'running');
+  const runningAgentCount = count<Extract<ListItem, { type: 'remote_agent' }>>(remoteSessions, item => item.status === 'running' || item.status === 'pending') + count<Extract<ListItem, { type: 'local_agent' }>>(agentTasks, item => item.status === 'running');
+  const runningTeammateCount = count(teammateTasks, (item: ListItem) => item.status === 'running');
   const subtitle = intersperse([...(runningTeammateCount > 0 ? [<Text key="teammates">
               {runningTeammateCount}{' '}
               {runningTeammateCount !== 1 ? 'agents' : 'agent'}
@@ -430,7 +433,7 @@ export function BackgroundTasksDialog({
             {teammateTasks.length > 0 && <Box flexDirection="column">
                 {(bashTasks.length > 0 || remoteSessions.length > 0 || agentTasks.length > 0) && <Text dimColor>
                     <Text bold>{'  '}Agents</Text> (
-                    {count(teammateTasks, i => i.type !== 'leader')})
+                    {count(teammateTasks, (item: ListItem) => item.type !== 'leader')})
                   </Text>}
                 <Box flexDirection="column">
                   <TeammateTaskGroups teammateTasks={teammateTasks} currentSelectionId={currentSelection?.id} />

@@ -1,4 +1,9 @@
 import { feature } from 'bun:bundle'
+import { APIError } from '@anthropic-ai/sdk'
+import type {
+  BetaMessageDeltaUsage,
+  BetaUsage,
+} from '@anthropic-ai/sdk/resources/beta/messages/messages.mjs'
 import type { ContentBlockParam } from '@anthropic-ai/sdk/resources/messages.mjs'
 import { randomUUID } from 'crypto'
 import { createRequire } from 'module'
@@ -44,7 +49,12 @@ import type { AppState } from './state/AppState.js'
 import { type Tools, type ToolUseContext, toolMatchesName } from './Tool.js'
 import type { AgentDefinition } from './tools/AgentTool/loadAgentsDir.js'
 import { SYNTHETIC_OUTPUT_TOOL_NAME } from './tools/SyntheticOutputTool/SyntheticOutputTool.js'
-import type { Message } from './types/message.js'
+import type {
+  AssistantMessage,
+  Message,
+  StreamEvent,
+  UserMessage,
+} from './types/message.js'
 import type { OrphanedPermission } from './types/textInputTypes.js'
 import { createAbortController } from './utils/abortController.js'
 import type { AttributionState } from './utils/commitAttribution.js'
@@ -147,6 +157,35 @@ const snipProjection = feature('HISTORY_SNIP')
   : null
 /* eslint-enable @typescript-eslint/no-require-imports */
 
+function toPartialUsage(
+  usage: BetaUsage | BetaMessageDeltaUsage | undefined,
+): Partial<NonNullableUsage> | undefined {
+  if (!usage) {
+    return undefined
+  }
+
+  return usage as unknown as Partial<NonNullableUsage>
+}
+
+function isMaxTurnsReachedAttachment(
+  attachment: unknown,
+): attachment is { type: 'max_turns_reached'; maxTurns: number; turnCount: number } {
+  return (
+    attachment !== null &&
+    typeof attachment === 'object' &&
+    'type' in attachment &&
+    attachment.type === 'max_turns_reached' &&
+    'maxTurns' in attachment &&
+    typeof attachment.maxTurns === 'number' &&
+    'turnCount' in attachment &&
+    typeof attachment.turnCount === 'number'
+  )
+}
+
+function isAPIError(error: unknown): error is APIError {
+  return error instanceof APIError
+}
+
 export type QueryEngineConfig = {
   cwd: string
   tools: Tools
@@ -226,7 +265,10 @@ export class QueryEngine {
     this.totalUsage = EMPTY_USAGE
   }
 
-  private *emitExecutionItemMessages(items: Message['modelTurnItems']) {
+  private *emitExecutionItemMessages(items: AssistantMessage['modelTurnItems']) {
+    if (!items?.length) {
+      return
+    }
     for (const message of buildSDKExecutionItemMessages(items, getSessionId())) {
       yield message as SDKMessage
     }
@@ -626,7 +668,10 @@ export class QueryEngine {
           (msg.content.includes(`<${LOCAL_COMMAND_STDOUT_TAG}>`) ||
             msg.content.includes(`<${LOCAL_COMMAND_STDERR_TAG}>`))
         ) {
-          yield localCommandOutputToSDKAssistantMessage(msg.content, msg.uuid)
+          yield localCommandOutputToSDKAssistantMessage(
+            msg.content,
+            msg.uuid as `${string}-${string}-${string}-${string}-${string}`,
+          )
         }
 
         if (msg.type === 'system' && msg.subtype === 'compact_boundary') {
@@ -684,7 +729,7 @@ export class QueryEngine {
                 fileHistory: updater(prev.fileHistory),
               }))
             },
-            message.uuid,
+            message.uuid as `${string}-${string}-${string}-${string}-${string}`,
           )
         })
     }
@@ -822,29 +867,30 @@ export class QueryEngine {
           yield* this.emitExecutionItemMessages(message.modelTurnItems)
           yield* normalizeMessage(message)
           break
-        case 'stream_event':
-          if (message.event.type === 'message_start') {
+        case 'stream_event': {
+          const event = message.event as StreamEvent['event']
+          if (event.type === 'message_start') {
             // Reset current message usage for new message
             currentMessageUsage = EMPTY_USAGE
             currentMessageUsage = updateModelUsage(
               currentMessageUsage,
-              message.event.message.usage,
+              toPartialUsage(event.message.usage),
             )
           }
-          if (message.event.type === 'message_delta') {
+          if (event.type === 'message_delta') {
             currentMessageUsage = updateModelUsage(
               currentMessageUsage,
-              message.event.usage,
+              toPartialUsage(event.usage),
             )
             // Capture stop_reason from message_delta. The assistant message
             // is yielded at content_block_stop with stop_reason=null; the
             // real value only arrives here (see claude.ts message_delta
             // handler). Without this, result.stop_reason is always null.
-            if (message.event.delta.stop_reason != null) {
-              lastStopReason = message.event.delta.stop_reason
+            if (event.delta.stop_reason != null) {
+              lastStopReason = event.delta.stop_reason
             }
           }
-          if (message.event.type === 'message_stop') {
+          if (event.type === 'message_stop') {
             // Accumulate current message usage into total
             this.totalUsage = accumulateModelUsage(
               this.totalUsage,
@@ -855,7 +901,7 @@ export class QueryEngine {
           if (includePartialMessages) {
             yield {
               type: 'stream_event' as const,
-              event: message.event,
+              event,
               session_id: getSessionId(),
               parent_tool_use_id: null,
               uuid: randomUUID(),
@@ -863,6 +909,7 @@ export class QueryEngine {
           }
 
           break
+        }
         case 'attachment':
           this.mutableMessages.push(message)
           // Record inline (same reason as progress above).
@@ -876,7 +923,7 @@ export class QueryEngine {
             structuredOutputFromTool = message.attachment.data
           }
           // Handle max turns reached signal from query.ts
-          else if (message.attachment.type === 'max_turns_reached') {
+          else if (isMaxTurnsReachedAttachment(message.attachment)) {
             if (persistSession) {
               if (
                 isEnvTruthy(process.env.CODEX_CODE_EAGER_FLUSH) ||
@@ -928,9 +975,6 @@ export class QueryEngine {
             } as SDKUserMessageReplay
           }
           break
-        case 'stream_request_start':
-          // Don't yield stream request start messages
-          break
         case 'system': {
           // Snip boundary: replay on our store to remove zombie messages and
           // stale markers. The yielded boundary is a signal, not data to push —
@@ -978,14 +1022,19 @@ export class QueryEngine {
             }
           }
           if (message.subtype === 'api_error') {
+            const error = message.error as { status?: number } | undefined
             yield {
               type: 'system',
               subtype: 'api_retry' as const,
-              attempt: message.retryAttempt,
-              max_retries: message.maxRetries,
-              retry_delay_ms: message.retryInMs,
-              error_status: message.error.status ?? null,
-              error: categorizeRetryableAPIError(message.error),
+              attempt: message.retryAttempt ?? 0,
+              max_retries: message.maxRetries ?? 0,
+              retry_delay_ms: message.retryInMs ?? 0,
+              error_status: error?.status ?? null,
+              error: categorizeRetryableAPIError(
+                isAPIError(message.error)
+                  ? message.error
+                  : new APIError(0, undefined, 'Unknown API error', undefined),
+              ),
               session_id: getSessionId(),
               uuid: message.uuid,
             }
@@ -1318,7 +1367,11 @@ export async function* ask({
           snipReplay: (yielded: Message, store: Message[]) => {
             if (!snipProjection!.isSnipBoundaryMessage(yielded))
               return undefined
-            return snipModule!.snipCompactIfNeeded(store, { force: true })
+            const result = snipModule!.snipCompactIfNeeded(store, { force: true })
+            return {
+              messages: result.messages,
+              executed: true,
+            }
           },
         }
       : {}),

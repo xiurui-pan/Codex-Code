@@ -12,36 +12,40 @@ export async function findSessionMemorySummaryContent({
   currentSessionMemoryPath,
   transcriptSessionMemoryPath,
   isEmpty,
+  includePeerSessionSummaries = true,
 }: {
   fs: SummaryFs
   transcriptProjectDir: string
   currentSessionMemoryPath: string
   transcriptSessionMemoryPath: string
   isEmpty(content: string): Promise<boolean>
+  includePeerSessionSummaries?: boolean
 }): Promise<string | null> {
   const fallbackCandidatePaths = new Set<string>()
 
-  try {
-    const entries = await fs.readdir(transcriptProjectDir)
-    for (const entry of entries) {
-      const entryName = entry.name
-      if (!/^[0-9a-f-]{36}$/i.test(entryName)) {
-        continue
+  if (includePeerSessionSummaries) {
+    try {
+      const entries = await fs.readdir(transcriptProjectDir)
+      for (const entry of entries) {
+        const entryName = entry.name
+        if (!/^[0-9a-f-]{36}$/i.test(entryName)) {
+          continue
+        }
+        const candidatePath = join(
+          transcriptProjectDir,
+          entryName,
+          'session-memory',
+          'summary.md',
+        )
+        if (
+          candidatePath !== currentSessionMemoryPath &&
+          candidatePath !== transcriptSessionMemoryPath
+        ) {
+          fallbackCandidatePaths.add(candidatePath)
+        }
       }
-      const candidatePath = join(
-        transcriptProjectDir,
-        entryName,
-        'session-memory',
-        'summary.md',
-      )
-      if (
-        candidatePath !== currentSessionMemoryPath &&
-        candidatePath !== transcriptSessionMemoryPath
-      ) {
-        fallbackCandidatePaths.add(candidatePath)
-      }
-    }
-  } catch {}
+    } catch {}
+  }
 
   for (const preferredPath of [
     currentSessionMemoryPath,
@@ -108,5 +112,6 @@ export async function findCompactionSessionMemorySummaryContent({
       'summary.md',
     ),
     isEmpty,
+    includePeerSessionSummaries: false,
   })
 }
